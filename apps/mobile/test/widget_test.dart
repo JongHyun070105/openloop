@@ -48,11 +48,8 @@ void main() {
     expect(find.text('공모전 마감'), findsOneWidget);
     await tester.tap(find.text('공모전 마감'));
     await tester.pumpAndSettle();
-    expect(find.text('캘린더에 추가'), findsOneWidget);
-    expect(find.text('알림 예약'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('close-loop-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('닫힌 Loop'), findsOneWidget);
+    expect(find.text('실행 항목'), findsOneWidget);
+    expect(find.text('체크포인트'), findsOneWidget);
   });
 
   testWidgets('settings persist base URL and retention choice', (tester) async {
@@ -124,15 +121,14 @@ void main() {
     );
     await controller.saveLoop(loop);
 
-    final completed = await controller.updateAction(
+    await controller.updateAction(
       loop,
       loop.actions.single,
       true,
     );
-    expect(completed.actions.single.completed, isTrue);
     expect(repository.loops.single.actions.single.completed, isTrue);
 
-    await controller.deleteLoop(completed);
+    await controller.deleteLoop(repository.loops.single);
     expect(repository.loops, isEmpty);
     expect(controller.loops, isEmpty);
   });

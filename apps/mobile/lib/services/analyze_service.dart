@@ -235,7 +235,7 @@ class LocalAnalyzeService implements AnalyzeService {
                 'id': 'checkpoint-t24h',
                 'offset': 'T-24h',
                 'title': 'T-24h 확인',
-                'due_at': date!
+                'due_at': date
                     .subtract(const Duration(days: 1))
                     .toIso8601String(),
                 'completed': false,
@@ -244,7 +244,7 @@ class LocalAnalyzeService implements AnalyzeService {
                 'id': 'checkpoint-t2h',
                 'offset': 'T-2h',
                 'title': 'T-2h 확인',
-                'due_at': date!
+                'due_at': date
                     .subtract(const Duration(hours: 2))
                     .toIso8601String(),
                 'completed': false,
@@ -253,7 +253,7 @@ class LocalAnalyzeService implements AnalyzeService {
                 'id': 'checkpoint-tn',
                 'offset': 'T+N',
                 'title': 'T+N 후속 확인',
-                'due_at': date!.add(const Duration(days: 1)).toIso8601String(),
+                'due_at': date.add(const Duration(days: 1)).toIso8601String(),
                 'completed': false,
               },
             ]
