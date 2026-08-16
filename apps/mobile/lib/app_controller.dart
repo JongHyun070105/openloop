@@ -258,9 +258,12 @@ class AppController extends ChangeNotifier {
     );
     if (baseUrl.trim().isNotEmpty) {
       try {
-        updated = await ApiAnalyzeService(
-          baseUrl: baseUrl.trim(),
-        ).updateCheckpoint(loopId: loop.id, itemId: item.id, completed: completed);
+        updated = await ApiAnalyzeService(baseUrl: baseUrl.trim())
+            .updateCheckpoint(
+              loopId: loop.id,
+              itemId: item.id,
+              completed: completed,
+            );
       } catch (_) {
         // Checkpoints stay available offline and can be re-synced later.
       }

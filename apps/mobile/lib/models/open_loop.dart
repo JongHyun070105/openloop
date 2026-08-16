@@ -177,7 +177,7 @@ class OpenLoop {
               .map(
                 (item) =>
                     LoopChecklistItem.fromJson(item as Map<String, dynamic>),
-                )
+              )
               .toList(),
       checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
           .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))

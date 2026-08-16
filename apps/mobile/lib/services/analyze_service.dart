@@ -201,9 +201,19 @@ class LocalAnalyzeService implements AnalyzeService {
       },
       'suggested_question': _localQuestion(missingFields),
       'actions': [
-        {'id': 'action-calendar', 'type': 'calendar', 'title': '$title 추가', 'completed': false},
+        {
+          'id': 'action-calendar',
+          'type': 'calendar',
+          'title': '$title 추가',
+          'completed': false,
+        },
         if (place != null)
-          {'id': 'action-place', 'type': 'place', 'title': place, 'completed': false},
+          {
+            'id': 'action-place',
+            'type': 'place',
+            'title': place,
+            'completed': false,
+          },
         if (isDeadline)
           {
             'id': 'action-checklist',
@@ -212,7 +222,12 @@ class LocalAnalyzeService implements AnalyzeService {
             'completed': false,
           },
         if (startTime != null)
-          {'id': 'action-reminder', 'type': 'reminder', 'title': '알림 설정', 'completed': false},
+          {
+            'id': 'action-reminder',
+            'type': 'reminder',
+            'title': '알림 설정',
+            'completed': false,
+          },
       ],
       'checkpoints': isDeadline && date != null
           ? [
@@ -220,14 +235,18 @@ class LocalAnalyzeService implements AnalyzeService {
                 'id': 'checkpoint-t24h',
                 'offset': 'T-24h',
                 'title': 'T-24h 확인',
-                'due_at': date!.subtract(const Duration(days: 1)).toIso8601String(),
+                'due_at': date!
+                    .subtract(const Duration(days: 1))
+                    .toIso8601String(),
                 'completed': false,
               },
               {
                 'id': 'checkpoint-t2h',
                 'offset': 'T-2h',
                 'title': 'T-2h 확인',
-                'due_at': date!.subtract(const Duration(hours: 2)).toIso8601String(),
+                'due_at': date!
+                    .subtract(const Duration(hours: 2))
+                    .toIso8601String(),
                 'completed': false,
               },
               {
