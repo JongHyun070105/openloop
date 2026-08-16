@@ -163,6 +163,7 @@ class LocalAnalyzeService implements AnalyzeService {
     final date = _explicitDate(text, now);
     final startTime = _explicitTime(text);
     final place = _explicitPlace(text);
+    final title = _localTitle(text, isDeadline);
     final missingFields = <String>[
       if (date == null) 'date',
       if (startTime == null) 'start_time',
@@ -172,7 +173,7 @@ class LocalAnalyzeService implements AnalyzeService {
       'status': missingFields.isEmpty ? 'open' : 'needs_input',
       'event': {
         'type': isDeadline ? 'deadline' : 'appointment',
-        'title': _localTitle(text, isDeadline),
+        'title': title,
         'date': date == null
             ? null
             : '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
@@ -199,6 +200,45 @@ class LocalAnalyzeService implements AnalyzeService {
         'resolution_note': 'API 연결 전에는 텍스트에 명시된 값만 추출합니다. 저장 전에 빈 항목을 확인하세요.',
       },
       'suggested_question': _localQuestion(missingFields),
+      'actions': [
+        {'id': 'action-calendar', 'type': 'calendar', 'title': '$title 추가', 'completed': false},
+        if (place != null)
+          {'id': 'action-place', 'type': 'place', 'title': place, 'completed': false},
+        if (isDeadline)
+          {
+            'id': 'action-checklist',
+            'type': 'checklist',
+            'title': '마감 체크리스트',
+            'completed': false,
+          },
+        if (startTime != null)
+          {'id': 'action-reminder', 'type': 'reminder', 'title': '알림 설정', 'completed': false},
+      ],
+      'checkpoints': isDeadline && date != null
+          ? [
+              {
+                'id': 'checkpoint-t24h',
+                'offset': 'T-24h',
+                'title': 'T-24h 확인',
+                'due_at': date!.subtract(const Duration(days: 1)).toIso8601String(),
+                'completed': false,
+              },
+              {
+                'id': 'checkpoint-t2h',
+                'offset': 'T-2h',
+                'title': 'T-2h 확인',
+                'due_at': date!.subtract(const Duration(hours: 2)).toIso8601String(),
+                'completed': false,
+              },
+              {
+                'id': 'checkpoint-tn',
+                'offset': 'T+N',
+                'title': 'T+N 후속 확인',
+                'due_at': date!.add(const Duration(days: 1)).toIso8601String(),
+                'completed': false,
+              },
+            ]
+          : <Map<String, dynamic>>[],
     };
     return OpenLoop.fromAnalyzeJson(fallbackJson);
   }
