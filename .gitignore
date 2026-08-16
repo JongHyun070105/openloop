@@ -1,23 +1,39 @@
 .DS_Store
+
+# Environment files
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
 
+# Node / web
 node_modules/
 dist/
 
+# Python
 __pycache__/
 *.py[cod]
 .venv/
+**/.venv/
 .pytest_cache/
 .aws-sam/
 
-# Flutter generated
-apps/mobile/.dart_tool/
-apps/mobile/.flutter-plugins
-apps/mobile/.flutter-plugins-dependencies
-apps/mobile/build/
-apps/mobile/ios/Pods/
-apps/mobile/ios/.symlinks/
-apps/mobile/android/.gradle/
-apps/mobile/android/local.properties
+# Flutter / Android / iOS generated output
+.dart_tool/
+**/.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+build/
+**/build/
+ios/Pods/
+**/ios/Pods/
+ios/.symlinks/
+**/ios/.symlinks/
+android/.gradle/
+**/android/.gradle/
+android/local.properties
+**/android/local.properties
