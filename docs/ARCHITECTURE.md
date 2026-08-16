@@ -3,7 +3,7 @@
 ```text
 Screenshot / Image / Text
             |
-      Flutter / Web
+      Flutter mobile
             |
    local preprocessing
             |
@@ -25,7 +25,8 @@ Screenshot / Image / Text
 ## Boundaries
 
 - `apps/demo` is a deterministic judging prototype. It demonstrates product behavior without credentials.
-- `apps/mobile` owns capture, review, Loop presentation, calendar permission, and notifications.
+- `apps/mobile` owns capture, review, Loop presentation, Android/iOS sharing,
+  calendar handoff, local reminders, and device-side permissions.
 - `services/api` owns orchestration, normalized contracts, context resolution, confidence, action graphs, and scheduling.
 - External providers live behind adapters. Domain models must not depend on a specific LLM, calendar, map, or push provider.
 
@@ -36,10 +37,22 @@ Screenshot / Image / Text
 - `LoopAction`: calendar, reminder, place, or checklist action.
 - `Checkpoint`: scheduled context reevaluation, not a continuously running agent.
 
-## Next implementation slices
+## Current delivery topology
 
-1. Shared JSON Schema and generated Dart/TypeScript clients.
-2. Multimodal model adapter with redaction and structured-output validation.
-3. SQLite development repository, then PostgreSQL production repository.
-4. Native share extension and calendar integration.
-5. Golden dataset focused on Final Agreement Accuracy.
+- The API persists local development data in SQLite and deployed data in
+  DynamoDB. Its Lambda/Web Adapter deployment is defined in `infra/`.
+- Gemini accepts text and image analysis through a server-only adapter; raw
+  uploads are size/type constrained and not persisted.
+- Kakao and KMA provide normalized place and weather data. The Flutter client
+  opens the native Kakao map when possible and otherwise uses the web URL.
+- Action, checklist, and checkpoint mutations are installation-scoped and
+  local-first: a failed remote request preserves the user’s local progress.
+- Checkpoint scheduling, FCM delivery, PostHog, and Sentry are credential-gated
+  optional integrations with disabled-safe defaults.
+
+## Remaining production slices
+
+1. User authentication and a durable authorization model beyond anonymous installation IDs.
+2. A golden evaluation dataset focused on Final Agreement Accuracy.
+3. Provider credential activation and real-device permission/push acceptance testing.
+4. Billing and multi-user sharing only after the personal-loop flow is validated.

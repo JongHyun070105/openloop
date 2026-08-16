@@ -21,6 +21,7 @@ void main() {
       return http.Response.bytes(
         utf8.encode(
           jsonEncode({
+            'id': 'loop-42',
             'status': 'open',
             'suggested_question': null,
             'event': {
@@ -47,6 +48,23 @@ void main() {
               'resolution_note': '최종 합의를 선택했습니다.',
               'future_field': 'is ignored',
             },
+            'actions': [
+              {
+                'id': 'action-calendar',
+                'type': 'calendar',
+                'title': '캘린더에 추가',
+                'metadata': {'duration_minutes': 60},
+              },
+            ],
+            'checkpoints': [
+              {
+                'id': 'checkpoint-t24h',
+                'offset': 'T-24h',
+                'title': '하루 전 확인',
+                'due_at': '2026-08-21T19:00:00Z',
+              },
+            ],
+            'delete_at': '2026-08-29T00:00:00Z',
           }),
         ),
         200,
@@ -65,7 +83,61 @@ void main() {
     expect(result.reminderOffsets, ['-1h']);
     expect(result.checklist.first.isRequired, isFalse);
     expect(result.checklist.last.isRequired, isTrue);
+    expect(result.actions.single.metadata['duration_minutes'], 60);
+    expect(result.checkpoints.single.dueAt, isNotNull);
+    expect(result.deleteAt, isNotNull);
   });
+
+  test(
+    'API client syncs checkpoint completion with installation ownership',
+    () async {
+      final client = MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(
+          request.url.toString(),
+          'https://api.example/v1/loops/loop-42/checkpoints/checkpoint-t24h',
+        );
+        expect(request.headers['x-openloop-install-id'], 'test-install');
+        expect(jsonDecode(request.body), {'completed': true});
+        return http.Response(
+          jsonEncode({
+            'id': 'loop-42',
+            'status': 'open',
+            'event': {
+              'type': 'deadline',
+              'title': '제출 마감',
+              'source': 'text',
+              'confidence': {},
+              'missing_fields': [],
+              'reminders': [],
+            },
+            'checkpoints': [
+              {
+                'id': 'checkpoint-t24h',
+                'offset': 'T-24h',
+                'title': '하루 전 확인',
+                'completed': true,
+              },
+            ],
+          }),
+          200,
+          headers: const {'content-type': 'application/json'},
+        );
+      });
+
+      final result =
+          await ApiAnalyzeService(
+            baseUrl: 'https://api.example',
+            client: client,
+          ).updateCheckpoint(
+            loopId: 'loop-42',
+            itemId: 'checkpoint-t24h',
+            completed: true,
+          );
+
+      expect(result.checkpoints.single.completed, isTrue);
+    },
+  );
 
   test('local analyzer asks only for a missing time', () async {
     final result = await LocalAnalyzeService().analyze(
@@ -87,5 +159,16 @@ void main() {
     expect(result.time, isNull);
     expect(result.place, isNull);
     expect(result.missingFields, ['date', 'start_time', 'place']);
+  });
+
+  test('local deadline includes action graph and checkpoints', () async {
+    final result = await LocalAnalyzeService().analyze(
+      text: 'AI 공모전 제출 마감 2026-08-22 23:00',
+      source: 'text',
+    );
+
+    expect(result.actions, isNotEmpty);
+    expect(result.actions.any((action) => action.type == 'checklist'), isTrue);
+    expect(result.checkpoints, hasLength(3));
   });
 }

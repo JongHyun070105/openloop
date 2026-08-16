@@ -779,14 +779,20 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
       at: loop.startsAt,
     );
     if (!mounted) return;
+    final mapOpened = await api.openKakaoMap(selected);
+    if (mapOpened) {
+      await widget.controller.completeActionByType(loop, 'place');
+      AppIntegrations.instance.capture('place_opened');
+    }
+    if (!mounted) return;
     setState(() {
       weather = snapshot;
-      notice = snapshot.available
-          ? '기상청 예보를 불러왔습니다.'
-          : '현재 제공 가능한 기상청 예보가 없습니다.';
+      notice = mapOpened
+          ? (snapshot.available
+                ? '기상청 예보를 불러오고 카카오맵을 열었습니다.'
+                : '카카오맵을 열었습니다. 현재 제공 가능한 기상청 예보가 없습니다.')
+          : '기상청 예보를 불러왔지만 카카오맵을 열지 못했습니다.';
     });
-    await api.openKakaoMap(selected);
-    AppIntegrations.instance.capture('place_opened');
   }
 
   @override
@@ -1031,6 +1037,12 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 final ok = await widget.controller.deviceActions.addToCalendar(
                   loop,
                 );
+                if (ok) {
+                  await widget.controller.completeActionByType(
+                    loop,
+                    'calendar',
+                  );
+                }
                 if (mounted) {
                   setState(
                     () => notice = ok
@@ -1046,6 +1058,12 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               onPressed: () async {
                 final ok = await widget.controller.deviceActions
                     .scheduleReminder(loop);
+                if (ok) {
+                  await widget.controller.completeActionByType(
+                    loop,
+                    'reminder',
+                  );
+                }
                 if (mounted) {
                   setState(
                     () => notice = ok

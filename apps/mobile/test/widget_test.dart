@@ -50,6 +50,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('실행 항목'), findsOneWidget);
     expect(find.text('체크포인트'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('캘린더에 추가'), 180);
+    await tester.tap(find.text('캘린더에 추가'));
+    await tester.pumpAndSettle();
+    expect(
+      controller.loops.single.actions
+          .where((action) => action.type == 'calendar')
+          .single
+          .completed,
+      isTrue,
+    );
+
+    await tester.tap(find.text('T-24h 확인'));
+    await tester.pumpAndSettle();
+    expect(controller.loops.single.checkpoints.first.completed, isTrue);
   });
 
   testWidgets('settings persist base URL and retention choice', (tester) async {
@@ -121,15 +136,42 @@ void main() {
     );
     await controller.saveLoop(loop);
 
-    await controller.updateAction(
-      loop,
-      loop.actions.single,
-      true,
-    );
+    await controller.updateAction(loop, loop.actions.single, true);
     expect(repository.loops.single.actions.single.completed, isTrue);
 
-    await controller.deleteLoop(repository.loops.single);
-    expect(repository.loops, isEmpty);
-    expect(controller.loops, isEmpty);
+    final checklistLoop = OpenLoop(
+      id: 'checklist-loop',
+      kind: LoopKind.deadline,
+      state: LoopState.open,
+      title: '제출',
+      source: 'text',
+      createdAt: DateTime(2026, 8, 16),
+      actions: const [
+        LoopAction(id: 'checklist', type: 'checklist', title: '제출물 확인'),
+      ],
+      checklist: const [LoopChecklistItem(id: 'required', title: '파일 업로드')],
+      confidence: const {},
+    );
+    await controller.saveLoop(checklistLoop);
+    await controller.updateChecklist(
+      checklistLoop,
+      checklistLoop.checklist.single,
+      true,
+    );
+    expect(
+      controller.loops
+          .firstWhere((item) => item.id == checklistLoop.id)
+          .actions
+          .single
+          .completed,
+      isTrue,
+    );
+
+    await controller.deleteLoop(
+      repository.loops.firstWhere((item) => item.id == loop.id),
+    );
+    expect(repository.loops, hasLength(1));
+    expect(controller.loops, hasLength(1));
+    expect(repository.loops.single.id, checklistLoop.id);
   });
 }

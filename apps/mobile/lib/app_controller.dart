@@ -214,6 +214,12 @@ class AppController extends ChangeNotifier {
       }
     }
     await saveLoop(updated);
+    final requiredItems = updated.checklist.where((entry) => entry.isRequired);
+    if (updated.checklist.isNotEmpty &&
+        requiredItems.isNotEmpty &&
+        requiredItems.every((entry) => entry.completed)) {
+      await completeActionByType(updated, 'checklist');
+    }
   }
 
   Future<void> updateAction(
@@ -240,6 +246,15 @@ class AppController extends ChangeNotifier {
       }
     }
     await saveLoop(updated);
+  }
+
+  Future<void> completeActionByType(OpenLoop loop, String type) async {
+    for (final action in loop.actions) {
+      if (action.type == type && !action.completed) {
+        await updateAction(loop, action, true);
+        return;
+      }
+    }
   }
 
   Future<void> updateCheckpoint(

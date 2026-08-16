@@ -258,24 +258,31 @@ class LoopAction {
     required this.type,
     required this.title,
     this.completed = false,
+    this.metadata = const {},
   });
   final String id;
   final String type;
   final String title;
   final bool completed;
+  final Map<String, dynamic> metadata;
 
-  LoopAction copyWith({bool? completed}) => LoopAction(
-    id: id,
-    type: type,
-    title: title,
-    completed: completed ?? this.completed,
-  );
+  LoopAction copyWith({bool? completed, Map<String, dynamic>? metadata}) =>
+      LoopAction(
+        id: id,
+        type: type,
+        title: title,
+        completed: completed ?? this.completed,
+        metadata: metadata ?? this.metadata,
+      );
 
   factory LoopAction.fromJson(Map<String, dynamic> json) => LoopAction(
     id: json['id'] as String,
     type: json['type'] as String,
     title: json['title'] as String,
     completed: json['completed'] as bool? ?? false,
+    metadata: Map<String, dynamic>.from(
+      json['metadata'] as Map? ?? const <String, dynamic>{},
+    ),
   );
 
   Map<String, dynamic> toJson() => {
@@ -283,6 +290,7 @@ class LoopAction {
     'type': type,
     'title': title,
     'completed': completed,
+    'metadata': metadata,
   };
 }
 

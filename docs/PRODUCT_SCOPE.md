@@ -54,8 +54,30 @@ OpenLoop converts information users already understood into a structured, action
 ## Deliberately deferred
 
 - Production authentication and billing
-- Live LLM calls and prompt evaluation dataset
-- Native share extensions
-- Real calendar, maps, weather, FCM, and APNs integrations
-- PostgreSQL persistence and production scheduler
+- A golden prompt-evaluation dataset and automated quality gate
+- Account-to-account sharing and collaborative editing
 - Purchase, coupon, travel, school, and work skills
+
+## Implemented product paths
+
+- Text, image, and native Android/iOS share capture feed the same review flow.
+- The FastAPI service uses a structured Gemini adapter when configured and
+  degrades to a deterministic local-safe analysis path when it is unavailable.
+- Calendar handoff, local reminders, Kakao place lookup/map handoff, and KMA
+  weather lookup are wired behind permission and provider-availability checks.
+- Appointment and deadline loops persist actions, checklist items, and
+  `T-24h`/`T-2h`/`T+N` checkpoints; each can be completed locally and synced
+  to the server when reachable.
+- DynamoDB-backed serverless persistence, scheduled checkpoint dispatch, FCM,
+  PostHog, and Sentry are all optional integrations. They remain explicitly
+  disabled until their corresponding credentials are configured, rather than
+  pretending to be active.
+
+## External activation prerequisites
+
+- Gemini, Kakao, and KMA credentials belong only on the server.
+- Firebase configuration plus the FCM service-account secret are required to
+  activate remote checkpoint push.
+- PostHog and Sentry keys are required to activate analytics and error capture.
+- Platform permissions and provider-side KMA authorization still determine
+  whether those integrations can complete on a particular device/account.
