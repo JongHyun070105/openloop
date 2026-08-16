@@ -242,6 +242,32 @@ class AppController extends ChangeNotifier {
     await saveLoop(updated);
   }
 
+  Future<void> updateCheckpoint(
+    OpenLoop loop,
+    LoopCheckpoint item,
+    bool completed,
+  ) async {
+    var updated = loop.copyWith(
+      checkpoints: loop.checkpoints
+          .map(
+            (entry) => entry.id == item.id
+                ? entry.copyWith(completed: completed)
+                : entry,
+          )
+          .toList(),
+    );
+    if (baseUrl.trim().isNotEmpty) {
+      try {
+        updated = await ApiAnalyzeService(
+          baseUrl: baseUrl.trim(),
+        ).updateCheckpoint(loopId: loop.id, itemId: item.id, completed: completed);
+      } catch (_) {
+        // Checkpoints stay available offline and can be re-synced later.
+      }
+    }
+    await saveLoop(updated);
+  }
+
   Future<bool> deleteLoop(OpenLoop loop) async {
     if (baseUrl.trim().isNotEmpty) {
       try {

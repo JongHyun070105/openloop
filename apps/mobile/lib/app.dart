@@ -968,6 +968,52 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               ),
             ),
           ],
+          if (loop.checkpoints.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const Text(
+              '체크포인트',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            ...loop.checkpoints.map(
+              (item) => CheckboxListTile(
+                value: item.completed,
+                contentPadding: EdgeInsets.zero,
+                title: Row(
+                  children: [
+                    Expanded(child: Text(item.title)),
+                    const SizedBox(width: 8),
+                    Text(
+                      item.completed ? '완료' : item.offset,
+                      style: TextStyle(
+                        color: item.completed
+                            ? OLColors.cobalt
+                            : OLColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: item.dueAt == null
+                    ? null
+                    : Text(
+                        item.dueAt!.toLocal().toString(),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                onChanged: loop.state == LoopState.closed
+                    ? null
+                    : (value) async {
+                        await widget.controller.updateCheckpoint(
+                          loop,
+                          item,
+                          value ?? false,
+                        );
+                        if (mounted) setState(() {});
+                      },
+              ),
+            ),
+          ],
           if (notice != null) ...[
             const SizedBox(height: 14),
             _InfoBanner(text: notice!),
