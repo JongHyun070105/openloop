@@ -127,6 +127,38 @@ def _extract_checklist(text: str) -> list[ChecklistSuggestion]:
     return [ChecklistSuggestion(title=value, required=True) for value in values if value][:10]
 
 
+def _summary(
+    title: str,
+    intent: Intent,
+    event_date: date | None,
+    event_time: time | None,
+    place_name: str | None,
+    missing_fields: list[str],
+) -> str:
+    """Produce a small, factual local summary when no AI provider is configured.
+
+    This fallback intentionally mirrors the remote contract without filling in a
+    value that was not in the shared text.  It is useful in review UI and makes
+    the privacy-safe degraded path legible instead of looking like a blank AI
+    result.
+    """
+
+    kind = "마감" if intent == Intent.DEADLINE else "일정"
+    facts = [title, kind]
+    if event_date:
+        facts.append(event_date.isoformat())
+    if event_time:
+        facts.append(event_time.strftime("%H:%M"))
+    if place_name:
+        facts.append(place_name)
+    text = " · ".join(facts)
+    if missing_fields:
+        labels = {"date": "날짜", "start_time": "시간", "place": "장소"}
+        unresolved = ", ".join(labels.get(field, field) for field in missing_fields)
+        return f"{text}. {unresolved} 확인이 필요합니다."
+    return f"{text}로 정리했습니다."
+
+
 def _suggested_question(missing_fields: list[str]) -> str | None:
     if not missing_fields:
         return None
@@ -181,6 +213,14 @@ def analyze_demo(request: AnalyzeRequest) -> AnalyzeResponse:
             title=0.7,
         ),
         missing_fields=missing_fields,
+        summary=_summary(
+            _event_title(text, intent),
+            intent,
+            event_date,
+            event_time,
+            place_name,
+            missing_fields,
+        ),
         resolution_note=(
             "API 연결 전에는 텍스트에 명시된 값만 추출합니다. 저장 전에 빈 항목을 확인하세요."
         ),

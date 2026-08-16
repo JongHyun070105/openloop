@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -30,6 +31,7 @@ void main() {
               'date': '2026-08-22',
               'start_time': '19:00:00',
               'place': {'name': '성수'},
+              'summary': '성수 저녁 약속을 8월 22일 19:00 성수에서 진행합니다.',
               'source': 'text',
               'confidence': {
                 'date': .9,
@@ -79,6 +81,7 @@ void main() {
     expect(result.title, '성수 약속');
     expect(result.state, LoopState.open);
     expect(result.time, '19:00:00');
+    expect(result.summary, '성수 저녁 약속을 8월 22일 19:00 성수에서 진행합니다.');
     expect(result.missingFields, isEmpty);
     expect(result.reminderOffsets, ['-1h']);
     expect(result.checklist.first.isRequired, isFalse);
@@ -139,6 +142,65 @@ void main() {
     },
   );
 
+  test(
+    'API client sends every selected image in one multipart request',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'openloop-share-test-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final first = File('${directory.path}/first.png');
+      final second = File('${directory.path}/second.png');
+      await first.writeAsBytes([1, 2, 3]);
+      await second.writeAsBytes([4, 5, 6]);
+
+      final client = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(
+          request.url.toString(),
+          'https://api.example/v1/loops/analyze/image',
+        );
+        expect(request.headers['x-openloop-install-id'], 'test-install');
+        expect(
+          request.headers['content-type'],
+          startsWith('multipart/form-data; boundary='),
+        );
+        expect(RegExp('name="file"').allMatches(request.body).length, 2);
+        expect(request.body, contains('name="source"'));
+        expect(request.body, contains('screenshot'));
+        return http.Response(
+          jsonEncode({
+            'id': 'shared-loop',
+            'status': 'open',
+            'event': {
+              'type': 'appointment',
+              'title': '공유 일정',
+              'source': 'screenshot',
+              'confidence': {},
+              'missing_fields': [],
+              'reminders': [],
+            },
+          }),
+          201,
+          headers: const {'content-type': 'application/json'},
+        );
+      });
+
+      final result =
+          await ApiAnalyzeService(
+            baseUrl: 'https://api.example',
+            client: client,
+          ).analyzeImages(
+            imagePaths: [first.path, second.path],
+            companionText: '두 장을 함께 봐 주세요',
+            source: 'screenshot',
+          );
+
+      expect(result.id, 'shared-loop');
+      expect(result.source, 'screenshot');
+    },
+  );
+
   test('local analyzer asks only for a missing time', () async {
     final result = await LocalAnalyzeService().analyze(
       text: '내일 성수에서 만나자',
@@ -161,14 +223,44 @@ void main() {
     expect(result.missingFields, ['date', 'start_time', 'place']);
   });
 
-  test('local deadline includes action graph and checkpoints', () async {
-    final result = await LocalAnalyzeService().analyze(
-      text: 'AI 공모전 제출 마감 2026-08-22 23:00',
-      source: 'text',
-    );
+  test(
+    'local deadline mirrors the deadline checklist and review cadence',
+    () async {
+      final result = await LocalAnalyzeService().analyze(
+        text: 'AI 공모전 제출 마감 2026-08-22 23:00. 제출물: 작품 파일, 포트폴리오',
+        source: 'text',
+      );
 
-    expect(result.actions, isNotEmpty);
-    expect(result.actions.any((action) => action.type == 'checklist'), isTrue);
-    expect(result.checkpoints, hasLength(3));
-  });
+      expect(result.actions, isNotEmpty);
+      expect(
+        result.actions.any((action) => action.type == 'checklist'),
+        isTrue,
+      );
+      expect(result.checklist.map((item) => item.title), ['작품 파일', '포트폴리오']);
+      expect(result.checkpoints, hasLength(3));
+      expect(result.checkpoints.map((item) => item.offset), [
+        'D-7',
+        'D-3',
+        'D-1',
+      ]);
+      expect(result.summary, contains('공모전 마감'));
+    },
+  );
+
+  test(
+    'local appointment creates event-driven before and after checkpoints',
+    () async {
+      final result = await LocalAnalyzeService().analyze(
+        text: '2026-08-22 19:00 성수에서 회의',
+        source: 'text',
+      );
+
+      expect(result.state, LoopState.open);
+      expect(result.checkpoints.map((item) => item.offset), [
+        'T-24h',
+        'T-2h',
+        'T+1d',
+      ]);
+    },
+  );
 }

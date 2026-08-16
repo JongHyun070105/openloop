@@ -12,6 +12,11 @@ OpenLoop converts information users already understood into a structured, action
 - Image
 - Text
 
+Android `SEND`/`SEND_MULTIPLE`과 iOS Share Extension은 한 번에 최대 5장의
+이미지를 하나의 캡처 맥락으로 전달한다. 텍스트와 URL 공유 문자열은 같은
+보조 문맥으로 보존한다. URL 원문을 서버가 임의로 가져오는 기능은 SSRF와
+개인정보 경계 때문에 MVP에 포함하지 않는다.
+
 ### Intents
 
 - `appointment`: appointment, event, reservation
@@ -26,6 +31,7 @@ OpenLoop converts information users already understood into a structured, action
 5. Missing-field detection
 6. Focused user verification
 7. Action graph generation
+8. A concise, factual Korean summary for the review screen
 
 ### Actions
 
@@ -33,7 +39,8 @@ OpenLoop converts information users already understood into a structured, action
 - Reminder
 - Open Loop
 - Deadline checklist
-- Event-driven checkpoints (`T-24h`, `T-2h`, `T+N`)
+- Deadline checkpoints (`D-7`, `D-3`, `D-1`)
+- Appointment checkpoints (`T-24h`, `T-2h`, `T+1d`)
 
 ## UX rules
 
@@ -60,14 +67,16 @@ OpenLoop converts information users already understood into a structured, action
 
 ## Implemented product paths
 
-- Text, image, and native Android/iOS share capture feed the same review flow.
+- Text, image, and native Android/iOS share capture (up to five images) feed the same review flow.
 - The FastAPI service uses a structured Gemini adapter when configured and
   degrades to a deterministic local-safe analysis path when it is unavailable.
+- Both remote and local analysis return an explicit Korean review summary;
+  selecting a missing field refreshes the summary and action graph.
 - Calendar handoff, local reminders, Kakao place lookup/map handoff, and KMA
   weather lookup are wired behind permission and provider-availability checks.
-- Appointment and deadline loops persist actions, checklist items, and
-  `T-24h`/`T-2h`/`T+N` checkpoints; each can be completed locally and synced
-  to the server when reachable.
+- Appointment and deadline loops persist actions, checklist items, and their
+  distinct checkpoint cadence; each can be completed locally and synced to the
+  server when reachable.
 - DynamoDB-backed serverless persistence, scheduled checkpoint dispatch, FCM,
   PostHog, and Sentry are all optional integrations. They remain explicitly
   disabled until their corresponding credentials are configured, rather than

@@ -29,8 +29,8 @@ void main() {
     await tester.tap(find.byKey(const Key('capture-button')));
     await tester.pumpAndSettle();
     expect(find.text('OpenLoop에 공유'), findsOneWidget);
-    expect(find.text('스크린샷'), findsOneWidget);
-    expect(find.text('이미지'), findsOneWidget);
+    expect(find.text('카메라'), findsOneWidget);
+    expect(find.text('사진·스크린샷'), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('capture-text')),
       'AI 공모전 제출 마감 8월 22일 23시',
@@ -42,13 +42,21 @@ void main() {
 
     expect(find.text('DEADLINE'), findsOneWidget);
     expect(find.text('API가 연결되지 않아 로컬 데모 분석을 사용했습니다.'), findsOneWidget);
+    expect(find.text('AI 요약'), findsOneWidget);
+    expect(find.text('AI 확신도'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('save-loop-button')),
+      220,
+    );
     await tester.tap(find.byKey(const Key('save-loop-button')));
     await tester.pumpAndSettle();
 
     expect(find.text('공모전 마감'), findsOneWidget);
     await tester.tap(find.text('공모전 마감'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('실행 항목'), 180);
     expect(find.text('실행 항목'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('체크포인트'), 180);
     expect(find.text('체크포인트'), findsOneWidget);
 
     await tester.scrollUntilVisible(find.text('캘린더에 추가'), 180);
@@ -62,7 +70,8 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.text('T-24h 확인'));
+    await tester.scrollUntilVisible(find.text('공모전 마감 D-7 준비 확인'), 180);
+    await tester.tap(find.text('공모전 마감 D-7 준비 확인'));
     await tester.pumpAndSettle();
     expect(controller.loops.single.checkpoints.first.completed, isTrue);
   });
@@ -116,6 +125,14 @@ void main() {
     expect(complete.state, LoopState.open);
     expect(complete.place, '성수');
     expect(complete.participants, const ['나', '친구']);
+    expect(complete.summary, contains('성수'));
+    expect(complete.summary, isNot(contains('확인이 필요합니다')));
+    expect(complete.actions.any((item) => item.type == 'place'), isTrue);
+    expect(complete.checkpoints.map((item) => item.offset), [
+      'T-24h',
+      'T-2h',
+      'T+1d',
+    ]);
     expect(controller.loops.single.id, loop.id);
   });
 
@@ -174,4 +191,28 @@ void main() {
     expect(controller.loops, hasLength(1));
     expect(repository.loops.single.id, checklistLoop.id);
   });
+
+  test(
+    'Close & Forget starts its retention clock when a loop is completed',
+    () async {
+      final oldLoop = OpenLoop(
+        id: 'retention-loop',
+        kind: LoopKind.appointment,
+        state: LoopState.open,
+        title: '오래된 일정',
+        source: 'text',
+        createdAt: DateTime.now().subtract(const Duration(days: 90)),
+        confidence: const {},
+      );
+      await controller.saveLoop(oldLoop);
+
+      await controller.closeLoop(oldLoop);
+
+      final closed = controller.loops.single;
+      expect(closed.state, LoopState.closed);
+      expect(closed.completedAt, isNotNull);
+      expect(closed.deleteAt, isNotNull);
+      expect(closed.deleteAt!.difference(closed.completedAt!).inDays, 7);
+    },
+  );
 }

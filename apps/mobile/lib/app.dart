@@ -8,6 +8,7 @@ import 'app_controller.dart';
 import 'design_system.dart';
 import 'models/open_loop.dart';
 import 'services/external_integrations.dart';
+import 'services/shared_capture.dart';
 
 class OpenLoopApp extends StatefulWidget {
   const OpenLoopApp({super.key, required this.controller});
@@ -54,18 +55,8 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   }
 
   void _openSharedMedia(List<SharedMediaFile> items) {
-    if (items.isEmpty) return;
-    final firstImage = items
-        .where((item) => item.type == SharedMediaType.image)
-        .firstOrNull;
-    final text = items
-        .where(
-          (item) =>
-              item.type == SharedMediaType.text ||
-              item.type == SharedMediaType.url,
-        )
-        .map((item) => item.path)
-        .join('\n');
+    final capture = normalizeSharedMedia(items);
+    if (capture.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final navigator = navigatorKey.currentState;
       if (navigator == null) return;
@@ -73,8 +64,11 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
         MaterialPageRoute<void>(
           builder: (_) => CaptureScreen(
             controller: widget.controller,
-            initialText: text,
-            initialImagePath: firstImage?.path,
+            initialText: capture.text,
+            initialImagePaths: capture.imagePaths.take(5).toList(),
+            initialNotice: capture.imagePaths.length > 5
+                ? '공유된 이미지 ${capture.imagePaths.length}장 중 최대 5장을 한 번에 분석할 수 있어요.'
+                : null,
           ),
         ),
       );
@@ -254,11 +248,13 @@ class CaptureScreen extends StatefulWidget {
     super.key,
     required this.controller,
     this.initialText = '',
-    this.initialImagePath,
+    this.initialImagePaths = const [],
+    this.initialNotice,
   });
   final AppController controller;
   final String initialText;
-  final String? initialImagePath;
+  final List<String> initialImagePaths;
+  final String? initialNotice;
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
@@ -266,17 +262,19 @@ class CaptureScreen extends StatefulWidget {
 class _CaptureScreenState extends State<CaptureScreen> {
   late final TextEditingController textController;
   String source = 'text';
-  XFile? image;
+  List<XFile> images = [];
   String? error;
+  String? notice;
 
   @override
   void initState() {
     super.initState();
     textController = TextEditingController(text: widget.initialText);
-    if (widget.initialImagePath != null) {
-      image = XFile(widget.initialImagePath!);
+    if (widget.initialImagePaths.isNotEmpty) {
+      images = widget.initialImagePaths.map(XFile.new).toList();
       source = 'image';
     }
+    notice = widget.initialNotice;
   }
 
   @override
@@ -287,15 +285,22 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _pickImage(ImageSource imageSource) async {
     try {
-      final picked = await ImagePicker().pickImage(
-        source: imageSource,
-        imageQuality: 82,
-      );
-      if (picked != null && mounted) {
+      final picked = imageSource == ImageSource.camera
+          ? await ImagePicker().pickImage(source: imageSource, imageQuality: 82)
+          : null;
+      final selected = picked == null && imageSource == ImageSource.gallery
+          ? await ImagePicker().pickMultiImage(imageQuality: 82)
+          : picked == null
+          ? const <XFile>[]
+          : [picked];
+      if (selected.isNotEmpty && mounted) {
         setState(() {
-          image = picked;
+          images = selected.take(5).toList();
           source = imageSource == ImageSource.camera ? 'screenshot' : 'image';
           error = null;
+          notice = selected.length > 5
+              ? '한 번에 최대 5장까지 분석할 수 있어 처음 5장을 선택했어요.'
+              : null;
         });
       }
     } catch (_) {
@@ -307,15 +312,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _analyze() async {
     final text = textController.text.trim();
-    if (text.isEmpty && image == null) {
+    if (text.isEmpty && images.isEmpty) {
       setState(() => error = '분석할 텍스트나 이미지를 추가해 주세요.');
       return;
     }
-    final result = image == null
+    final result = images.isEmpty
         ? widget.controller.analyze(text: text, source: source)
-        : widget.controller.analyzeImage(
-            imagePath: image!.path,
+        : widget.controller.analyzeImages(
+            imagePaths: images.map((image) => image.path).toList(),
             companionText: text,
+            source: source,
           );
     await Navigator.push(
       context,
@@ -343,7 +349,9 @@ class _CaptureScreenState extends State<CaptureScreen> {
           minLines: 5,
           maxLines: 10,
           decoration: const InputDecoration(hintText: '대화, 공지, 예약 내용을 붙여 넣으세요'),
-          onChanged: (_) => setState(() => source = 'text'),
+          onChanged: (_) {
+            if (images.isEmpty) setState(() => source = 'text');
+          },
         ),
         const SizedBox(height: 14),
         Row(
@@ -352,7 +360,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
               child: OutlinedButton.icon(
                 onPressed: () => _pickImage(ImageSource.camera),
                 icon: const Icon(Icons.camera_alt_outlined),
-                label: const Text('스크린샷'),
+                label: const Text('카메라'),
               ),
             ),
             const SizedBox(width: 10),
@@ -360,33 +368,47 @@ class _CaptureScreenState extends State<CaptureScreen> {
               child: OutlinedButton.icon(
                 onPressed: () => _pickImage(ImageSource.gallery),
                 icon: const Icon(Icons.photo_outlined),
-                label: const Text('이미지'),
+                label: const Text('사진·스크린샷'),
               ),
             ),
           ],
         ),
-        if (image != null) ...[
+        if (images.isNotEmpty) ...[
           const SizedBox(height: 12),
-          ListTile(
-            tileColor: OLColors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            leading: const Icon(Icons.image_outlined),
-            title: Text(
-              image!.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: IconButton(
-              onPressed: () => setState(() => image = null),
-              icon: const Icon(Icons.close),
+          Text(
+            images.length == 1
+                ? '이미지 1장을 분석합니다.'
+                : '이미지 ${images.length}장을 하나의 맥락으로 분석합니다.',
+            style: const TextStyle(color: OLColors.muted),
+          ),
+          const SizedBox(height: 8),
+          ...images.asMap().entries.map(
+            (entry) => ListTile(
+              tileColor: OLColors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              leading: const Icon(Icons.image_outlined),
+              title: Text(
+                entry.value.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: IconButton(
+                tooltip: '이미지 제거',
+                onPressed: () => setState(() => images.removeAt(entry.key)),
+                icon: const Icon(Icons.close),
+              ),
             ),
           ),
         ],
         if (error != null) ...[
           const SizedBox(height: 12),
           Text(error!, style: const TextStyle(color: OLColors.warning)),
+        ],
+        if (notice != null) ...[
+          const SizedBox(height: 12),
+          _InfoBanner(text: notice!),
         ],
         const SizedBox(height: 24),
         FilledButton(
@@ -674,6 +696,10 @@ class ReviewScreen extends StatelessWidget {
           loop.title,
           style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
         ),
+        if (loop.summary?.trim().isNotEmpty == true) ...[
+          const SizedBox(height: 16),
+          _SummaryCard(summary: loop.summary!),
+        ],
         const SizedBox(height: 22),
         _Fact(icon: Icons.calendar_today_outlined, label: dateText(loop.date)),
         _Fact(
@@ -692,6 +718,10 @@ class ReviewScreen extends StatelessWidget {
         if (loop.resolutionNote != null) ...[
           const SizedBox(height: 18),
           _InfoBanner(text: loop.resolutionNote!),
+        ],
+        if (loop.confidence.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          _ConfidenceCard(confidence: loop.confidence),
         ],
         const SizedBox(height: 24),
         FilledButton(
@@ -861,6 +891,10 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 26),
+          if (loop.summary?.trim().isNotEmpty == true) ...[
+            _SummaryCard(summary: loop.summary!),
+            const SizedBox(height: 18),
+          ],
           _Fact(
             icon: Icons.calendar_today_outlined,
             label: dateText(loop.date),
@@ -878,6 +912,10 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             ),
           if (loop.purpose != null)
             _Fact(icon: Icons.subject_outlined, label: loop.purpose!),
+          if (loop.confidence.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _ConfidenceCard(confidence: loop.confidence),
+          ],
           if (weather?.available == true) ...[
             const SizedBox(height: OLSpacing.md),
             OLCard(
@@ -1391,6 +1429,92 @@ class _InfoBanner extends StatelessWidget {
     ),
     child: Text(text, style: const TextStyle(height: 1.45)),
   );
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.summary});
+  final String summary;
+
+  @override
+  Widget build(BuildContext context) => OLCard(
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.auto_awesome_outlined, color: OLColors.cobalt),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'AI 요약',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 5),
+              Text(summary, style: const TextStyle(height: 1.45)),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ConfidenceCard extends StatelessWidget {
+  const _ConfidenceCard({required this.confidence});
+  final Map<String, double> confidence;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = {
+      'date': '날짜',
+      'time': '시간',
+      'location': '장소',
+      'title': '제목',
+    };
+    const order = {'date': 0, 'time': 1, 'location': 2, 'title': 3};
+    final entries =
+        confidence.entries
+            .where((entry) => labels.containsKey(entry.key))
+            .toList()
+          ..sort((left, right) => order[left.key]!.compareTo(order[right.key]!));
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return OLCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.verified_outlined, color: OLColors.cobalt, size: 19),
+              SizedBox(width: 8),
+              Text('AI 확신도', style: TextStyle(fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in entries)
+                Chip(
+                  label: Text(
+                    '${labels[entry.key]} ${(entry.value * 100).round()}%',
+                  ),
+                  side: BorderSide(
+                    color: entry.value >= .8
+                        ? OLColors.cobalt.withValues(alpha: .25)
+                        : OLColors.warning.withValues(alpha: .35),
+                  ),
+                  backgroundColor: entry.value >= .8
+                      ? OLColors.cobaltSoft
+                      : OLColors.warning.withValues(alpha: .08),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PrivacyNote extends StatelessWidget {

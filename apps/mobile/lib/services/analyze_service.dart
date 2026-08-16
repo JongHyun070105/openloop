@@ -45,16 +45,41 @@ class ApiAnalyzeService implements AnalyzeService {
   Future<OpenLoop> analyzeImage({
     required String imagePath,
     String? companionText,
+    String source = 'image',
+  }) => analyzeImages(
+    imagePaths: [imagePath],
+    companionText: companionText,
+    source: source,
+  );
+
+  Future<OpenLoop> analyzeImages({
+    required List<String> imagePaths,
+    String? companionText,
+    String source = 'image',
   }) async {
+    if (imagePaths.isEmpty) {
+      throw ArgumentError.value(
+        imagePaths,
+        'imagePaths',
+        'At least one image is required',
+      );
+    }
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$_root/v1/loops/analyze/image'),
     );
     request.headers['X-OpenLoop-Install-Id'] = await InstallationIdentity.get();
-    request.files.add(await http.MultipartFile.fromPath('file', imagePath));
+    request.files.addAll(
+      await Future.wait(
+        imagePaths.map(
+          (imagePath) => http.MultipartFile.fromPath('file', imagePath),
+        ),
+      ),
+    );
     if (companionText?.trim().isNotEmpty == true) {
       request.fields['companion_text'] = companionText!.trim();
     }
+    request.fields['source'] = source;
     final streamed = await _client
         .send(request)
         .timeout(const Duration(seconds: 25));
@@ -164,6 +189,15 @@ class LocalAnalyzeService implements AnalyzeService {
     final startTime = _explicitTime(text);
     final place = _explicitPlace(text);
     final title = _localTitle(text, isDeadline);
+    final checklist = isDeadline
+        ? _localDeadlineChecklist(text)
+        : const <Map<String, dynamic>>[];
+    final checkpoints = _localCheckpoints(
+      date: date,
+      time: startTime,
+      deadline: isDeadline,
+      title: title,
+    );
     final missingFields = <String>[
       if (date == null) 'date',
       if (startTime == null) 'start_time',
@@ -180,6 +214,14 @@ class LocalAnalyzeService implements AnalyzeService {
         'start_time': startTime,
         'place': place == null ? null : {'name': place},
         'purpose': null,
+        'summary': _localSummary(
+          title: title,
+          isDeadline: isDeadline,
+          date: date,
+          time: startTime,
+          place: place,
+          missingFields: missingFields,
+        ),
         'source': source,
         'confidence': {
           'date': date == null ? 0.0 : .96,
@@ -190,7 +232,9 @@ class LocalAnalyzeService implements AnalyzeService {
         'missing_fields': missingFields,
         'reminders': isDeadline && date != null
             ? [
-                {'type': 'checkpoint', 'offset': '-1d'},
+                {'type': 'checkpoint', 'offset': 'D-7'},
+                {'type': 'checkpoint', 'offset': 'D-3'},
+                {'type': 'checkpoint', 'offset': 'D-1'},
               ]
             : startTime != null
             ? [
@@ -221,7 +265,7 @@ class LocalAnalyzeService implements AnalyzeService {
             'title': '마감 체크리스트',
             'completed': false,
           },
-        if (startTime != null)
+        if (date != null || startTime != null)
           {
             'id': 'action-reminder',
             'type': 'reminder',
@@ -229,38 +273,126 @@ class LocalAnalyzeService implements AnalyzeService {
             'completed': false,
           },
       ],
-      'checkpoints': isDeadline && date != null
-          ? [
-              {
-                'id': 'checkpoint-t24h',
-                'offset': 'T-24h',
-                'title': 'T-24h 확인',
-                'due_at': date
-                    .subtract(const Duration(days: 1))
-                    .toIso8601String(),
-                'completed': false,
-              },
-              {
-                'id': 'checkpoint-t2h',
-                'offset': 'T-2h',
-                'title': 'T-2h 확인',
-                'due_at': date
-                    .subtract(const Duration(hours: 2))
-                    .toIso8601String(),
-                'completed': false,
-              },
-              {
-                'id': 'checkpoint-tn',
-                'offset': 'T+N',
-                'title': 'T+N 후속 확인',
-                'due_at': date.add(const Duration(days: 1)).toIso8601String(),
-                'completed': false,
-              },
-            ]
-          : <Map<String, dynamic>>[],
+      'checklist': checklist,
+      'checkpoints': checkpoints,
     };
     return OpenLoop.fromAnalyzeJson(fallbackJson);
   }
+}
+
+List<Map<String, dynamic>> _localDeadlineChecklist(String text) {
+  final match = RegExp(r'(?:제출물|준비물|체크리스트)\s*[:：]\s*([^\n]+)').firstMatch(text);
+  final explicit = match == null
+      ? const <String>[]
+      : match
+            .group(1)!
+            .split(RegExp(r'[,/·]|\s+및\s+'))
+            .map((value) => value.trim().replaceAll(RegExp(r'[. ]+$'), ''))
+            .where((value) => value.isNotEmpty)
+            .take(10)
+            .toList();
+  final items = explicit.isEmpty ? const ['제출물 확인', '최종 제출'] : explicit;
+  return [
+    for (var index = 0; index < items.length; index++)
+      {
+        'id': 'checklist-${index + 1}',
+        'title': items[index],
+        'required': true,
+        'completed': false,
+      },
+  ];
+}
+
+List<Map<String, dynamic>> _localCheckpoints({
+  required DateTime? date,
+  required String? time,
+  required bool deadline,
+  required String title,
+}) {
+  if (date == null) return const [];
+  final parts = time?.split(':') ?? const <String>[];
+  final eventAt = DateTime(
+    date.year,
+    date.month,
+    date.day,
+    parts.isEmpty ? 9 : int.tryParse(parts.first) ?? 9,
+    parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
+  );
+  final templates = deadline
+      ? <({String id, String offset, String title, Duration delta})>[
+          (
+            id: 'd7',
+            offset: 'D-7',
+            title: '$title D-7 준비 확인',
+            delta: const Duration(days: -7),
+          ),
+          (
+            id: 'd3',
+            offset: 'D-3',
+            title: '$title D-3 제출물 점검',
+            delta: const Duration(days: -3),
+          ),
+          (
+            id: 'd1',
+            offset: 'D-1',
+            title: '$title D-1 최종 확인',
+            delta: const Duration(days: -1),
+          ),
+        ]
+      : <({String id, String offset, String title, Duration delta})>[
+          (
+            id: 't24h',
+            offset: 'T-24h',
+            title: '$title 하루 전 확인',
+            delta: const Duration(hours: -24),
+          ),
+          (
+            id: 't2h',
+            offset: 'T-2h',
+            title: '$title 출발·준비 확인',
+            delta: const Duration(hours: -2),
+          ),
+          (
+            id: 't1d',
+            offset: 'T+1d',
+            title: '$title 후속 확인',
+            delta: const Duration(days: 1),
+          ),
+        ];
+  return [
+    for (final item in templates)
+      {
+        'id': 'checkpoint-${item.id}',
+        'offset': item.offset,
+        'title': item.title,
+        'due_at': eventAt.add(item.delta).toUtc().toIso8601String(),
+        'completed': false,
+      },
+  ];
+}
+
+String _localSummary({
+  required String title,
+  required bool isDeadline,
+  required DateTime? date,
+  required String? time,
+  required String? place,
+  required List<String> missingFields,
+}) {
+  final facts = <String>[title, isDeadline ? '마감' : '일정'];
+  if (date != null) {
+    facts.add(
+      '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+    );
+  }
+  if (time != null) facts.add(time.substring(0, 5));
+  if (place != null) facts.add(place);
+  if (missingFields.isEmpty) return '${facts.join(' · ')}로 정리했습니다.';
+  const labels = {'date': '날짜', 'start_time': '시간', 'place': '장소'};
+  final unresolved = missingFields
+      .map((field) => labels[field] ?? field)
+      .join(', ');
+  return '${facts.join(' · ')}. $unresolved 확인이 필요합니다.';
 }
 
 DateTime? _explicitDate(String text, DateTime now) {

@@ -38,6 +38,25 @@ class LoopServiceTests(unittest.TestCase):
         self.assertEqual(resolved.event.start_time.hour, 19)
         self.assertEqual(resolved.event.missing_fields, [])
         self.assertIsNone(resolved.suggested_question)
+        self.assertTrue(resolved.event.summary)
+        self.assertEqual(
+            [checkpoint.offset for checkpoint in resolved.checkpoints],
+            ["T-24h", "T-2h", "T+1d"],
+        )
+        self.assertTrue(all(checkpoint.due_at for checkpoint in resolved.checkpoints))
+
+    def test_resolving_place_adds_the_place_action_without_replacing_calendar(self) -> None:
+        analysis = analyze_demo(AnalyzeRequest(text="내일 오후 7시 약속"))
+        created = self.service.create(CreateLoopRequest(**analysis.model_dump()))
+        calendar = next(item for item in created.actions if item.type == "calendar")
+
+        resolved = self.service.resolve_ambiguity(
+            created.id, AmbiguityUpdate(field="place", value="성수")
+        )
+
+        refreshed_calendar = next(item for item in resolved.actions if item.type == "calendar")
+        self.assertEqual(refreshed_calendar.id, calendar.id)
+        self.assertTrue(any(item.type == "place" and item.title == "성수" for item in resolved.actions))
 
     def test_deadline_generates_checklist_and_checkpoints(self) -> None:
         analysis = analyze_demo(

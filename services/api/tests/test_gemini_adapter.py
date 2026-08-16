@@ -4,7 +4,7 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from app.analyzer import GeminiAnalysisAdapter
+from app.analyzer import GeminiAnalysisAdapter, ImageInput
 from app.errors import ExternalIntegrationError
 from app.models import AnalyzeRequest, LoopStatus
 
@@ -68,6 +68,7 @@ class GeminiAdapterTests(unittest.TestCase):
         self.assertEqual(config["response_mime_type"], "application/json")
         self.assertEqual(config["response_schema"]["type"], "object")
         schema_json = json.dumps(config["response_schema"])
+        self.assertIn('"summary"', schema_json)
         self.assertNotIn("additionalProperties", schema_json)
         self.assertNotIn("additional_properties", schema_json)
         self.assertEqual(config["thinking_config"].values["thinking_level"], "MINIMAL")
@@ -88,6 +89,21 @@ class GeminiAdapterTests(unittest.TestCase):
         self.assertNotIn("private-name", prompt)
         self.assertNotIn("010-1234-5678", prompt)
         self.assertEqual(part, {"data": b"image-bytes", "mime_type": "image/png"})
+
+    def test_multiple_images_are_sent_as_one_multimodal_context(self) -> None:
+        self.adapter.analyze_images(
+            [
+                ImageInput("one.png", "image/png", b"one"),
+                ImageInput("two.png", "image/png", b"two"),
+            ],
+            "마감 공지",
+            "screenshot",
+        )
+
+        prompt, first, second = self.captured["contents"]
+        self.assertIn("all user-shared images", prompt)
+        self.assertEqual(first, {"data": b"one", "mime_type": "image/png"})
+        self.assertEqual(second, {"data": b"two", "mime_type": "image/png"})
 
     def test_rejects_schema_extra_fields(self) -> None:
         invalid = _response_payload()

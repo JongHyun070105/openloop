@@ -64,16 +64,36 @@ class AppController extends ChangeNotifier {
   Future<OpenLoop> analyzeImage({
     required String imagePath,
     String? companionText,
+    String source = 'image',
+  }) => analyzeImages(
+    imagePaths: [imagePath],
+    companionText: companionText,
+    source: source,
+  );
+
+  Future<OpenLoop> analyzeImages({
+    required List<String> imagePaths,
+    String? companionText,
+    String source = 'image',
   }) async {
+    if (imagePaths.isEmpty) {
+      throw ArgumentError.value(
+        imagePaths,
+        'imagePaths',
+        'At least one image is required',
+      );
+    }
     processing = true;
     notifyListeners();
     lastAnalysisWasLocal = false;
     try {
       if (baseUrl.trim().isNotEmpty) {
         try {
-          return await ApiAnalyzeService(
-            baseUrl: baseUrl.trim(),
-          ).analyzeImage(imagePath: imagePath, companionText: companionText);
+          return await ApiAnalyzeService(baseUrl: baseUrl.trim()).analyzeImages(
+            imagePaths: imagePaths,
+            companionText: companionText,
+            source: source,
+          );
         } catch (_) {
           lastAnalysisWasLocal = true;
         }
@@ -84,7 +104,7 @@ class AppController extends ChangeNotifier {
         text: companionText?.trim().isNotEmpty == true
             ? companionText!.trim()
             : '선택한 이미지에서 일정을 분석해 주세요.',
-        source: 'image',
+        source: source,
       );
     } finally {
       processing = false;
@@ -132,7 +152,7 @@ class AppController extends ChangeNotifier {
     required List<String> remaining,
   }) {
     final state = remaining.isEmpty ? LoopState.open : LoopState.needsInput;
-    return switch (field) {
+    final updated = switch (field) {
       'start_time' => loop.copyWith(
         state: state,
         time: value as String,
@@ -165,10 +185,18 @@ class AppController extends ChangeNotifier {
       ),
       _ => loop.copyWith(state: state, missingFields: remaining),
     };
+    return _refreshLocalGraph(
+      updated.copyWith(summary: _summaryForLoop(updated)),
+    );
   }
 
   Future<void> closeLoop(OpenLoop loop) async {
-    var closed = loop.copyWith(state: LoopState.closed);
+    final completedAt = DateTime.now();
+    var closed = loop.copyWith(
+      state: LoopState.closed,
+      completedAt: completedAt,
+      deleteAt: _retentionDeadline(retention, completedAt),
+    );
     if (baseUrl.trim().isNotEmpty) {
       try {
         closed = await ApiAnalyzeService(
@@ -336,18 +364,130 @@ class AppController extends ChangeNotifier {
 
   void _applyRetention() {
     final now = DateTime.now();
-    final age = switch (retention) {
-      RetentionPolicy.immediately => Duration.zero,
-      RetentionPolicy.sevenDays => const Duration(days: 7),
-      RetentionPolicy.thirtyDays => const Duration(days: 30),
-      RetentionPolicy.keep => null,
-    };
-    if (age == null) return;
     loops = loops.where((loop) {
       if (loop.state != LoopState.closed) return true;
-      return age != Duration.zero && now.difference(loop.createdAt) <= age;
+      final deleteAt =
+          loop.deleteAt ??
+          _retentionDeadline(retention, loop.completedAt ?? loop.createdAt);
+      return deleteAt == null || deleteAt.isAfter(now);
     }).toList();
   }
+}
+
+DateTime? _retentionDeadline(RetentionPolicy policy, DateTime completedAt) =>
+    switch (policy) {
+      RetentionPolicy.immediately => completedAt,
+      RetentionPolicy.sevenDays => completedAt.add(const Duration(days: 7)),
+      RetentionPolicy.thirtyDays => completedAt.add(const Duration(days: 30)),
+      RetentionPolicy.keep => null,
+    };
+
+OpenLoop _refreshLocalGraph(OpenLoop loop) {
+  final actions = <LoopAction>[...loop.actions];
+
+  void ensureAction(String type, String title) {
+    if (actions.any((action) => action.type == type)) return;
+    actions.add(LoopAction(id: 'local-action-$type', type: type, title: title));
+  }
+
+  ensureAction('calendar', '${loop.title} 일정 추가');
+  if (loop.place != null) ensureAction('place', loop.place!);
+  if (loop.date != null || loop.time != null) ensureAction('reminder', '알림 설정');
+  var checklist = loop.checklist;
+  if (loop.kind == LoopKind.deadline) {
+    ensureAction('checklist', '마감 체크리스트');
+    if (checklist.isEmpty) {
+      checklist = const [
+        LoopChecklistItem(id: 'local-checklist-1', title: '제출물 확인'),
+        LoopChecklistItem(id: 'local-checklist-2', title: '최종 제출'),
+      ];
+    }
+  } else {
+    checklist = const [];
+  }
+
+  final templates = loop.kind == LoopKind.deadline
+      ? <({String offset, String title, Duration delta})>[
+          (
+            offset: 'D-7',
+            title: '${loop.title} D-7 준비 확인',
+            delta: const Duration(days: -7),
+          ),
+          (
+            offset: 'D-3',
+            title: '${loop.title} D-3 제출물 점검',
+            delta: const Duration(days: -3),
+          ),
+          (
+            offset: 'D-1',
+            title: '${loop.title} D-1 최종 확인',
+            delta: const Duration(days: -1),
+          ),
+        ]
+      : <({String offset, String title, Duration delta})>[
+          (
+            offset: 'T-24h',
+            title: '${loop.title} 하루 전 확인',
+            delta: const Duration(hours: -24),
+          ),
+          (
+            offset: 'T-2h',
+            title: '${loop.title} 출발·준비 확인',
+            delta: const Duration(hours: -2),
+          ),
+          (
+            offset: 'T+1d',
+            title: '${loop.title} 후속 확인',
+            delta: const Duration(days: 1),
+          ),
+        ];
+  final existingByOffset = {
+    for (final item in loop.checkpoints) item.offset: item,
+  };
+  final eventAt = loop.startsAt;
+  final checkpoints = <LoopCheckpoint>[
+    for (final template in templates)
+      if (existingByOffset[template.offset] case final existing?)
+        LoopCheckpoint(
+          id: existing.id,
+          offset: template.offset,
+          title: template.title,
+          dueAt: eventAt?.add(template.delta),
+          completed: existing.completed,
+        )
+      else
+        LoopCheckpoint(
+          id: 'local-checkpoint-${template.offset.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
+          offset: template.offset,
+          title: template.title,
+          dueAt: eventAt?.add(template.delta),
+        ),
+  ];
+  return loop.copyWith(
+    actions: actions,
+    checklist: checklist,
+    checkpoints: checkpoints,
+  );
+}
+
+String _summaryForLoop(OpenLoop loop) {
+  final facts = <String>[
+    loop.title,
+    loop.kind == LoopKind.deadline ? '마감' : '일정',
+  ];
+  if (loop.date != null) {
+    facts.add(
+      '${loop.date!.year.toString().padLeft(4, '0')}-${loop.date!.month.toString().padLeft(2, '0')}-${loop.date!.day.toString().padLeft(2, '0')}',
+    );
+  }
+  if (loop.time != null) facts.add(loop.time!.substring(0, 5));
+  if (loop.place != null) facts.add(loop.place!);
+  if (loop.missingFields.isEmpty) return '${facts.join(' · ')}로 정리했습니다.';
+  const labels = {'date': '날짜', 'start_time': '시간', 'place': '장소'};
+  final unresolved = loop.missingFields
+      .map((field) => labels[field] ?? field)
+      .join(', ');
+  return '${facts.join(' · ')}. $unresolved 확인이 필요합니다.';
 }
 
 String _retentionApiValue(RetentionPolicy value) => switch (value) {

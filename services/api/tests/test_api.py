@@ -32,6 +32,8 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(body["status"], "needs_input")
         self.assertIn("start_time", body["event"])
         self.assertIn("missing_fields", body["event"])
+        self.assertIn("summary", body["event"])
+        self.assertIn("확인이 필요합니다", body["event"]["summary"])
         self.assertIn("resolution_note", body["event"])
         self.assertIn("suggested_question", body)
 
@@ -121,6 +123,25 @@ class ApiTests(unittest.TestCase):
         persisted = self.client.get(f"/v1/loops/{loop['id']}")
         self.assertEqual(persisted.status_code, 200)
         self.assertEqual(persisted.json()["id"], loop["id"])
+
+    def test_multiple_shared_images_use_one_capture_contract(self) -> None:
+        response = self.client.post(
+            "/v1/loops/analyze/image",
+            files=[
+                ("file", ("conversation-1.png", b"first", "image/png")),
+                ("file", ("conversation-2.png", b"second", "image/png")),
+            ],
+            data={
+                "companion_text": "AI 공모전 접수 마감 8월 22일 23:59",
+                "source": "screenshot",
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        loop = response.json()
+        self.assertEqual(loop["event"]["source"], "screenshot")
+        self.assertEqual(loop["event"]["type"], "deadline")
+        self.assertEqual([item["offset"] for item in loop["checkpoints"]], ["D-7", "D-3", "D-1"])
 
     def test_dynamodb_is_selected_only_when_table_environment_is_present(self) -> None:
         repository = Mock()

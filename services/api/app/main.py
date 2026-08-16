@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import JSONResponse
 
-from .analyzer import AnalysisAdapter, analysis_adapter_from_env
+from .analyzer import AnalysisAdapter, ImageInput, analysis_adapter_from_env
 from .context_providers import (
     PlaceAdapter,
     WeatherAdapter,
@@ -40,6 +40,8 @@ from .service import LoopService
 
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_IMAGE_COUNT = 5
+MAX_TOTAL_IMAGE_BYTES = 25 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
 
 
@@ -171,37 +173,57 @@ def create_app(
         track_analysis(result)
         return result
 
-    async def analyze_uploaded_image(
-        file: UploadFile,
+    async def analyze_uploaded_images(
+        files: list[UploadFile],
         companion_text: str | None,
         source: Literal["screenshot", "image"],
     ) -> AnalyzeResponse:
-        if file.content_type not in ALLOWED_IMAGE_TYPES:
-            await file.close()
-            raise HTTPException(status_code=415, detail="Unsupported image type")
+        if not files:
+            raise HTTPException(status_code=400, detail="At least one image is required")
+        if len(files) > MAX_IMAGE_COUNT:
+            for file in files:
+                await file.close()
+            raise HTTPException(
+                status_code=413,
+                detail=f"A maximum of {MAX_IMAGE_COUNT} images can be analyzed together",
+            )
+        captures: list[ImageInput] = []
+        total_bytes = 0
         try:
-            content = await file.read(MAX_IMAGE_BYTES + 1)
+            for file in files:
+                if file.content_type not in ALLOWED_IMAGE_TYPES:
+                    raise HTTPException(status_code=415, detail="Unsupported image type")
+                content = await file.read(MAX_IMAGE_BYTES + 1)
+                if len(content) > MAX_IMAGE_BYTES:
+                    raise HTTPException(status_code=413, detail="Each image must be 10 MB or smaller")
+                if not content:
+                    raise HTTPException(status_code=400, detail="Image is empty")
+                total_bytes += len(content)
+                if total_bytes > MAX_TOTAL_IMAGE_BYTES:
+                    raise HTTPException(status_code=413, detail="Shared images exceed the 25 MB total limit")
+                captures.append(
+                    ImageInput(
+                        filename=file.filename or "capture",
+                        content_type=file.content_type,
+                        content=content,
+                    )
+                )
         finally:
-            await file.close()
-        if len(content) > MAX_IMAGE_BYTES:
-            raise HTTPException(status_code=413, detail="Image exceeds the 10 MB limit")
-        if not content:
-            raise HTTPException(status_code=400, detail="Image is empty")
-        return analysis.analyze_image(
-            filename=file.filename or "capture",
-            content_type=file.content_type,
-            content=content,
+            for file in files:
+                await file.close()
+        return analysis.analyze_images(
+            images=captures,
             companion_text=companion_text,
             source=source,
         )
 
     @api.post("/v1/analyze/image", response_model=AnalyzeResponse)
     async def analyze_image(
-        file: UploadFile = File(...),
+        file: list[UploadFile] = File(...),
         companion_text: str | None = Form(default=None, max_length=20_000),
         source: Literal["screenshot", "image"] = Form(default="image"),
     ) -> AnalyzeResponse:
-        result = await analyze_uploaded_image(file, companion_text, source)
+        result = await analyze_uploaded_images(file, companion_text, source)
         track_analysis(result)
         return result
 
@@ -220,12 +242,12 @@ def create_app(
         status_code=status.HTTP_201_CREATED,
     )
     async def analyze_image_and_create(
-        file: UploadFile = File(...),
+        file: list[UploadFile] = File(...),
         companion_text: str | None = Form(default=None, max_length=20_000),
         source: Literal["screenshot", "image"] = Form(default="image"),
         installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
     ) -> OpenLoop:
-        result = await analyze_uploaded_image(file, companion_text, source)
+        result = await analyze_uploaded_images(file, companion_text, source)
         track_analysis(result)
         return persist_analysis(result, installation_id)
 

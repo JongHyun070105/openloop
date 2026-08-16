@@ -64,6 +64,7 @@ class StructuredEvent(BaseModel):
     place: Place | None = None
     participants: list[str] = Field(default_factory=list)
     purpose: str | None = None
+    summary: str | None = Field(default=None, max_length=600)
     reminders: list[Reminder] = Field(default_factory=list)
     checklist: list[ChecklistSuggestion] = Field(default_factory=list)
     source: Literal["screenshot", "image", "text"]

@@ -10,8 +10,8 @@ OpenLoop는 카카오톡 대화, 공지, 포스터처럼 흩어진 비정형 정
 Capture -> Create -> Close
 ```
 
-- **Capture** — screenshot, image, text를 공유합니다.
-- **Create** — AI가 최종 합의, 누락 필드, 신뢰도를 포함한 구조화된 일정을 만듭니다.
+- **Capture** — screenshot, image, text를 공유합니다. 공유된 이미지는 최대 5장을 한 번의 맥락으로 분석합니다.
+- **Create** — AI가 최종 합의, 한두 문장 요약, 누락 필드, 신뢰도를 포함한 구조화된 일정을 만듭니다.
 - **Close** — calendar, reminder, checklist, checkpoint를 연결해 완료까지 추적합니다.
 
 MVP는 `Appointment`와 `Deadline` 두 가지 intent에 집중합니다. AI가 확실하면 한 번의 확인으로 등록하고, 애매하면 필요한 필드 하나만 묻습니다.
@@ -66,7 +66,8 @@ Optional Flutter analytics, Sentry, and Firebase client identifiers belong in `a
 
 ## Implemented
 
-- 텍스트·사진·공유 Capture와 Appointment/Deadline 분석
+- 텍스트·사진·공유 Capture(최대 5장)와 Appointment/Deadline 분석
+- Gemini 구조화 결과의 AI 요약과 필드별 신뢰도 리뷰
 - confidence review와 필요한 모호성 필드 하나만 재질문
 - Open Loop 목록, 상세, 체크리스트, 마감, 완료 보관함, retention 설정
 - Android 공유 인텐트와 iOS Share Extension

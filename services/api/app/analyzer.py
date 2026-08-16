@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from base64 import b64encode
+from dataclasses import dataclass
 from datetime import date as Date
 from datetime import datetime
 from pathlib import Path
@@ -24,12 +25,29 @@ latest final agreement. Confidence values must be between 0 and 1. Never include
 the event. For deadlines, extract each explicitly named submission as checklist with required true or false,
 and preserve requested reminder offsets. For a complete new event, status must be open; never return closed.
 Dates must be YYYY-MM-DD and times must be local Korean time in HH:MM:SS without a timezone suffix. When the
-user omits a year, use the next matching date in Korean local context unless they explicitly describe a past event."""
+user omits a year, use the next matching date in Korean local context unless they explicitly describe a past event.
+Write summary in Korean as one or two concise sentences using only extracted facts. If a required field is still
+missing, say that it needs confirmation rather than inventing a value. Do not include raw source text or private
+identifiers in summary."""
 
 KST = ZoneInfo("Asia/Seoul")
 _EXPLICIT_YEAR = re.compile(r"(?:19|20)\d{2}\s*(?:년|[-./])")
 _PAST_DATE_MARKERS = ("작년", "지난해", "지난 ", "지난주", "어제", "이전")
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ImageInput:
+    """An in-memory, validated capture passed to an analysis adapter.
+
+    The API creates this only after enforcing content type and size limits. It is
+    deliberately not a persisted model, which keeps shared screenshots out of
+    both SQLite and DynamoDB.
+    """
+
+    filename: str
+    content_type: str
+    content: bytes
 
 
 def _gemini_response_schema() -> dict[str, Any]:
@@ -124,6 +142,13 @@ class AnalysisAdapter(Protocol):
         source: Literal["screenshot", "image"],
     ) -> AnalyzeResponse: ...
 
+    def analyze_images(
+        self,
+        images: list[ImageInput],
+        companion_text: str | None,
+        source: Literal["screenshot", "image"],
+    ) -> AnalyzeResponse: ...
+
 
 class DeterministicAnalysisAdapter:
     """Credential-free adapter used in development, tests, and safe fallback."""
@@ -142,8 +167,30 @@ class DeterministicAnalysisAdapter:
         source: Literal["screenshot", "image"],
     ) -> AnalyzeResponse:
         del content_type, content
-        fallback_text = companion_text or Path(filename).stem or "이미지 일정"
+        # A temporary filename can itself contain personal information. The
+        # no-provider path has no pixel OCR, so use only explicit companion text
+        # or a neutral label instead of turning a filename into stored content.
+        fallback_text = companion_text or "이미지 일정"
         return self.analyze(AnalyzeRequest(text=fallback_text, source=source))
+
+    def analyze_images(
+        self,
+        images: list[ImageInput],
+        companion_text: str | None,
+        source: Literal["screenshot", "image"],
+    ) -> AnalyzeResponse:
+        if not images:
+            raise ValueError("At least one image is required")
+        # The credential-free path never pretends to OCR pixels. It can only
+        # safely use a user-provided companion text or a neutral filename hint.
+        first = images[0]
+        return self.analyze_image(
+            first.filename,
+            first.content_type,
+            first.content,
+            companion_text,
+            source,
+        )
 
 
 class JsonHttpAnalysisAdapter:
@@ -175,6 +222,38 @@ class JsonHttpAnalysisAdapter:
                 "filename": safe_filename,
                 "content_type": content_type,
                 "image_base64": b64encode(content).decode("ascii"),
+                "companion_text": redact_pii(companion_text) if companion_text else None,
+                "source": source,
+            }
+        )
+
+    def analyze_images(
+        self,
+        images: list[ImageInput],
+        companion_text: str | None,
+        source: Literal["screenshot", "image"],
+    ) -> AnalyzeResponse:
+        if not images:
+            raise ValueError("At least one image is required")
+        if len(images) == 1:
+            image = images[0]
+            return self.analyze_image(
+                image.filename,
+                image.content_type,
+                image.content,
+                companion_text,
+                source,
+            )
+        return self._post(
+            {
+                "images": [
+                    {
+                        "filename": f"capture-{index + 1}{Path(image.filename).suffix.lower()}",
+                        "content_type": image.content_type,
+                        "image_base64": b64encode(image.content).decode("ascii"),
+                    }
+                    for index, image in enumerate(images)
+                ],
                 "companion_text": redact_pii(companion_text) if companion_text else None,
                 "source": source,
             }
@@ -235,12 +314,32 @@ class GeminiAnalysisAdapter:
         companion_text: str | None,
         source: Literal["screenshot", "image"],
     ) -> AnalyzeResponse:
-        del filename
-        prompt = f"Source type: {source}. Extract the actionable event from this user-shared image."
+        return self.analyze_images(
+            [ImageInput(filename=filename, content_type=content_type, content=content)],
+            companion_text,
+            source,
+        )
+
+    def analyze_images(
+        self,
+        images: list[ImageInput],
+        companion_text: str | None,
+        source: Literal["screenshot", "image"],
+    ) -> AnalyzeResponse:
+        if not images:
+            raise ValueError("At least one image is required")
+        prompt = (
+            f"Source type: {source}. Extract the actionable event from all user-shared images. "
+            "Treat them as one context, resolve the latest final agreement when they conflict, "
+            "and do not infer a fact that is absent from every image."
+        )
         if companion_text:
             prompt += f"\nCompanion text:\n{redact_pii(companion_text)}"
-        image_part = self.types.Part.from_bytes(data=content, mime_type=content_type)
-        return self._generate([prompt, image_part], source, companion_text)
+        image_parts = [
+            self.types.Part.from_bytes(data=image.content, mime_type=image.content_type)
+            for image in images
+        ]
+        return self._generate([prompt, *image_parts], source, companion_text)
 
     def _generate(
         self,

@@ -26,6 +26,8 @@ class DemoAnalyzerTests(unittest.TestCase):
         self.assertEqual(result.event.type.value, "deadline")
         self.assertEqual(len(result.event.reminders), 3)
         self.assertEqual([item.title for item in result.event.checklist], ["작품 파일", "포트폴리오"])
+        self.assertIn("공모전 마감", result.event.summary or "")
+        self.assertIn("2026", result.event.summary or "")
 
     def test_never_substitutes_demo_appointment_for_arbitrary_input(self) -> None:
         result = analyze_demo(

@@ -32,7 +32,8 @@ Screenshot / Image / Text
 
 ## Core entities
 
-- `StructuredEvent`: normalized appointment or deadline with field confidence.
+- `StructuredEvent`: normalized appointment or deadline with a factual Korean
+  review summary and field confidence.
 - `OpenLoop`: event plus lifecycle (`open`, `needs_input`, `closed`).
 - `LoopAction`: calendar, reminder, place, or checklist action.
 - `Checkpoint`: scheduled context reevaluation, not a continuously running agent.
@@ -41,8 +42,8 @@ Screenshot / Image / Text
 
 - The API persists local development data in SQLite and deployed data in
   DynamoDB. Its Lambda/Web Adapter deployment is defined in `infra/`.
-- Gemini accepts text and image analysis through a server-only adapter; raw
-  uploads are size/type constrained and not persisted.
+- Gemini accepts text and one-to-five-image analysis through a server-only
+  adapter; raw uploads are type/size constrained and not persisted.
 - Kakao and KMA provide normalized place and weather data. The Flutter client
   opens the native Kakao map when possible and otherwise uses the web URL.
 - Action, checklist, and checkpoint mutations are installation-scoped and

@@ -52,6 +52,7 @@ class OpenLoop {
     this.time,
     this.place,
     this.purpose,
+    this.summary,
     this.participants = const [],
     this.resolutionNote,
     this.missingFields = const [],
@@ -59,6 +60,7 @@ class OpenLoop {
     this.actions = const [],
     this.checklist = const [],
     this.checkpoints = const [],
+    this.completedAt,
     this.deleteAt,
   });
 
@@ -72,6 +74,7 @@ class OpenLoop {
   final String? time;
   final String? place;
   final String? purpose;
+  final String? summary;
   final List<String> participants;
   final String? resolutionNote;
   final List<String> missingFields;
@@ -79,6 +82,7 @@ class OpenLoop {
   final List<LoopAction> actions;
   final List<LoopChecklistItem> checklist;
   final List<LoopCheckpoint> checkpoints;
+  final DateTime? completedAt;
   final DateTime? deleteAt;
   final Map<String, double> confidence;
 
@@ -101,11 +105,13 @@ class OpenLoop {
     String? time,
     String? place,
     String? purpose,
+    String? summary,
     List<String>? participants,
     List<String>? missingFields,
     List<LoopAction>? actions,
     List<LoopChecklistItem>? checklist,
     List<LoopCheckpoint>? checkpoints,
+    DateTime? completedAt,
     DateTime? deleteAt,
   }) => OpenLoop(
     id: id,
@@ -118,6 +124,7 @@ class OpenLoop {
     time: time ?? this.time,
     place: place ?? this.place,
     purpose: purpose ?? this.purpose,
+    summary: summary ?? this.summary,
     participants: participants ?? this.participants,
     resolutionNote: resolutionNote,
     missingFields: missingFields ?? this.missingFields,
@@ -125,6 +132,7 @@ class OpenLoop {
     actions: actions ?? this.actions,
     checklist: checklist ?? this.checklist,
     checkpoints: checkpoints ?? this.checkpoints,
+    completedAt: completedAt ?? this.completedAt,
     deleteAt: deleteAt ?? this.deleteAt,
     confidence: confidence,
   );
@@ -156,6 +164,7 @@ class OpenLoop {
       time: event['start_time'] as String?,
       place: (event['place'] as Map<String, dynamic>?)?['name'] as String?,
       purpose: event['purpose'] as String?,
+      summary: event['summary'] as String?,
       participants: List<String>.from(
         event['participants'] as List<dynamic>? ?? const [],
       ),
@@ -182,6 +191,9 @@ class OpenLoop {
       checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
           .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
           .toList(),
+      completedAt: json['completed_at'] == null
+          ? null
+          : DateTime.tryParse(json['completed_at'] as String),
       deleteAt: json['delete_at'] == null
           ? null
           : DateTime.tryParse(json['delete_at'] as String),
@@ -202,6 +214,7 @@ class OpenLoop {
     time: json['time'] as String?,
     place: json['place'] as String?,
     purpose: json['purpose'] as String?,
+    summary: json['summary'] as String?,
     participants: List<String>.from(
       json['participants'] as List<dynamic>? ?? const [],
     ),
@@ -221,6 +234,9 @@ class OpenLoop {
     checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
         .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
         .toList(),
+    completedAt: json['completedAt'] == null
+        ? null
+        : DateTime.tryParse(json['completedAt'] as String),
     deleteAt: json['deleteAt'] == null
         ? null
         : DateTime.parse(json['deleteAt'] as String),
@@ -240,6 +256,7 @@ class OpenLoop {
     'time': time,
     'place': place,
     'purpose': purpose,
+    'summary': summary,
     'participants': participants,
     'resolutionNote': resolutionNote,
     'missingFields': missingFields,
@@ -247,6 +264,7 @@ class OpenLoop {
     'actions': actions.map((item) => item.toJson()).toList(),
     'checklist': checklist.map((item) => item.toJson()).toList(),
     'checkpoints': checkpoints.map((item) => item.toJson()).toList(),
+    'completedAt': completedAt?.toIso8601String(),
     'deleteAt': deleteAt?.toIso8601String(),
     'confidence': confidence,
   };
