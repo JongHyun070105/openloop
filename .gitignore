@@ -1,4 +1,9 @@
 .DS_Store
+.idea/
+**/.idea/
+*.iml
+*.swp
+*.swo
 
 # Environment files
 .env
@@ -7,10 +12,36 @@
 **/.env.*
 !.env.example
 !**/.env.example
+!.env.*.example
+!**/.env.*.example
+.envrc
+.direnv/
+.aws/
+.codex/
+.omx/
+
+# Provider credentials and signing material must stay local.
+*.pem
+*.p12
+*.p8
+*.key
+*.mobileprovision
+*.keystore
+*.jks
+**/key.properties
+**/google-services.json
+**/GoogleService-Info.plist
+**/*service-account*.json
+**/*firebase-adminsdk*.json
 
 # Node / web
 node_modules/
 dist/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npmrc
 
 # Python
 __pycache__/
@@ -18,6 +49,13 @@ __pycache__/
 .venv/
 **/.venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+*.sqlite
+*.sqlite3
+*.db
+*.log
 .aws-sam/
 
 # Flutter / Android / iOS generated output
@@ -33,7 +71,13 @@ ios/Pods/
 **/ios/Pods/
 ios/.symlinks/
 **/ios/.symlinks/
+ios/DerivedData/
+**/ios/DerivedData/
+**/xcuserdata/
+**/*.xcuserstate
 android/.gradle/
 **/android/.gradle/
 android/local.properties
 **/android/local.properties
+android/.cxx/
+**/android/.cxx/
