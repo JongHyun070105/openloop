@@ -106,4 +106,34 @@ void main() {
     expect(complete.participants, const ['나', '친구']);
     expect(controller.loops.single.id, loop.id);
   });
+
+  test('completes actions and deletes loops locally', () async {
+    final loop = OpenLoop(
+      id: 'action-loop',
+      kind: LoopKind.appointment,
+      state: LoopState.open,
+      title: '캘린더 추가',
+      source: 'text',
+      createdAt: DateTime(2026, 8, 16),
+      date: DateTime(2026, 8, 17),
+      time: '19:00:00',
+      actions: const [
+        LoopAction(id: 'calendar', type: 'calendar', title: '일정 추가'),
+      ],
+      confidence: const {},
+    );
+    await controller.saveLoop(loop);
+
+    final completed = await controller.updateAction(
+      loop,
+      loop.actions.single,
+      true,
+    );
+    expect(completed.actions.single.completed, isTrue);
+    expect(repository.loops.single.actions.single.completed, isTrue);
+
+    await controller.deleteLoop(completed);
+    expect(repository.loops, isEmpty);
+    expect(controller.loops, isEmpty);
+  });
 }

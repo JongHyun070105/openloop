@@ -96,6 +96,38 @@ class ApiAnalyzeService implements AnalyzeService {
     body: {'completed': completed},
   );
 
+  Future<OpenLoop> updateAction({
+    required String loopId,
+    required String itemId,
+    required bool completed,
+  }) => _mutate(
+    method: 'PATCH',
+    path: '/v1/loops/$loopId/actions/$itemId',
+    body: {'completed': completed},
+  );
+
+  Future<OpenLoop> updateCheckpoint({
+    required String loopId,
+    required String itemId,
+    required bool completed,
+  }) => _mutate(
+    method: 'PATCH',
+    path: '/v1/loops/$loopId/checkpoints/$itemId',
+    body: {'completed': completed},
+  );
+
+  Future<void> deleteLoop({required String loopId}) async {
+    final request = http.Request('DELETE', Uri.parse('$_root/v1/loops/$loopId'))
+      ..headers['X-OpenLoop-Install-Id'] = await InstallationIdentity.get();
+    final streamed = await _client
+        .send(request)
+        .timeout(const Duration(seconds: 15));
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode != 204) {
+      throw StateError('Loop 삭제 실패 (${response.statusCode})');
+    }
+  }
+
   Future<OpenLoop> _mutate({
     required String method,
     required String path,
@@ -173,7 +205,9 @@ class LocalAnalyzeService implements AnalyzeService {
 }
 
 DateTime? _explicitDate(String text, DateTime now) {
-  final fullMatch = RegExp(r'\b(20\d{2})[-./](\d{1,2})[-./](\d{1,2})\b').firstMatch(text);
+  final fullMatch = RegExp(
+    r'\b(20\d{2})[-./](\d{1,2})[-./](\d{1,2})\b',
+  ).firstMatch(text);
   final monthDayMatch = RegExp(r'\b(\d{1,2})월\s*(\d{1,2})일').firstMatch(text);
   try {
     if (fullMatch != null) {
@@ -216,15 +250,29 @@ DateTime? _explicitDate(String text, DateTime now) {
 
 String? _explicitTime(String text) {
   final candidates = <MapEntry<int, String>>[];
-  for (final match in RegExp(r'(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)').allMatches(text)) {
-    candidates.add(MapEntry(match.start, '${match.group(1)!.padLeft(2, '0')}:${match.group(2)!}:00'));
+  for (final match in RegExp(
+    r'(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)',
+  ).allMatches(text)) {
+    candidates.add(
+      MapEntry(
+        match.start,
+        '${match.group(1)!.padLeft(2, '0')}:${match.group(2)!}:00',
+      ),
+    );
   }
-  for (final match in RegExp(r'(?:(오전|오후)\s*)?(1[0-2]|0?\d)\s*시(?:\s*([0-5]?\d)\s*분?)?').allMatches(text)) {
+  for (final match in RegExp(
+    r'(?:(오전|오후)\s*)?(1[0-2]|0?\d)\s*시(?:\s*([0-5]?\d)\s*분?)?',
+  ).allMatches(text)) {
     var hour = int.parse(match.group(2)!);
     final minute = int.parse(match.group(3) ?? '0');
     if (match.group(1) == '오후' && hour < 12) hour += 12;
     if (match.group(1) == '오전' && hour == 12) hour = 0;
-    candidates.add(MapEntry(match.start, '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00'));
+    candidates.add(
+      MapEntry(
+        match.start,
+        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00',
+      ),
+    );
   }
   if (candidates.isEmpty) return null;
   candidates.sort((left, right) => left.key.compareTo(right.key));
@@ -238,12 +286,15 @@ String? _explicitPlace(String text) {
     final prefix = text.substring(0, markerIndex).trim();
     if (prefix.isEmpty) continue;
     final afterAt = prefix.lastIndexOf('에');
-    final candidate = (afterAt >= 0
-            ? prefix.substring(afterAt + 1)
-            : prefix.split(RegExp(r'\s+')).last)
-        .trim()
-        .replaceAll(RegExp(r'^[, .!?…]+|[, .!?…]+$'), '');
-    if (RegExp(r"^[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .'-]{0,39}$").hasMatch(candidate)) {
+    final candidate =
+        (afterAt >= 0
+                ? prefix.substring(afterAt + 1)
+                : prefix.split(RegExp(r'\s+')).last)
+            .trim()
+            .replaceAll(RegExp(r'^[, .!?…]+|[, .!?…]+$'), '');
+    if (RegExp(
+      r"^[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .'-]{0,39}$",
+    ).hasMatch(candidate)) {
       return candidate;
     }
   }

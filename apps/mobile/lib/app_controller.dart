@@ -216,6 +216,48 @@ class AppController extends ChangeNotifier {
     await saveLoop(updated);
   }
 
+  Future<void> updateAction(
+    OpenLoop loop,
+    LoopAction item,
+    bool completed,
+  ) async {
+    var updated = loop.copyWith(
+      actions: loop.actions
+          .map(
+            (entry) => entry.id == item.id
+                ? entry.copyWith(completed: completed)
+                : entry,
+          )
+          .toList(),
+    );
+    if (baseUrl.trim().isNotEmpty) {
+      try {
+        updated = await ApiAnalyzeService(
+          baseUrl: baseUrl.trim(),
+        ).updateAction(loopId: loop.id, itemId: item.id, completed: completed);
+      } catch (_) {
+        // Action completion remains local-first so the user can keep moving.
+      }
+    }
+    await saveLoop(updated);
+  }
+
+  Future<bool> deleteLoop(OpenLoop loop) async {
+    if (baseUrl.trim().isNotEmpty) {
+      try {
+        await ApiAnalyzeService(
+          baseUrl: baseUrl.trim(),
+        ).deleteLoop(loopId: loop.id);
+      } catch (_) {
+        // Fall back to local deletion below.
+      }
+    }
+    loops = loops.where((item) => item.id != loop.id).toList();
+    await repository.save(loops);
+    notifyListeners();
+    return true;
+  }
+
   Future<void> updateSettings({
     required String url,
     required RetentionPolicy policy,

@@ -802,6 +802,37 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(loop.state == LoopState.closed ? '닫힌 Loop' : 'Open Loop'),
+        actions: loop.state == LoopState.closed
+            ? null
+            : [
+                IconButton(
+                  tooltip: '삭제',
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Loop 삭제'),
+                        content: const Text('이 Loop를 목록에서 삭제할까요?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('취소'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('삭제'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+                    await widget.controller.deleteLoop(loop);
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(22),
@@ -888,6 +919,46 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                     ? null
                     : (value) async {
                         await widget.controller.updateChecklist(
+                          loop,
+                          item,
+                          value ?? false,
+                        );
+                        if (mounted) setState(() {});
+                      },
+              ),
+            ),
+          ],
+          if (loop.actions.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const Text(
+              '실행 항목',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            ...loop.actions.map(
+              (item) => CheckboxListTile(
+                value: item.completed,
+                contentPadding: EdgeInsets.zero,
+                title: Row(
+                  children: [
+                    Expanded(child: Text(item.title)),
+                    const SizedBox(width: 8),
+                    Text(
+                      item.completed ? '완료' : '대기',
+                      style: TextStyle(
+                        color: item.completed
+                            ? OLColors.cobalt
+                            : OLColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                onChanged: loop.state == LoopState.closed
+                    ? null
+                    : (value) async {
+                        await widget.controller.updateAction(
                           loop,
                           item,
                           value ?? false,

@@ -56,7 +56,10 @@ class OpenLoop {
     this.resolutionNote,
     this.missingFields = const [],
     this.reminderOffsets = const [],
+    this.actions = const [],
     this.checklist = const [],
+    this.checkpoints = const [],
+    this.deleteAt,
   });
 
   final String id;
@@ -73,7 +76,10 @@ class OpenLoop {
   final String? resolutionNote;
   final List<String> missingFields;
   final List<String> reminderOffsets;
+  final List<LoopAction> actions;
   final List<LoopChecklistItem> checklist;
+  final List<LoopCheckpoint> checkpoints;
+  final DateTime? deleteAt;
   final Map<String, double> confidence;
 
   DateTime? get startsAt {
@@ -97,7 +103,10 @@ class OpenLoop {
     String? purpose,
     List<String>? participants,
     List<String>? missingFields,
+    List<LoopAction>? actions,
     List<LoopChecklistItem>? checklist,
+    List<LoopCheckpoint>? checkpoints,
+    DateTime? deleteAt,
   }) => OpenLoop(
     id: id,
     kind: kind,
@@ -113,7 +122,10 @@ class OpenLoop {
     resolutionNote: resolutionNote,
     missingFields: missingFields ?? this.missingFields,
     reminderOffsets: reminderOffsets,
+    actions: actions ?? this.actions,
     checklist: checklist ?? this.checklist,
+    checkpoints: checkpoints ?? this.checkpoints,
+    deleteAt: deleteAt ?? this.deleteAt,
     confidence: confidence,
   );
 
@@ -155,6 +167,9 @@ class OpenLoop {
           .map((item) => (item as Map<String, dynamic>)['offset'] as String?)
           .whereType<String>()
           .toList(),
+      actions: (json['actions'] as List<dynamic>? ?? const [])
+          .map((item) => LoopAction.fromJson(item as Map<String, dynamic>))
+          .toList(),
       checklist:
           (json['checklist'] as List<dynamic>? ??
                   event['checklist'] as List<dynamic>? ??
@@ -162,8 +177,14 @@ class OpenLoop {
               .map(
                 (item) =>
                     LoopChecklistItem.fromJson(item as Map<String, dynamic>),
-              )
+                )
               .toList(),
+      checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
+          .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      deleteAt: json['delete_at'] == null
+          ? null
+          : DateTime.tryParse(json['delete_at'] as String),
       confidence: confidenceJson.map(
         (key, value) => MapEntry(key, (value as num).toDouble()),
       ),
@@ -191,9 +212,18 @@ class OpenLoop {
     reminderOffsets: List<String>.from(
       json['reminderOffsets'] as List<dynamic>? ?? const [],
     ),
+    actions: (json['actions'] as List<dynamic>? ?? const [])
+        .map((item) => LoopAction.fromJson(item as Map<String, dynamic>))
+        .toList(),
     checklist: (json['checklist'] as List<dynamic>? ?? const [])
         .map((item) => LoopChecklistItem.fromJson(item as Map<String, dynamic>))
         .toList(),
+    checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
+        .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
+        .toList(),
+    deleteAt: json['deleteAt'] == null
+        ? null
+        : DateTime.parse(json['deleteAt'] as String),
     confidence: (json['confidence'] as Map<String, dynamic>).map(
       (key, value) => MapEntry(key, (value as num).toDouble()),
     ),
@@ -214,7 +244,86 @@ class OpenLoop {
     'resolutionNote': resolutionNote,
     'missingFields': missingFields,
     'reminderOffsets': reminderOffsets,
+    'actions': actions.map((item) => item.toJson()).toList(),
     'checklist': checklist.map((item) => item.toJson()).toList(),
+    'checkpoints': checkpoints.map((item) => item.toJson()).toList(),
+    'deleteAt': deleteAt?.toIso8601String(),
     'confidence': confidence,
+  };
+}
+
+class LoopAction {
+  const LoopAction({
+    required this.id,
+    required this.type,
+    required this.title,
+    this.completed = false,
+  });
+  final String id;
+  final String type;
+  final String title;
+  final bool completed;
+
+  LoopAction copyWith({bool? completed}) => LoopAction(
+    id: id,
+    type: type,
+    title: title,
+    completed: completed ?? this.completed,
+  );
+
+  factory LoopAction.fromJson(Map<String, dynamic> json) => LoopAction(
+    id: json['id'] as String,
+    type: json['type'] as String,
+    title: json['title'] as String,
+    completed: json['completed'] as bool? ?? false,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'type': type,
+    'title': title,
+    'completed': completed,
+  };
+}
+
+class LoopCheckpoint {
+  const LoopCheckpoint({
+    required this.id,
+    required this.offset,
+    required this.title,
+    this.dueAt,
+    this.completed = false,
+  });
+
+  final String id;
+  final String offset;
+  final String title;
+  final DateTime? dueAt;
+  final bool completed;
+
+  LoopCheckpoint copyWith({bool? completed}) => LoopCheckpoint(
+    id: id,
+    offset: offset,
+    title: title,
+    dueAt: dueAt,
+    completed: completed ?? this.completed,
+  );
+
+  factory LoopCheckpoint.fromJson(Map<String, dynamic> json) => LoopCheckpoint(
+    id: json['id'] as String,
+    offset: json['offset'] as String,
+    title: json['title'] as String,
+    dueAt: json['due_at'] == null
+        ? null
+        : DateTime.tryParse(json['due_at'] as String),
+    completed: json['completed'] as bool? ?? false,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'offset': offset,
+    'title': title,
+    'due_at': dueAt?.toIso8601String(),
+    'completed': completed,
   };
 }
