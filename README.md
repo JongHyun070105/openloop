@@ -21,11 +21,13 @@ MVP는 `Appointment`와 `Deadline` 두 가지 intent에 집중합니다. AI가 �
 ```text
 apps/
   demo/       React + Vite 심사용 클릭 프로토타입
-  mobile/     Flutter 실제 서비스 클라이언트 뼈대
+  mobile/     Flutter Android/iOS 서비스 클라이언트
 services/
-  api/        FastAPI 분석/Loop API 뼈대
+  api/        FastAPI 분석/Loop API
+infra/        AWS SAM 서버리스 인프라
 docs/
   ARCHITECTURE.md
+  AWS_DEPLOYMENT.md
   PRODUCT_SCOPE.md
 ```
 
@@ -45,33 +47,43 @@ npm run dev
 cd services/api
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --reload
+# Fill the ignored services/api/.env file; leave .env.example blank.
+.venv/bin/uvicorn --env-file .env app.main:app --reload
 ```
 
 API docs: <http://127.0.0.1:8000/docs>
+
+Server provider values belong only in `services/api/.env`; copy its `.env.example` first and leave the template blank. Do not put Gemini, Kakao, or KMA keys in a Flutter build.
 
 ### Flutter
 
 ```bash
 cd apps/mobile
-flutter run
+flutter run --dart-define=OPENLOOP_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-## Current foundation
+Optional Flutter analytics, Sentry, and Firebase client identifiers belong in `apps/mobile/.env` (copy `apps/mobile/.env.example`) and are passed with `--dart-define-from-file=.env`.
 
-- 카카오톡 약속 / 시간 변경 / 애매한 약속 / 공모전 마감 샘플
-- field별 confidence 및 missing field 모델
-- `OPEN -> CLOSED` Loop 상태 모델
-- Event-driven checkpoint 구조
-- Privacy-first 처리 원칙 문서화
-- frontend, API, Flutter 기본 검증 명령
+## Implemented
+
+- 텍스트·사진·공유 Capture와 Appointment/Deadline 분석
+- confidence review와 필요한 모호성 필드 하나만 재질문
+- Open Loop 목록, 상세, 체크리스트, 마감, 완료 보관함, retention 설정
+- Android 공유 인텐트와 iOS Share Extension
+- 캘린더·로컬 알림 연결 및 네트워크 실패 시 local-first 저장
+- FastAPI lifecycle API, SQLite/DynamoDB 저장소, 개인정보 redaction
+- Lambda/API Gateway/DynamoDB 기반 pay-per-use AWS 배포
+
+현재 dev API: <https://mrodt7pxq4.execute-api.ap-northeast-2.amazonaws.com/dev>
+
+실제 AI 공급자 키가 없을 때는 결정적 fallback 분석기가 동작합니다. 이 모드는 입력에 명시된 값만 추출하고 빈 날짜·시간·장소는 질문으로 남기며, 예시용 가짜 일정을 만들지 않습니다. 공급자를 정하면 키는 커밋하지 않고 로컬 `services/api/.env` 또는 AWS Secrets Manager로만 주입합니다. `.env.example`은 공유 가능한 빈 템플릿입니다.
 
 ## Validation
 
 ```bash
 cd apps/demo && npm run build
-cd services/api && python3 -m unittest discover -s tests
+cd services/api && .venv/bin/python -m unittest discover -s tests -v
 cd apps/mobile && flutter analyze && flutter test
 ```
 
-자세한 제품 범위와 경계는 [PRODUCT_SCOPE.md](docs/PRODUCT_SCOPE.md), 시스템 구조는 [ARCHITECTURE.md](docs/ARCHITECTURE.md)를 참고하세요.
+자세한 제품 범위와 경계는 [PRODUCT_SCOPE.md](docs/PRODUCT_SCOPE.md), 시스템 구조는 [ARCHITECTURE.md](docs/ARCHITECTURE.md), AWS 운영은 [AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md)를 참고하세요.

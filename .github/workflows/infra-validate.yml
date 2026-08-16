@@ -1,0 +1,38 @@
+name: Validate AWS infrastructure
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - infra/**
+      - services/api/**
+      - .github/workflows/infra-validate.yml
+  push:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - infra/**
+      - services/api/**
+      - .github/workflows/infra-validate.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/setup-sam@v2
+      - name: Validate SAM template
+        run: sam validate --lint --template-file infra/template.yaml
+      - name: Test checkpoint dispatcher
+        working-directory: infra/checkpoint
+        run: python -m unittest -v
+      - name: Test checkpoint notification worker
+        working-directory: infra/checkpoint_worker
+        run: python -m unittest -v
+      - name: Build API image
+        run: docker build --tag openloop-api:ci .

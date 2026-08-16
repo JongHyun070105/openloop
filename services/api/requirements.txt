@@ -1,2 +1,8 @@
 fastapi>=0.116,<1
+boto3>=1.40,<2
+google-genai>=1.65,<2
+httpx>=0.28,<1
+python-multipart>=0.0.20,<1
+python-dotenv>=1.1,<2
+sentry-sdk[fastapi]>=2.40,<3
 uvicorn[standard]>=0.35,<1

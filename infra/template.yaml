@@ -1,0 +1,466 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: OpenLoop low-cost, event-driven API and checkpoint infrastructure
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+  DefaultUserId:
+    Type: String
+    Default: dev-local
+    Description: Local/dev fallback only when X-OpenLoop-Install-Id is absent.
+  IntegrationSecretArn:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional Secrets Manager ARN containing API integration keys as one JSON object.
+  GeminiModel:
+    Type: String
+    Default: gemini-3.5-flash-lite
+  FcmSecretArn:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: Optional Secrets Manager ARN containing a Firebase service-account JSON object.
+  FcmProjectId:
+    Type: String
+    Default: ""
+    Description: Optional Firebase project ID. Defaults to project_id in the FCM secret.
+  PosthogHost:
+    Type: String
+    Default: ""
+    Description: Optional PostHog ingestion host.
+  CheckpointScheduleState:
+    Type: String
+    Default: DISABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+    Description: Keep disabled until a checkpoint consumer is ready.
+  BudgetAlertEmail:
+    Type: String
+    Default: ""
+    Description: Optional email address for monthly AWS Budget alerts.
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 10
+    MinValue: 1
+  ApiReservedConcurrency:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 10
+    Description: Optional API Lambda concurrency cap; 0 preserves the account default.
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, prod]
+  HasIntegrationSecret: !Not [!Equals [!Ref IntegrationSecretArn, ""]]
+  HasFcmSecret: !Not [!Equals [!Ref FcmSecretArn, ""]]
+  HasBudgetEmail: !Not [!Equals [!Ref BudgetAlertEmail, ""]]
+  HasApiReservedConcurrency: !Not [!Equals [!Ref ApiReservedConcurrency, 0]]
+
+Globals:
+  Function:
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        APP_ENV: !Ref Environment
+        LOG_LEVEL: INFO
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      CorsConfiguration:
+        AllowHeaders:
+          - content-type
+          - x-openloop-install-id
+        AllowMethods:
+          - GET
+          - POST
+          - PATCH
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - "*"
+        MaxAge: 600
+      AccessLogSettings:
+        DestinationArn: !GetAtt HttpApiAccessLog.Arn
+        Format: '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}'
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 10
+        ThrottlingRateLimit: 5
+
+  HttpApiAccessLog:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ..
+      DockerTag: openloop-api-v1
+    Properties:
+      FunctionName: !Sub "openloop-${Environment}-api"
+      PackageType: Image
+      Description: FastAPI served through AWS Lambda Web Adapter
+      MemorySize: 512
+      Timeout: 30
+      ReservedConcurrentExecutions: !If
+        - HasApiReservedConcurrency
+        - !Ref ApiReservedConcurrency
+        - !Ref AWS::NoValue
+      Role: !GetAtt ApiFunctionRole.Arn
+      Environment:
+        Variables:
+          OPENLOOP_TABLE_NAME: !Ref OpenLoopTable
+          OPENLOOP_DEFAULT_USER_ID: !Ref DefaultUserId
+          OPENLOOP_REQUIRE_INSTALL_ID: !If [IsProduction, "true", "false"]
+          OPENLOOP_PUSH_DISPATCH_ENABLED: !If [HasFcmSecret, "true", "false"]
+          INTEGRATION_SECRET_ARN: !Ref IntegrationSecretArn
+          GEMINI_MODEL: !Ref GeminiModel
+          POSTHOG_HOST: !Ref PosthogHost
+          AWS_LWA_REMOVE_BASE_PATH: !Sub "/${Environment}"
+      Events:
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /health
+            Method: GET
+        Analyze:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /v1/analyze
+            Method: POST
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+  ApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ApiRuntime
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${ApiFunctionLogGroup.Arn}:*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt OpenLoopTable.Arn
+                  - !Sub "${OpenLoopTable.Arn}/index/*"
+              - !If
+                - HasIntegrationSecret
+                - Effect: Allow
+                  Action: secretsmanager:GetSecretValue
+                  Resource: !Ref IntegrationSecretArn
+                - !Ref AWS::NoValue
+
+  ApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/openloop-${Environment}-api"
+      RetentionInDays: 7
+
+  OpenLoopTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  CheckpointDispatchQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      ContentBasedDeduplication: true
+      MessageRetentionPeriod: 345600
+      VisibilityTimeout: 180
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt CheckpointDispatchDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  CheckpointDispatchDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600
+
+  SchedulerDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+
+  CheckpointDispatcherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "openloop-${Environment}-checkpoint-dispatcher"
+      Runtime: python3.13
+      Handler: handler.lambda_handler
+      CodeUri: checkpoint/
+      Description: Finds due checkpoints and emits idempotent work messages
+      MemorySize: 128
+      Timeout: 30
+      Role: !GetAtt CheckpointDispatcherRole.Arn
+      Environment:
+        Variables:
+          OPENLOOP_TABLE_NAME: !Ref OpenLoopTable
+          CHECKPOINT_QUEUE_URL: !Ref CheckpointDispatchQueue
+          CHECKPOINT_BATCH_SIZE: 25
+
+  CheckpointDispatcherLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/openloop-${Environment}-checkpoint-dispatcher"
+      RetentionInDays: 7
+
+  CheckpointDispatcherRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CheckpointDispatch
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${CheckpointDispatcherLogGroup.Arn}:*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt OpenLoopTable.Arn
+                  - !Sub "${OpenLoopTable.Arn}/index/GSI1"
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt CheckpointDispatchQueue.Arn
+
+  CheckpointWorkerFunction:
+    Type: AWS::Serverless::Function
+    Condition: HasFcmSecret
+    Properties:
+      FunctionName: !Sub "openloop-${Environment}-checkpoint-worker"
+      Runtime: python3.13
+      Handler: handler.lambda_handler
+      CodeUri: checkpoint_worker/
+      Description: Sends due checkpoint notifications through FCM HTTP v1
+      MemorySize: 256
+      Timeout: 30
+      ReservedConcurrentExecutions: 1
+      Role: !GetAtt CheckpointWorkerRole.Arn
+      Environment:
+        Variables:
+          OPENLOOP_TABLE_NAME: !Ref OpenLoopTable
+          FCM_SECRET_ARN: !Ref FcmSecretArn
+          FCM_PROJECT_ID: !Ref FcmProjectId
+      Events:
+        CheckpointQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt CheckpointDispatchQueue.Arn
+            BatchSize: 5
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+  CheckpointWorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: HasFcmSecret
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/openloop-${Environment}-checkpoint-worker"
+      RetentionInDays: 7
+
+  CheckpointWorkerRole:
+    Type: AWS::IAM::Role
+    Condition: HasFcmSecret
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CheckpointWorker
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${CheckpointWorkerLogGroup.Arn}:*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt OpenLoopTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt CheckpointDispatchQueue.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref FcmSecretArn
+
+  CheckpointScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeCheckpointDispatcher
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt CheckpointDispatcherFunction.Arn
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt SchedulerDeadLetterQueue.Arn
+
+  CheckpointSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Description: Dispatch due OpenLoop checkpoints every 15 minutes
+      FlexibleTimeWindow:
+        Mode: FLEXIBLE
+        MaximumWindowInMinutes: 5
+      ScheduleExpression: rate(15 minutes)
+      State: !Ref CheckpointScheduleState
+      Target:
+        Arn: !GetAtt CheckpointDispatcherFunction.Arn
+        RoleArn: !GetAtt CheckpointScheduleRole.Arn
+        Input: '{"source":"openloop.scheduler"}'
+        DeadLetterConfig:
+          Arn: !GetAtt SchedulerDeadLetterQueue.Arn
+        RetryPolicy:
+          MaximumEventAgeInSeconds: 900
+          MaximumRetryAttempts: 2
+
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Condition: HasBudgetEmail
+    Properties:
+      Budget:
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+        BudgetName: !Sub "openloop-${Environment}-monthly-cost"
+        BudgetType: COST
+        TimeUnit: MONTHLY
+      NotificationsWithSubscribers:
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 50
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - Address: !Ref BudgetAlertEmail
+              SubscriptionType: EMAIL
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: FORECASTED
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - Address: !Ref BudgetAlertEmail
+              SubscriptionType: EMAIL
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - Address: !Ref BudgetAlertEmail
+              SubscriptionType: EMAIL
+
+Outputs:
+  ApiBaseUrl:
+    Description: OpenLoop HTTP API base URL
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Environment}"
+  TableName:
+    Value: !Ref OpenLoopTable
+  CheckpointQueueUrl:
+    Value: !Ref CheckpointDispatchQueue
+  CheckpointScheduleName:
+    Value: !Ref CheckpointSchedule
