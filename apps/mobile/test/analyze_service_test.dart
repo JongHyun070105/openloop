@@ -293,6 +293,20 @@ void main() {
     expect(result.place, '성수');
   });
 
+  test(
+    'local analyzer treats explicit dated transaction as appointment',
+    () async {
+      final result = await LocalAnalyzeService(
+        clock: () => DateTime(2026, 8, 16, 11),
+      ).analyze(text: '오늘 오후 4시 종로5가역 12번 출구에서 향수 거래', source: 'text');
+
+      expect(result.kind, LoopKind.appointment);
+      expect(result.date, DateTime(2026, 8, 16));
+      expect(result.time, '16:00:00');
+      expect(result.missingFields, isEmpty);
+    },
+  );
+
   test('local analyzer never fabricates missing event values', () async {
     final result = await LocalAnalyzeService().analyze(
       text: '프로젝트 회의',
@@ -322,30 +336,47 @@ void main() {
         isTrue,
       );
       expect(result.checklist.map((item) => item.title), ['작품 파일', '포트폴리오']);
-      expect(result.checkpoints, hasLength(3));
-      expect(result.checkpoints.map((item) => item.offset), [
-        'D-7',
-        'D-3',
-        'D-1',
-      ]);
+      expect(result.checkpoints, hasLength(1));
+      expect(result.checkpoints.map((item) => item.offset), ['D-1']);
       expect(result.summary, contains('공모전 마감'));
     },
   );
 
-  test(
-    'local appointment creates event-driven before and after checkpoints',
-    () async {
-      final result = await LocalAnalyzeService(
-        clock: () => DateTime(2026, 8, 1, 9),
-      ).analyze(text: '2026-08-22 19:00 성수에서 회의', source: 'text');
+  test('local appointment creates one useful pre-event checkpoint', () async {
+    final result = await LocalAnalyzeService(
+      clock: () => DateTime(2026, 8, 1, 9),
+    ).analyze(text: '2026-08-22 19:00 성수에서 회의', source: 'text');
 
-      expect(result.state, LoopState.open);
-      expect(result.checkpoints.map((item) => item.offset), [
-        'T-24h',
-        'T-2h',
-        'T-1h',
-        'T+1d',
-      ]);
-    },
-  );
+    expect(result.state, LoopState.open);
+    expect(result.checkpoints.map((item) => item.offset), ['T-1h']);
+  });
+
+  test('local saved place never asks for date or time', () async {
+    final result = await LocalAnalyzeService().analyze(
+      text: '성수 난포 맛집 저장해줘',
+      source: 'text',
+    );
+
+    expect(result.kind, LoopKind.place);
+    expect(result.state, LoopState.open);
+    expect(result.missingFields, isEmpty);
+    expect(result.date, isNull);
+    expect(result.time, isNull);
+    expect(result.checkpoints, isEmpty);
+    expect(result.actions.map((item) => item.type), ['place']);
+  });
+
+  test('local coupon keeps an expiry date without asking for a time', () async {
+    final result = await LocalAnalyzeService(
+      clock: () => DateTime(2026, 8, 1, 9),
+    ).analyze(text: '스타벅스 쿠폰 2026-08-22까지 저장', source: 'text');
+
+    expect(result.kind, LoopKind.coupon);
+    expect(result.state, LoopState.open);
+    expect(result.date, isNull);
+    expect(result.expiresOn, DateTime(2026, 8, 22));
+    expect(result.time, isNull);
+    expect(result.missingFields, isEmpty);
+    expect(result.checkpoints.map((item) => item.offset), ['D-1']);
+  });
 }

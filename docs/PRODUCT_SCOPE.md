@@ -20,6 +20,8 @@ Android `SEND`와 iOS Share Extension은 이미지 한 장만 전달한다. 새 
 
 - `appointment`: appointment, event, reservation
 - `deadline`: notice, submission, application
+- `place`: restaurant, cafe, shop, venue, or destination saved for later
+- `coupon`: coupon, voucher, discount, or benefit with an optional expiry date
 
 ### AI pipeline
 
@@ -44,8 +46,10 @@ confidence join `missing_fields` and require focused verification.
 - Reminder
 - Open Loop
 - Deadline checklist
-- Deadline checkpoints (start with `D-7`, `D-3`, `D-1`; use a nearer useful lead time when those have passed)
-- Appointment checkpoints (start with `T-24h`, `T-2h`, `T-1h`, `T+1d`; never create a past prompt)
+- Place/map handoff and coupon-use action
+- One contextual alert: Appointment `T-1h` (or the nearest remaining `T-15m` / `T-5m`), Deadline/Coupon `D-1` (or `D-day`)
+- No checkpoint for a saved place
+- Conservative same-place links between Loops owned by the same installation
 
 ## UX rules
 
@@ -73,7 +77,8 @@ confidence join `missing_fields` and require focused verification.
 
 - Production authentication and billing
 - Account-to-account sharing and collaborative editing
-- Purchase, coupon, travel, school, and work skills
+- Purchase, reservation, travel, school, and work skills beyond the four current capture types
+- Fuzzy or model-inferred cross-Loop relationships beyond explicit same-place context
 - Production authentication and authorization beyond installation ownership
 
 ## Implemented product paths
@@ -88,8 +93,8 @@ confidence join `missing_fields` and require focused verification.
   selecting a missing field refreshes the summary and action graph.
 - Calendar handoff, local reminders, Kakao place lookup/map handoff, and KMA
   weather lookup are wired behind permission and provider-availability checks.
-- Appointment and deadline loops persist actions, checklist items, and the exact
-  cadence defined above; each can be completed locally and synced when reachable.
+- Appointment, deadline, place, and coupon loops persist only the actions and
+  contextual alert defined above; same-place Loops are linked without fuzzy inference.
 - The checked-in 100-case synthetic evaluation covers clear appointments, time
   changes, place changes, relative dates, missing fields, and poster/deadline input.
 

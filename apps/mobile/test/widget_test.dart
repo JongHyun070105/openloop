@@ -47,7 +47,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
 
-    expect(find.text('DEADLINE'), findsOneWidget);
+    expect(find.text('마감'), findsOneWidget);
     expect(find.text('원격 AI를 설정하지 않아 로컬 규칙 분석을 사용했습니다.'), findsOneWidget);
     expect(find.text('AI 요약'), findsOneWidget);
     for (
@@ -68,23 +68,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('실행 항목'), 180);
     expect(find.text('실행 항목'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('체크포인트'), 180);
-    expect(find.text('체크포인트'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('알림 시점'), 180);
+    expect(find.text('알림 시점'), findsOneWidget);
+    expect(find.byKey(const Key('calendar-add-button')), findsNothing);
 
-    final calendarButton = find.byKey(const Key('calendar-add-button'));
-    await tester.ensureVisible(calendarButton);
-    await tester.pumpAndSettle();
-    await tester.tap(calendarButton);
-    await tester.pumpAndSettle();
-    expect(
-      controller.loops.single.actions
-          .where((action) => action.type == 'calendar')
-          .single
-          .completed,
-      isTrue,
-    );
-
-    final checkpoint = find.text('공모전 마감 D-7 준비 확인');
+    final checkpoint = find.text('공모전 마감 전날 확인');
     await tester.ensureVisible(checkpoint);
     await tester.pumpAndSettle();
     await tester.tap(checkpoint);
@@ -187,12 +175,7 @@ void main() {
     expect(complete.summary, contains('성수'));
     expect(complete.summary, isNot(contains('확인이 필요합니다')));
     expect(complete.actions.any((item) => item.type == 'place'), isTrue);
-    expect(complete.checkpoints.map((item) => item.offset), [
-      'T-24h',
-      'T-2h',
-      'T-1h',
-      'T+1d',
-    ]);
+    expect(complete.checkpoints.map((item) => item.offset), ['T-1h']);
     expect(controller.loops, isEmpty);
     expect(repository.loops, isEmpty);
   });
@@ -253,6 +236,62 @@ void main() {
     expect(place.place, '동대문역 1번 출구');
     expect(place.summary, contains('동대문역 1번 출구'));
     expect(repository.loops, isEmpty);
+  });
+
+  testWidgets('place review hides schedule fields and uses place wording', (
+    tester,
+  ) async {
+    final loop = OpenLoop(
+      id: 'place-draft',
+      kind: LoopKind.place,
+      state: LoopState.open,
+      title: '난포 성수',
+      source: 'image',
+      createdAt: DateTime(2026, 8, 17),
+      place: '난포 성수',
+      confidence: const {},
+      persistence: LoopPersistence.remoteDraft,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewScreen(controller: controller, loop: loop),
+      ),
+    );
+
+    expect(find.text('장소'), findsOneWidget);
+    expect(find.byKey(const Key('review-date-field')), findsNothing);
+    expect(find.byKey(const Key('review-time-field')), findsNothing);
+    expect(find.byKey(const Key('review-place-field')), findsOneWidget);
+    expect(find.text('장소 저장'), findsOneWidget);
+  });
+
+  testWidgets('coupon review shows expiry but never asks for time', (
+    tester,
+  ) async {
+    final loop = OpenLoop(
+      id: 'coupon-draft',
+      kind: LoopKind.coupon,
+      state: LoopState.open,
+      title: '커피 쿠폰',
+      source: 'image',
+      createdAt: DateTime(2026, 8, 17),
+      expiresOn: DateTime(2026, 8, 31),
+      confidence: const {},
+      persistence: LoopPersistence.remoteDraft,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ReviewScreen(controller: controller, loop: loop),
+      ),
+    );
+
+    expect(find.text('쿠폰'), findsOneWidget);
+    expect(find.byKey(const Key('review-date-field')), findsOneWidget);
+    expect(find.textContaining('기한 8월 31일'), findsOneWidget);
+    expect(find.byKey(const Key('review-time-field')), findsNothing);
+    expect(find.text('쿠폰 저장'), findsOneWidget);
   });
 
   test('image analysis never falls back to a text-only local result', () async {
@@ -414,7 +453,7 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text('DEADLINE'), findsOneWidget);
+    expect(find.text('마감'), findsOneWidget);
   });
 
   testWidgets('appointment primary review action saves and opens calendar', (
@@ -640,6 +679,53 @@ void main() {
     expect(controller.loops, hasLength(1));
     expect(repository.loops.single.id, checklistLoop.id);
   });
+
+  test(
+    'same-place loops link symmetrically and deletion removes the link',
+    () async {
+      final place = OpenLoop(
+        id: 'place-loop',
+        kind: LoopKind.place,
+        state: LoopState.open,
+        title: '난포 성수',
+        source: 'text',
+        createdAt: DateTime(2026, 8, 16),
+        place: '난포 성수',
+        confidence: const {},
+      );
+      final appointment = OpenLoop(
+        id: 'appointment-loop',
+        kind: LoopKind.appointment,
+        state: LoopState.open,
+        title: '저녁 약속',
+        source: 'text',
+        createdAt: DateTime(2026, 8, 17),
+        date: DateTime(2026, 8, 20),
+        time: '19:00:00',
+        place: '난포성수',
+        confidence: const {},
+      );
+
+      await controller.saveLoop(place);
+      await controller.saveLoop(appointment);
+
+      expect(
+        controller.loops
+            .firstWhere((item) => item.id == place.id)
+            .relatedLoopIds,
+        [appointment.id],
+      );
+      expect(
+        controller.loops
+            .firstWhere((item) => item.id == appointment.id)
+            .relatedLoopIds,
+        [place.id],
+      );
+
+      await controller.deleteLoop(appointment);
+      expect(controller.loops.single.relatedLoopIds, isEmpty);
+    },
+  );
 
   test(
     'Close & Forget starts its retention clock when a loop is completed',

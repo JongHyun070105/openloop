@@ -32,9 +32,9 @@ One screenshot / image or text
 
 ## Core entities
 
-- `AnalyzeResponse`: nonpersisted `Analysis Draft` containing a normalized appointment or deadline, a factual Korean summary, confidence, missing fields, and one focused question.
-- `OpenLoop`: event plus lifecycle (`open`, `needs_input`, `closed`).
-- `LoopAction`: calendar, reminder, place, or checklist action.
+- `AnalyzeResponse`: nonpersisted `Analysis Draft` containing a normalized appointment, deadline, place, or coupon, a factual Korean summary, confidence, missing fields, and at most one focused question.
+- `OpenLoop`: event plus lifecycle (`open`, `needs_input`, `closed`) and conservative same-place relation IDs.
+- `LoopAction`: calendar, reminder, place, coupon, or checklist action.
 - `Checkpoint`: scheduled context reevaluation, not a continuously running agent.
 
 ## Current delivery topology
@@ -49,7 +49,8 @@ One screenshot / image or text
   opens the native Kakao map when possible and otherwise uses the web URL.
 - Action, checklist, and checkpoint mutations are installation-scoped and
   local-first: a failed remote request preserves the user’s local progress.
-- Default checkpoint cadence starts with Appointment `T-24h` / `T-2h` / `T-1h` / `T+1d` and Deadline `D-7` / `D-3` / `D-1`; both API and mobile filter already-passed times and substitute the nearest useful lead time for an imminent event.
+- Default checkpoint policy creates at most one useful alert: Appointment `T-1h` or the nearest remaining `T-15m` / `T-5m`; Deadline/Coupon `D-1` or `D-day`. A saved place creates none. API and mobile apply the same policy.
+- v2.5 context starts with deterministic same-owner, normalized same-place links. Fuzzy semantic linking remains deferred so the UI can always explain why two Loops are related.
 
 ## Delivery status
 
@@ -68,3 +69,4 @@ One screenshot / image or text
 2. Checkpoint-time weather/place context reevaluation instead of a static stored payload.
 3. Provider credential activation and real-device permission/push acceptance testing.
 4. Billing and multi-user sharing only after the personal-loop flow is validated.
+5. Purchase/reservation/travel skill modules and model-inferred cross-Loop context.

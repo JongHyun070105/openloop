@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class Intent(str, Enum):
     APPOINTMENT = "appointment"
     DEADLINE = "deadline"
+    PLACE = "place"
+    COUPON = "coupon"
 
 
 class LoopStatus(str, Enum):
@@ -61,6 +63,7 @@ class StructuredEvent(BaseModel):
     title: str
     date: Date | None = None
     start_time: Time | None = None
+    expires_on: Date | None = None
     place: Place | None = None
     participants: list[str] = Field(default_factory=list)
     purpose: str | None = None
@@ -111,7 +114,7 @@ class ChecklistItem(BaseModel):
 
 class LoopAction(BaseModel):
     id: str
-    type: Literal["calendar", "reminder", "place", "checklist"]
+    type: Literal["calendar", "reminder", "place", "checklist", "coupon"]
     title: str
     completed: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -134,6 +137,7 @@ class OpenLoop(BaseModel):
     actions: list[LoopAction] = Field(default_factory=list)
     checklist: list[ChecklistItem] = Field(default_factory=list)
     checkpoints: list[Checkpoint] = Field(default_factory=list)
+    related_loop_ids: list[str] = Field(default_factory=list)
     retention: RetentionPolicy = RetentionPolicy.KEEP
     created_at: datetime
     updated_at: datetime
@@ -148,6 +152,7 @@ class CreateLoopRequest(BaseModel):
     actions: list[LoopAction] = Field(default_factory=list)
     checklist: list[ChecklistItem] = Field(default_factory=list)
     checkpoints: list[Checkpoint] = Field(default_factory=list)
+    related_loop_ids: list[str] = Field(default_factory=list)
     retention: RetentionPolicy = RetentionPolicy.KEEP
 
     @model_validator(mode="after")
@@ -158,7 +163,15 @@ class CreateLoopRequest(BaseModel):
 
 
 class AmbiguityUpdate(BaseModel):
-    field: Literal["title", "date", "start_time", "place", "participants", "purpose"]
+    field: Literal[
+        "title",
+        "date",
+        "start_time",
+        "expires_on",
+        "place",
+        "participants",
+        "purpose",
+    ]
     value: Any
 
 

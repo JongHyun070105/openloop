@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 from zoneinfo import ZoneInfo
 
-from .demo_analyzer import analyze_demo
+from .demo_analyzer import _extract_time, analyze_demo
 from .errors import ExternalIntegrationError, ExternalIntegrationTimeout
 from pydantic import ValidationError
 
@@ -19,13 +19,18 @@ from .models import AnalyzeRequest, AnalyzeResponse, Intent, LoopStatus
 from .privacy import redact_pii
 
 
-_SYSTEM_INSTRUCTION = """You extract only the final agreed appointment or deadline from user-shared input.
+_SYSTEM_INSTRUCTION = """You classify and extract exactly one useful personal context from user-shared input.
 Return exactly the provided schema. Do not guess missing values. Put uncertain absent fields in missing_fields,
 set status to needs_input, and ask one focused suggested_question. Resolve corrections, rejections, and the
 latest final agreement. Confidence values must be between 0 and 1. Never include information not needed for
 the event. When the reason or activity is evident, put that concise action in purpose; do not leave purpose empty
 merely because the same meaning is also used in the title. For deadlines, extract each explicitly named submission as checklist with required true or false,
-and preserve requested reminder offsets. For a complete new event, status must be open; never return closed.
+and preserve only explicitly requested reminder offsets. Classify a real meeting, booking, or visit with a required
+date/time as appointment. Classify a submission or due date as deadline: its date matters, but absent time is not a
+missing field. Classify a restaurant, cafe, store, venue, or place the user wants to keep as place: never request a
+date or time for it. Classify a coupon, voucher, discount, or benefit as coupon: use expires_on only when an expiry
+date is visible, never put an expiry in date, and never request a time. For place and coupon captures, a confident
+title is enough to return open. For a complete new event, status must be open; never return closed.
 Dates must be YYYY-MM-DD and times must be local Korean time in HH:MM:SS without a timezone suffix. Resolve Korean
 relative dates against the reference instant included in the user prompt: 오늘 is the reference date, 내일 is +1 day,
 모레 is +2 days, and 담주/다음 주 means the following Korean calendar week (Sunday through Saturday). When month/day is present but the year is
@@ -134,6 +139,7 @@ def _focused_question(missing_fields: list[str]) -> str | None:
         "title": "일정 제목을 어떻게 정리할까요?",
         "date": "언제로 등록할까요?",
         "start_time": "몇 시로 등록할까요?",
+        "expires_on": "쿠폰 기한을 언제로 정리할까요?",
         "place": "어디에서 진행할까요?",
     }
     return questions.get(missing_fields[0]) if missing_fields else None
@@ -142,15 +148,20 @@ def _focused_question(missing_fields: list[str]) -> str | None:
 def _confidence_aware_missing_fields(event: Any) -> list[str]:
     """Gate required product fields without inventing facts from model confidence."""
 
-    required = [
-        ("title", bool(event.title.strip()), event.confidence.title),
-        ("date", event.date is not None, event.confidence.date),
-        ("start_time", event.start_time is not None, event.confidence.time),
-    ]
+    required = [("title", bool(event.title.strip()), event.confidence.title)]
     if event.type == Intent.APPOINTMENT:
-        required.append(("place", event.place is not None, event.confidence.location))
+        required.extend(
+            [
+                ("date", event.date is not None, event.confidence.date),
+                ("start_time", event.start_time is not None, event.confidence.time),
+                ("place", event.place is not None, event.confidence.location),
+            ]
+        )
+    elif event.type == Intent.DEADLINE:
+        required.append(("date", event.date is not None, event.confidence.date))
 
-    inferred = list(event.missing_fields)
+    required_fields = {field for field, _, _ in required}
+    inferred = [field for field in event.missing_fields if field in required_fields]
     for field, present, confidence in required:
         if (not present or confidence < _CONFIDENCE_THRESHOLD) and field not in inferred:
             inferred.append(field)
@@ -181,7 +192,16 @@ def _reconcile_explicit_text_facts(
     confidence = event.confidence.model_dump()
     missing_fields = list(event.missing_fields)
 
-    if _EXPLICIT_DATE_EVIDENCE.search(source_text):
+    if event.type == Intent.COUPON:
+        updates["date"] = None
+        updates["start_time"] = None
+        if _EXPLICIT_DATE_EVIDENCE.search(source_text) and literal.expires_on is not None:
+            updates["expires_on"] = literal.expires_on
+            confidence["date"] = max(float(confidence["date"]), 0.98)
+            missing_fields = [field for field in missing_fields if field != "expires_on"]
+    elif event.type == Intent.PLACE:
+        updates.update({"date": None, "start_time": None, "expires_on": None})
+    elif _EXPLICIT_DATE_EVIDENCE.search(source_text):
         if literal.date is not None:
             updates["date"] = literal.date
             if event.date is None or "date" in event.missing_fields:
@@ -194,8 +214,9 @@ def _reconcile_explicit_text_facts(
         updates["date"] = None
         confidence["date"] = 0.0
 
-    if literal.start_time is not None:
-        updates["start_time"] = literal.start_time
+    literal_time = _extract_time(source_text)
+    if event.type not in (Intent.COUPON, Intent.PLACE) and literal_time is not None:
+        updates["start_time"] = literal_time
         if event.start_time is None or "start_time" in event.missing_fields:
             confidence["time"] = max(float(confidence["time"]), 0.98)
         missing_fields = [field for field in missing_fields if field != "start_time"]
@@ -222,7 +243,7 @@ def _normalize_provider_payload(payload: object, source: str) -> dict[str, Any]:
     for field in ("participants", "reminders", "checklist", "missing_fields"):
         if event.get(field) is None:
             event[field] = []
-    for field in ("purpose", "summary", "resolution_note"):
+    for field in ("purpose", "summary", "resolution_note", "expires_on"):
         event.setdefault(field, None)
     event["source"] = source
     data["event"] = event
@@ -258,11 +279,24 @@ def _normalize_new_loop_result(
         if event.start_time and event.start_time.tzinfo
         else event.start_time
     )
+    normalized_date = _resolve_contextual_date(event.date, source_text, reference_date)
+    normalized_expiry = _resolve_contextual_date(
+        event.expires_on, source_text, reference_date
+    )
+    if event.type == Intent.COUPON:
+        normalized_expiry = normalized_expiry or normalized_date
+        normalized_date = None
+        local_time = None
+    elif event.type == Intent.PLACE:
+        normalized_date = None
+        normalized_expiry = None
+        local_time = None
     normalized_event = event.model_copy(
         update={
             "source": source,
-            "date": _resolve_contextual_date(event.date, source_text, reference_date),
+            "date": normalized_date,
             "start_time": local_time,
+            "expires_on": normalized_expiry,
         }
     )
     normalized_event = _reconcile_explicit_text_facts(

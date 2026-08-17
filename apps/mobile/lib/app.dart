@@ -171,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 44),
             const Text(
-              '일정을 추가하면\n바로 분석해요.',
+              '공유하면\n바로 정리해요.',
               style: TextStyle(
                 color: OLColors.navy,
                 fontSize: 30,
@@ -182,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 11),
             const Text(
-              '애매한 정보는 추측하지 않고 한 번만 물어봅니다.',
+              '일정·장소·쿠폰을 구분하고 필요한 정보만 물어봅니다.',
               style: TextStyle(color: OLColors.muted, height: 1.5),
             ),
             const SizedBox(height: 26),
@@ -585,7 +585,9 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
   @override
   void initState() {
     super.initState();
-    selectedDate = widget.loop.date;
+    selectedDate = field == 'expires_on'
+        ? widget.loop.expiresOn
+        : widget.loop.date;
     textController = TextEditingController(
       text: switch (field) {
         'place' => widget.loop.place ?? '',
@@ -613,6 +615,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
       : switch (field) {
           'start_time' => '몇 시로 등록할까요?',
           'date' => '언제인지 알려줄래요?',
+          'expires_on' => '쿠폰 기한을 언제로 정리할까요?',
           'place' => '어디에서 만날까요?',
           'title' => '이 일정의 이름은 무엇인가요?',
           'purpose' => '무엇을 위한 일정인가요?',
@@ -622,7 +625,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
 
   Object? get value => switch (field) {
     'start_time' => normalizeTimeInput(timeController.text),
-    'date' =>
+    'date' || 'expires_on' =>
       selectedDate == null
           ? null
           : '${selectedDate!.year.toString().padLeft(4, '0')}-${selectedDate!.month.toString().padLeft(2, '0')}-${selectedDate!.day.toString().padLeft(2, '0')}',
@@ -637,9 +640,13 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
 
   String get _inputHint => switch (field) {
     'start_time' => '시간을 직접 입력하거나 선택해 주세요.',
-    'date' =>
+    'date' || 'expires_on' =>
       selectedDate == null
-          ? '날짜를 선택하면 다음으로 넘어가요.'
+          ? field == 'expires_on'
+                ? '기한을 선택하면 다음으로 넘어가요.'
+                : '날짜를 선택하면 다음으로 넘어가요.'
+          : field == 'expires_on'
+          ? '추출한 기한이 맞으면 바로 다음으로 넘어갈 수 있어요.'
           : '추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.',
     _ => '이 정보만 확인하면 일정으로 정리할 수 있어요.',
   };
@@ -686,12 +693,12 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
         ),
       ],
     ),
-    'date' => InkWell(
-      key: const Key('date-picker'),
+    'date' || 'expires_on' => InkWell(
+      key: Key(field == 'expires_on' ? 'expiry-picker' : 'date-picker'),
       onTap: () async {
         final selected = await showDatePicker(
           context: context,
-          initialDate: widget.loop.date ?? DateTime.now(),
+          initialDate: selectedDate ?? DateTime.now(),
           firstDate: DateTime.now().subtract(const Duration(days: 365)),
           lastDate: DateTime.now().add(const Duration(days: 3650)),
         );
@@ -706,7 +713,9 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
-          selectedDate == null ? '날짜 선택' : dateText(selectedDate),
+          selectedDate == null
+              ? (field == 'expires_on' ? '기한 선택' : '날짜 선택')
+              : dateText(selectedDate),
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
         ),
       ),
@@ -845,13 +854,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (!draft.isDraft) return;
     final selected = await showDatePicker(
       context: context,
-      initialDate: draft.date ?? DateTime.now(),
+      initialDate: draft.primaryDate ?? DateTime.now(),
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
     if (selected != null) {
       _edit(
-        'date',
+        draft.kind == LoopKind.coupon ? 'expires_on' : 'date',
         '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}',
       );
     }
@@ -924,7 +933,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           const _InfoBanner(text: '원격 AI를 설정하지 않아 로컬 규칙 분석을 사용했습니다.'),
         const SizedBox(height: 12),
         Text(
-          draft.kind == LoopKind.deadline ? 'DEADLINE' : 'APPOINTMENT',
+          loopKindLabel(draft.kind),
           style: const TextStyle(
             color: OLColors.cobalt,
             fontWeight: FontWeight.w800,
@@ -943,7 +952,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '일정 제목',
+                '제목',
                 style: TextStyle(
                   color: OLColors.muted,
                   fontSize: 12,
@@ -989,43 +998,52 @@ class _ReviewScreenState extends State<ReviewScreen> {
           _SummaryCard(summary: draft.summary!),
         ],
         const SizedBox(height: 22),
-        _EditableReviewFact(
-          key: const Key('review-date-field'),
-          icon: Icons.calendar_today_outlined,
-          label: dateText(draft.date),
-          enabled: draft.isDraft,
-          onTap: _pickDate,
-        ),
-        TextField(
-          key: const Key('review-time-field'),
-          controller: timeController,
-          enabled: draft.isDraft,
-          keyboardType: TextInputType.datetime,
-          textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: '시간',
-            hintText: '시간 미정',
-            prefixIcon: const Icon(Icons.schedule_outlined),
-            suffixIcon: IconButton(
-              tooltip: '시간 선택',
-              onPressed: draft.isDraft ? _pickTime : null,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+        if (draft.kind != LoopKind.place)
+          _EditableReviewFact(
+            key: const Key('review-date-field'),
+            icon: draft.kind == LoopKind.coupon
+                ? Icons.timer_outlined
+                : Icons.calendar_today_outlined,
+            label: draft.kind == LoopKind.coupon
+                ? '기한 ${dateText(draft.expiresOn)}'
+                : dateText(draft.date),
+            enabled: draft.isDraft,
+            onTap: _pickDate,
+          ),
+        if (draft.kind == LoopKind.appointment || draft.time != null)
+          TextField(
+            key: const Key('review-time-field'),
+            controller: timeController,
+            enabled: draft.isDraft,
+            keyboardType: TextInputType.datetime,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: draft.kind == LoopKind.deadline ? '마감 시간 (선택)' : '시간',
+              hintText: draft.kind == LoopKind.deadline ? '시간 없음' : '시간 미정',
+              prefixIcon: const Icon(Icons.schedule_outlined),
+              suffixIcon: IconButton(
+                tooltip: '시간 선택',
+                onPressed: draft.isDraft ? _pickTime : null,
+                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+              ),
+              errorText: _timeInputError,
             ),
-            errorText: _timeInputError,
+            onChanged: _updateTime,
           ),
-          onChanged: _updateTime,
-        ),
-        TextField(
-          key: const Key('review-place-field'),
-          controller: placeController,
-          enabled: draft.isDraft,
-          decoration: const InputDecoration(
-            labelText: '장소',
-            prefixIcon: Icon(Icons.place_outlined),
-            hintText: '장소 미정',
+        if (draft.kind == LoopKind.appointment ||
+            draft.kind == LoopKind.place ||
+            draft.place != null)
+          TextField(
+            key: const Key('review-place-field'),
+            controller: placeController,
+            enabled: draft.isDraft,
+            decoration: InputDecoration(
+              labelText: draft.kind == LoopKind.place ? '저장할 장소' : '장소',
+              prefixIcon: const Icon(Icons.place_outlined),
+              hintText: draft.kind == LoopKind.place ? '장소명' : '장소 미정',
+            ),
+            onChanged: (value) => _edit('place', value.trim()),
           ),
-          onChanged: (value) => _edit('place', value.trim()),
-        ),
         if (draft.participants.isNotEmpty)
           _Fact(
             icon: Icons.group_outlined,
@@ -1053,15 +1071,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 17),
           ),
-          child: Text(
-            submitting
-                ? '저장 중…'
-                : draft.kind == LoopKind.deadline
-                ? 'OpenLoop 생성'
-                : draft.isDraft
-                ? '저장하고 캘린더 열기'
-                : '캘린더 다시 열기',
-          ),
+          child: Text(submitting ? '저장 중…' : reviewPrimaryActionText(draft)),
         ),
       ],
     ),
@@ -1202,6 +1212,13 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
         body: Center(child: Text('보관 기간에 따라 삭제된 Loop입니다.')),
       );
     }
+    final relatedLoops = widget.controller.loops
+        .where(
+          (candidate) =>
+              candidate.id != loop.id &&
+              loop.relatedLoopIds.contains(candidate.id),
+        )
+        .toList();
     return Scaffold(
       appBar: AppBar(
         title: Text(loop.state == LoopState.closed ? '닫힌 Loop' : 'Open Loop'),
@@ -1229,9 +1246,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
           Icon(
             loop.state == LoopState.closed
                 ? Icons.check_circle
-                : (loop.kind == LoopKind.deadline
-                      ? Icons.flag_outlined
-                      : Icons.event_available),
+                : loopKindIcon(loop.kind),
             size: 50,
             color: loop.state == LoopState.closed
                 ? OLColors.iconMuted
@@ -1248,14 +1263,24 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             _SummaryCard(summary: loop.summary!),
             const SizedBox(height: 18),
           ],
-          _Fact(
-            icon: Icons.calendar_today_outlined,
-            label: dateText(loop.date),
-          ),
-          _Fact(
-            icon: Icons.schedule_outlined,
-            label: loop.time?.substring(0, 5) ?? '시간 미정',
-          ),
+          if (loop.kind == LoopKind.appointment ||
+              loop.kind == LoopKind.deadline)
+            _Fact(
+              icon: Icons.calendar_today_outlined,
+              label: dateText(loop.date),
+            ),
+          if (loop.kind == LoopKind.appointment || loop.time != null)
+            _Fact(
+              icon: Icons.schedule_outlined,
+              label: loop.time?.substring(0, 5) ?? '시간 미정',
+            ),
+          if (loop.kind == LoopKind.coupon)
+            _Fact(
+              icon: Icons.timer_outlined,
+              label: loop.expiresOn == null
+                  ? '기한 정보 없음'
+                  : '기한 ${dateText(loop.expiresOn)}',
+            ),
           if (loop.place != null)
             _Fact(icon: Icons.place_outlined, label: loop.place!),
           if (loop.participants.isNotEmpty)
@@ -1282,6 +1307,39 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ],
+          if (relatedLoops.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const Text(
+              '연결된 Loop',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const _InfoBanner(
+              text: '같은 장소가 확인된 정보만 연결했습니다. 일정, 저장한 장소, 쿠폰을 한 흐름으로 볼 수 있어요.',
+            ),
+            const SizedBox(height: 8),
+            ...relatedLoops.map(
+              (related) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  loopKindIcon(related.kind),
+                  color: OLColors.cobalt,
+                ),
+                title: Text(related.title),
+                subtitle: Text(loopCardMeta(related)),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => LoopDetailScreen(
+                      controller: widget.controller,
+                      loopId: related.id,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -1334,60 +1392,77 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             const SizedBox(height: 8),
             const _InfoBanner(
               text:
-                  '실행 항목은 캘린더 추가, 장소 확인처럼 직접 끝낼 일입니다. 알림은 일정 시점에 맞춰 앱이 자동으로 예약합니다.',
+                  '실행 항목은 캘린더 추가, 지도 열기, 쿠폰 사용처럼 직접 끝낼 일입니다. 자동 알림은 따로 체크할 필요가 없습니다.',
             ),
             const SizedBox(height: 8),
             ...loop.actions.map(
-              (item) => CheckboxListTile(
-                value: item.completed,
-                contentPadding: EdgeInsets.zero,
-                title: Row(
-                  children: [
-                    Expanded(child: Text(item.title)),
-                    const SizedBox(width: 8),
-                    Text(
-                      item.completed
-                          ? '완료'
-                          : item.type == 'reminder'
-                          ? '자동'
-                          : '대기',
-                      style: TextStyle(
-                        color: item.completed
-                            ? OLColors.cobalt
-                            : OLColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+              (item) => item.type == 'reminder'
+                  ? ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(
+                        Icons.notifications_active_outlined,
+                        color: OLColors.cobalt,
                       ),
+                      title: Text(item.title),
+                      subtitle: Text(
+                        actionDescription(item),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: const Text(
+                        '자동',
+                        style: TextStyle(
+                          color: OLColors.cobalt,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                  : CheckboxListTile(
+                      value: item.completed,
+                      contentPadding: EdgeInsets.zero,
+                      title: Row(
+                        children: [
+                          Expanded(child: Text(item.title)),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.completed ? '완료' : '대기',
+                            style: TextStyle(
+                              color: item.completed
+                                  ? OLColors.cobalt
+                                  : OLColors.muted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        actionDescription(item),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onChanged: loop.state == LoopState.closed
+                          ? null
+                          : (value) async {
+                              await widget.controller.updateAction(
+                                loop,
+                                item,
+                                value ?? false,
+                              );
+                              if (mounted) setState(() {});
+                            },
                     ),
-                  ],
-                ),
-                subtitle: Text(
-                  actionDescription(item),
-                  style: const TextStyle(fontSize: 12),
-                ),
-                onChanged: loop.state == LoopState.closed
-                    ? null
-                    : (value) async {
-                        await widget.controller.updateAction(
-                          loop,
-                          item,
-                          value ?? false,
-                        );
-                        if (mounted) setState(() {});
-                      },
-              ),
             ),
           ],
           if (loop.checkpoints.isNotEmpty) ...[
             const SizedBox(height: 22),
             const Text(
-              '체크포인트',
+              '알림 시점',
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             const _InfoBanner(
               text:
-                  '체크포인트는 일정 전후에 확인을 돕는 알림 시점입니다. 이미 지난 시점은 만들지 않고, 임박한 일정에는 더 가까운 준비 시점을 안내합니다.',
+                  '필요한 순간 한 번만 알려드립니다. 장소 저장에는 만들지 않고, 약속·마감·쿠폰 기한에만 가장 가까운 유효 시점을 사용합니다.',
             ),
             const SizedBox(height: 8),
             ...loop.checkpoints.map(
@@ -1441,35 +1516,37 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 icon: const Icon(Icons.map_outlined),
                 label: const Text('장소·날씨 보기'),
               ),
-            OutlinedButton.icon(
-              key: const Key('calendar-add-button'),
-              onPressed: () {
-                if (loop.startsAt == null) {
-                  setState(() => notice = '날짜와 시간을 먼저 확인한 뒤 캘린더에 추가해 주세요.');
-                  return;
-                }
-                _launchCalendarHandoff(widget.controller, loop);
-                setState(
-                  () => notice = '기기 캘린더 작성 화면을 열었습니다. 저장 후 OpenLoop로 돌아오세요.',
-                );
-              },
-              icon: const Icon(Icons.calendar_month_outlined),
-              label: const Text('캘린더에 추가'),
-            ),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final ok = await widget.controller.syncLocalReminders();
-                if (mounted) {
+            if (loop.kind == LoopKind.appointment)
+              OutlinedButton.icon(
+                key: const Key('calendar-add-button'),
+                onPressed: () {
+                  if (loop.startsAt == null) {
+                    setState(() => notice = '날짜와 시간을 먼저 확인한 뒤 캘린더에 추가해 주세요.');
+                    return;
+                  }
+                  _launchCalendarHandoff(widget.controller, loop);
                   setState(
-                    () => notice = ok
-                        ? '앞으로 남은 체크포인트 알림을 다시 예약했습니다.'
-                        : '예정된 체크포인트가 없거나 알림 권한이 꺼져 있습니다.',
+                    () => notice = '기기 캘린더 작성 화면을 열었습니다. 저장 후 OpenLoop로 돌아오세요.',
                   );
-                }
-              },
-              icon: const Icon(Icons.notifications_active_outlined),
-              label: const Text('알림 다시 예약'),
-            ),
+                },
+                icon: const Icon(Icons.calendar_month_outlined),
+                label: const Text('캘린더에 추가'),
+              ),
+            if (loop.checkpoints.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final ok = await widget.controller.syncLocalReminders();
+                  if (mounted) {
+                    setState(
+                      () => notice = ok
+                          ? '남은 알림 시점을 다시 예약했습니다.'
+                          : '알림 권한이 꺼져 있거나 예약할 시점이 없습니다.',
+                    );
+                  }
+                },
+                icon: const Icon(Icons.notifications_active_outlined),
+                label: const Text('알림 다시 예약'),
+              ),
             const SizedBox(height: 10),
             FilledButton.icon(
               key: const Key('close-loop-button'),
@@ -1730,12 +1807,7 @@ class LoopCard extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         child: Row(
           children: [
-            Icon(
-              loop.kind == LoopKind.deadline
-                  ? Icons.flag_outlined
-                  : Icons.event_outlined,
-              color: accent,
-            ),
+            Icon(loopKindIcon(loop.kind), color: accent),
             const SizedBox(width: 15),
             Expanded(
               child: Column(
@@ -1750,7 +1822,7 @@ class LoopCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    '${dateText(loop.date)} · ${loop.time?.substring(0, 5) ?? '시간 미정'}${loop.place == null ? '' : ' · ${loop.place}'}',
+                    loopCardMeta(loop),
                     style: const TextStyle(color: OLColors.muted, fontSize: 12),
                   ),
                 ],
@@ -1806,7 +1878,7 @@ class _EmptyLoops extends StatelessWidget {
         ),
         SizedBox(height: 6),
         Text(
-          '텍스트나 이미지를 공유해 첫 일정을 만들어 보세요.',
+          '텍스트나 이미지를 공유해 일정, 장소, 쿠폰을 저장해 보세요.',
           textAlign: TextAlign.center,
           style: TextStyle(color: OLColors.muted),
         ),
@@ -1954,6 +2026,45 @@ class _PrivacyNote extends StatelessWidget {
 
 String dateText(DateTime? date) =>
     date == null ? '날짜 미정' : '${date.month}월 ${date.day}일';
+
+String loopKindLabel(LoopKind kind) => switch (kind) {
+  LoopKind.appointment => '일정',
+  LoopKind.deadline => '마감',
+  LoopKind.place => '장소',
+  LoopKind.coupon => '쿠폰',
+};
+
+IconData loopKindIcon(LoopKind kind) => switch (kind) {
+  LoopKind.appointment => Icons.event_outlined,
+  LoopKind.deadline => Icons.flag_outlined,
+  LoopKind.place => Icons.bookmark_border_rounded,
+  LoopKind.coupon => Icons.local_activity_outlined,
+};
+
+String reviewPrimaryActionText(OpenLoop loop) => switch (loop.kind) {
+  LoopKind.appointment => loop.isDraft ? '저장하고 캘린더 열기' : '캘린더 다시 열기',
+  LoopKind.deadline => '마감 저장',
+  LoopKind.place => '장소 저장',
+  LoopKind.coupon => '쿠폰 저장',
+};
+
+String loopCardMeta(OpenLoop loop) => switch (loop.kind) {
+  LoopKind.appointment => [
+    dateText(loop.date),
+    loop.time?.substring(0, 5) ?? '시간 미정',
+    if (loop.place != null) loop.place!,
+  ].join(' · '),
+  LoopKind.deadline => [
+    '마감 ${dateText(loop.date)}',
+    if (loop.time != null) loop.time!.substring(0, 5),
+  ].join(' · '),
+  LoopKind.place => loop.place ?? '장소 정보',
+  LoopKind.coupon => [
+    loop.expiresOn == null ? '기한 정보 없음' : '기한 ${dateText(loop.expiresOn)}',
+    if (loop.place != null) loop.place!,
+  ].join(' · '),
+};
+
 String checkpointTimeText(DateTime dateTime, {DateTime? now}) {
   final local = dateTime.toLocal();
   final reference = (now ?? DateTime.now()).toLocal();
@@ -1971,16 +2082,17 @@ String checkpointTimeText(DateTime dateTime, {DateTime? now}) {
 
 String actionDescription(LoopAction action) => switch (action.type) {
   'calendar' => '기기 캘린더에 이 일정을 남깁니다.',
-  'reminder' => '허용한 앱 알림으로 체크포인트를 자동 예약합니다.',
+  'reminder' => '필요한 시점에 앱 알림을 자동 예약합니다.',
   'place' => '장소와 날씨 정보를 확인합니다.',
   'checklist' => '마감 전에 빠뜨릴 제출 항목을 확인합니다.',
+  'coupon' => '쿠폰을 사용한 뒤 완료로 표시합니다.',
   _ => '이 일정을 실제로 마무리하기 위한 항목입니다.',
 };
 
 String stateText(LoopState state) => switch (state) {
-  LoopState.open => 'OPEN',
+  LoopState.open => '진행 중',
   LoopState.needsInput => '확인 필요',
-  LoopState.closed => 'CLOSED',
+  LoopState.closed => '닫힘',
 };
 String retentionText(RetentionPolicy policy) => switch (policy) {
   RetentionPolicy.immediately => '닫는 즉시 삭제',

@@ -14,7 +14,7 @@ Capture -> Create -> Close
 - **Create** — AI가 최종 합의, 요약, 누락 필드, 신뢰도를 포함한 저장 전 `Analysis Draft`를 만듭니다. 사용자가 승인할 때만 Open Loop가 생성됩니다.
 - **Close** — calendar, reminder, checklist, checkpoint를 연결해 완료까지 추적합니다.
 
-MVP는 `Appointment`와 `Deadline` 두 가지 intent에 집중합니다. AI가 확실하면 한 번의 확인으로 등록하고, 애매하면 필요한 필드 하나만 묻습니다.
+현재 앱은 `Appointment`, `Deadline`, `Place`, `Coupon` 네 가지 intent를 지원합니다. AI가 확실하면 한 번의 확인으로 저장하고, 애매하면 해당 타입에 실제로 필요한 필드 하나만 묻습니다.
 
 ## Repository
 
@@ -72,7 +72,8 @@ Optional Flutter analytics, Sentry, and Firebase client identifiers belong in `a
 - 필수 필드가 없거나 confidence가 `0.65` 미만이면 해당 필드 하나만 확인합니다. 정상 빌드에서는 원시 confidence 백분율을 숨깁니다.
 - 설정된 원격 AI의 text/image 실패는 로컬 분석 성공으로 위장하지 않고 재시도 가능한 오류로 표시합니다.
 - Appointment 승인 버튼은 Loop를 저장한 뒤 시스템 calendar composer를 엽니다. 삭제 확인은 iOS Cupertino, Android Material 방식입니다.
-- Appointment checkpoint는 `T-24h`, `T-2h`, `T-1h`, `T+1d`; Deadline은 `D-7`, `D-3`, `D-1`입니다.
+- Appointment는 `T-1h` 또는 남은 가장 가까운 준비 시점, Deadline/Coupon은 `D-1` 또는 유효한 당일 시점에 알림 한 번만 만듭니다. Place에는 알림을 만들지 않습니다.
+- 같은 설치에서 장소명이 명시적으로 같은 Loop는 서로 연결해 상세 화면에 표시합니다. 모호한 제목 유사도는 관계로 추측하지 않습니다.
 - Open Loop 목록/상세, action/checklist/checkpoint 완료, local reminder, Kakao place handoff, KMA weather, Close & Forget 보관 정책이 연결돼 있습니다.
 - FastAPI lifecycle API, SQLite/DynamoDB 저장소와 Lambda/API Gateway 기반 AWS 배포 구성이 있습니다.
 

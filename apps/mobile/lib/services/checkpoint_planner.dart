@@ -12,59 +12,36 @@ class CheckpointPlan {
   final DateTime dueAt;
 }
 
-/// Produces only checkpoints that can still help the user act.
-///
-/// A plan made today for a 19:00 appointment must not ask for a "day before"
-/// confirmation. When the usual lead times have passed, the nearest useful
-/// pre-event prompt replaces them instead of scheduling a stale notification.
+/// Produces one contextual alert only when the capture has a real time or
+/// expiry. Saved places deliberately produce no checkpoint at all.
 List<CheckpointPlan> planCheckpoints({
   required LoopKind kind,
   required String title,
   required DateTime? eventAt,
   DateTime? now,
 }) {
-  if (eventAt == null) return const [];
+  if (eventAt == null || kind == LoopKind.place) return const [];
   final reference = now ?? DateTime.now();
-  final templates = kind == LoopKind.deadline
-      ? <({String offset, String label, Duration delta})>[
-          (
-            offset: 'D-7',
-            label: '$title D-7 준비 확인',
-            delta: const Duration(days: -7),
-          ),
-          (
-            offset: 'D-3',
-            label: '$title D-3 제출물 점검',
-            delta: const Duration(days: -3),
-          ),
-          (
-            offset: 'D-1',
-            label: '$title D-1 최종 확인',
-            delta: const Duration(days: -1),
-          ),
-        ]
-      : <({String offset, String label, Duration delta})>[
-          (
-            offset: 'T-24h',
-            label: '$title 하루 전 확인',
-            delta: const Duration(hours: -24),
-          ),
-          (
-            offset: 'T-2h',
-            label: '$title 출발·준비 확인',
-            delta: const Duration(hours: -2),
-          ),
-          (
-            offset: 'T-1h',
-            label: '$title 한 시간 전 준비 확인',
-            delta: const Duration(hours: -1),
-          ),
-          (
-            offset: 'T+1d',
-            label: '$title 후속 확인',
-            delta: const Duration(days: 1),
-          ),
-        ];
+  final templates = switch (kind) {
+    LoopKind.appointment => <({String offset, String label, Duration delta})>[
+      (
+        offset: 'T-1h',
+        label: '$title 출발·준비 확인',
+        delta: const Duration(hours: -1),
+      ),
+    ],
+    LoopKind.deadline => <({String offset, String label, Duration delta})>[
+      (offset: 'D-1', label: '$title 전날 확인', delta: const Duration(days: -1)),
+    ],
+    LoopKind.coupon => <({String offset, String label, Duration delta})>[
+      (
+        offset: 'D-1',
+        label: '$title 기한 전날 확인',
+        delta: const Duration(days: -1),
+      ),
+    ],
+    LoopKind.place => const <({String offset, String label, Duration delta})>[],
+  };
 
   final planned = <CheckpointPlan>[
     for (final template in templates)
@@ -80,35 +57,8 @@ List<CheckpointPlan> planCheckpoints({
     (item) => item.dueAt.isBefore(eventAt),
   );
   if (!hasUpcomingPreparation && eventAt.isAfter(reference)) {
-    final shortLeadTimes = kind == LoopKind.deadline
+    final shortLeadTimes = kind == LoopKind.appointment
         ? <({String offset, String label, Duration delta})>[
-            (
-              offset: 'T-3h',
-              label: '$title 마감 3시간 전 점검',
-              delta: const Duration(hours: -3),
-            ),
-            (
-              offset: 'T-1h',
-              label: '$title 마감 한 시간 전 확인',
-              delta: const Duration(hours: -1),
-            ),
-            (
-              offset: 'T-30m',
-              label: '$title 마감 30분 전 확인',
-              delta: const Duration(minutes: -30),
-            ),
-            (
-              offset: 'T-5m',
-              label: '$title 마감 직전 확인',
-              delta: const Duration(minutes: -5),
-            ),
-          ]
-        : <({String offset, String label, Duration delta})>[
-            (
-              offset: 'T-30m',
-              label: '$title 출발 30분 전 확인',
-              delta: const Duration(minutes: -30),
-            ),
             (
               offset: 'T-15m',
               label: '$title 출발 15분 전 확인',
@@ -119,6 +69,9 @@ List<CheckpointPlan> planCheckpoints({
               label: '$title 출발 직전 확인',
               delta: const Duration(minutes: -5),
             ),
+          ]
+        : <({String offset, String label, Duration delta})>[
+            (offset: 'D-day', label: '$title 기한 당일 확인', delta: Duration.zero),
           ];
     for (final template in shortLeadTimes) {
       final dueAt = eventAt.add(template.delta);

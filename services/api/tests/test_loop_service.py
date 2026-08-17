@@ -96,10 +96,10 @@ class LoopServiceTests(unittest.TestCase):
 
         _, _, checkpoints = _default_graph(event, reference_at=reference)
 
-        self.assertEqual([checkpoint.offset for checkpoint in checkpoints], ["T-2h", "T-1h", "T+1d"])
+        self.assertEqual([checkpoint.offset for checkpoint in checkpoints], ["T-1h"])
         self.assertTrue(all(checkpoint.due_at and checkpoint.due_at > reference for checkpoint in checkpoints))
 
-    def test_nearby_deadline_uses_a_short_lead_time_instead_of_missed_day_cadence(self) -> None:
+    def test_nearby_deadline_uses_one_same_day_alert_instead_of_stale_cadence(self) -> None:
         event = StructuredEvent(
             type=Intent.DEADLINE,
             title="공모전 마감",
@@ -112,8 +112,53 @@ class LoopServiceTests(unittest.TestCase):
 
         _, _, checkpoints = _default_graph(event, reference_at=reference)
 
-        self.assertEqual([checkpoint.offset for checkpoint in checkpoints], ["T-3h"])
-        self.assertEqual(checkpoints[0].due_at, datetime(2026, 8, 17, 7, tzinfo=UTC))
+        self.assertEqual([checkpoint.offset for checkpoint in checkpoints], ["D-day"])
+        self.assertEqual(checkpoints[0].due_at, datetime(2026, 8, 17, 10, tzinfo=UTC))
+
+    def test_place_has_only_a_map_action_and_links_by_exact_normalized_place(self) -> None:
+        first_event = StructuredEvent(
+            type=Intent.PLACE,
+            title="난포",
+            place={"name": "난포 성수"},
+            source="text",
+            confidence=Confidence(date=0, time=0, location=1, title=1),
+        )
+        first = self.service.create(CreateLoopRequest(event=first_event))
+        second_event = StructuredEvent(
+            type=Intent.APPOINTMENT,
+            title="저녁 약속",
+            date=date(2026, 8, 20),
+            start_time=time(19),
+            place={"name": "난포성수"},
+            source="text",
+            confidence=Confidence(date=1, time=1, location=1, title=1),
+        )
+        second = self.service.create(CreateLoopRequest(event=second_event))
+
+        self.assertEqual([item.type for item in first.actions], ["place"])
+        self.assertEqual(first.checkpoints, [])
+        self.assertEqual(second.related_loop_ids, [first.id])
+        self.assertEqual(self.repository.get(first.id).related_loop_ids, [second.id])
+
+        self.assertTrue(self.service.delete(second.id))
+        self.assertEqual(self.repository.get(first.id).related_loop_ids, [])
+
+    def test_coupon_has_one_use_action_and_no_time_requirement(self) -> None:
+        event = StructuredEvent(
+            type=Intent.COUPON,
+            title="커피 쿠폰",
+            expires_on=date(2026, 8, 20),
+            source="text",
+            confidence=Confidence(date=1, time=0, location=0, title=1),
+        )
+        actions, checklist, checkpoints = _default_graph(
+            event,
+            reference_at=datetime(2026, 8, 17, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual([item.type for item in actions], ["coupon", "reminder"])
+        self.assertEqual(checklist, [])
+        self.assertEqual([item.offset for item in checkpoints], ["D-1"])
 
     def test_close_and_forget_immediately_removes_loop_on_next_read(self) -> None:
         analysis = analyze_demo(AnalyzeRequest(text="6시 말고 7시 난포 예약했음"))

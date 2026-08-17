@@ -263,97 +263,80 @@ class LocalAnalyzeService implements AnalyzeService {
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 450));
     final now = _clock();
-    final isDeadline =
-        text.contains('마감') || text.contains('제출') || text.contains('공모전');
-    final date = _explicitDate(text, now);
-    final startTime = _explicitTime(text);
-    final place = _explicitPlace(text);
-    final title = _localTitle(text, isDeadline);
-    final checklist = isDeadline
+    final kind = _localKind(text, now);
+    final extractedDate = _explicitDate(text, now);
+    final date = kind == LoopKind.coupon || kind == LoopKind.place
+        ? null
+        : extractedDate;
+    final expiresOn = kind == LoopKind.coupon ? extractedDate : null;
+    final startTime = kind == LoopKind.appointment || kind == LoopKind.deadline
+        ? _explicitTime(text)
+        : null;
+    final title = _localTitle(text, kind);
+    final place = kind == LoopKind.place
+        ? _explicitPlace(text) ?? title
+        : _explicitPlace(text);
+    final checklist = kind == LoopKind.deadline
         ? _localDeadlineChecklist(text)
         : const <Map<String, dynamic>>[];
     final checkpoints = _localCheckpoints(
-      date: date,
-      time: startTime,
-      deadline: isDeadline,
+      kind: kind,
+      eventAt: _localCheckpointAnchor(
+        kind: kind,
+        date: date,
+        time: startTime,
+        expiresOn: expiresOn,
+      ),
       title: title,
       now: now,
     );
     final missingFields = <String>[
-      if (date == null) 'date',
-      if (startTime == null) 'start_time',
-      if (!isDeadline && place == null) 'place',
+      if (kind == LoopKind.appointment && date == null) 'date',
+      if (kind == LoopKind.appointment && startTime == null) 'start_time',
+      if (kind == LoopKind.appointment && place == null) 'place',
+      if (kind == LoopKind.deadline && date == null) 'date',
     ];
     final fallbackJson = <String, dynamic>{
       'status': missingFields.isEmpty ? 'open' : 'needs_input',
       'event': {
-        'type': isDeadline ? 'deadline' : 'appointment',
+        'type': kind.name,
         'title': title,
         'date': date == null
             ? null
             : '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
         'start_time': startTime,
+        'expires_on': expiresOn == null
+            ? null
+            : '${expiresOn.year.toString().padLeft(4, '0')}-${expiresOn.month.toString().padLeft(2, '0')}-${expiresOn.day.toString().padLeft(2, '0')}',
         'place': place == null ? null : {'name': place},
         'purpose': null,
         'summary': _localSummary(
           title: title,
-          isDeadline: isDeadline,
+          kind: kind,
           date: date,
           time: startTime,
+          expiresOn: expiresOn,
           place: place,
           missingFields: missingFields,
         ),
         'source': source,
         'confidence': {
-          'date': date == null ? 0.0 : .96,
+          'date': (date ?? expiresOn) == null ? 0.0 : .96,
           'time': startTime == null ? 0.0 : .97,
           'location': place == null ? 0.0 : .9,
           'title': .7,
         },
         'missing_fields': missingFields,
-        'reminders': isDeadline && date != null
-            ? [
-                {'type': 'checkpoint', 'offset': 'D-7'},
-                {'type': 'checkpoint', 'offset': 'D-3'},
-                {'type': 'checkpoint', 'offset': 'D-1'},
-              ]
-            : startTime != null
-            ? [
-                {'type': 'default', 'offset': '-1h'},
-              ]
-            : <Map<String, String>>[],
+        'reminders': const <Map<String, String>>[],
         'resolution_note': 'API 연결 전에는 텍스트에 명시된 값만 추출합니다. 저장 전에 빈 항목을 확인하세요.',
       },
       'suggested_question': _localQuestion(missingFields),
-      'actions': [
-        {
-          'id': 'action-calendar',
-          'type': 'calendar',
-          'title': '$title 추가',
-          'completed': false,
-        },
-        if (place != null)
-          {
-            'id': 'action-place',
-            'type': 'place',
-            'title': place,
-            'completed': false,
-          },
-        if (isDeadline)
-          {
-            'id': 'action-checklist',
-            'type': 'checklist',
-            'title': '마감 체크리스트',
-            'completed': false,
-          },
-        if (date != null && startTime != null)
-          {
-            'id': 'action-reminder',
-            'type': 'reminder',
-            'title': '알림 자동 예약',
-            'completed': false,
-          },
-      ],
+      'actions': _localActions(
+        kind: kind,
+        title: title,
+        place: place,
+        checkpoints: checkpoints,
+      ),
       'checklist': checklist,
       'checkpoints': checkpoints,
     };
@@ -388,23 +371,13 @@ List<Map<String, dynamic>> _localDeadlineChecklist(String text) {
 }
 
 List<Map<String, dynamic>> _localCheckpoints({
-  required DateTime? date,
-  required String? time,
-  required bool deadline,
+  required LoopKind kind,
+  required DateTime? eventAt,
   required String title,
   required DateTime now,
 }) {
-  if (date == null || time == null) return const [];
-  final parts = time.split(':');
-  final eventAt = DateTime(
-    date.year,
-    date.month,
-    date.day,
-    parts.isEmpty ? 9 : int.tryParse(parts.first) ?? 9,
-    parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
-  );
   final planned = planCheckpoints(
-    kind: deadline ? LoopKind.deadline : LoopKind.appointment,
+    kind: kind,
     title: title,
     eventAt: eventAt,
     now: now,
@@ -422,24 +395,141 @@ List<Map<String, dynamic>> _localCheckpoints({
   ];
 }
 
-String _localSummary({
-  required String title,
-  required bool isDeadline,
+DateTime? _localCheckpointAnchor({
+  required LoopKind kind,
   required DateTime? date,
   required String? time,
+  required DateTime? expiresOn,
+}) {
+  if (kind == LoopKind.place) return null;
+  final target = kind == LoopKind.coupon ? expiresOn : date;
+  if (target == null) return null;
+  if (kind == LoopKind.coupon || time == null) {
+    return DateTime(target.year, target.month, target.day, 10);
+  }
+  final parts = time.split(':');
+  return DateTime(
+    target.year,
+    target.month,
+    target.day,
+    int.tryParse(parts.first) ?? 9,
+    parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
+  );
+}
+
+List<Map<String, dynamic>> _localActions({
+  required LoopKind kind,
+  required String title,
+  required String? place,
+  required List<Map<String, dynamic>> checkpoints,
+}) => switch (kind) {
+  LoopKind.appointment => [
+    {
+      'id': 'action-calendar',
+      'type': 'calendar',
+      'title': '$title 일정 추가',
+      'completed': false,
+    },
+    if (place != null)
+      {
+        'id': 'action-place',
+        'type': 'place',
+        'title': place,
+        'completed': false,
+      },
+    if (checkpoints.isNotEmpty)
+      {
+        'id': 'action-reminder',
+        'type': 'reminder',
+        'title': '일정 알림 자동 예약',
+        'completed': false,
+      },
+  ],
+  LoopKind.deadline => [
+    {
+      'id': 'action-checklist',
+      'type': 'checklist',
+      'title': '마감 체크리스트',
+      'completed': false,
+    },
+    if (checkpoints.isNotEmpty)
+      {
+        'id': 'action-reminder',
+        'type': 'reminder',
+        'title': '마감 알림 자동 예약',
+        'completed': false,
+      },
+  ],
+  LoopKind.coupon => [
+    {
+      'id': 'action-coupon',
+      'type': 'coupon',
+      'title': '쿠폰 사용하기',
+      'completed': false,
+    },
+    if (place != null)
+      {
+        'id': 'action-place',
+        'type': 'place',
+        'title': place,
+        'completed': false,
+      },
+    if (checkpoints.isNotEmpty)
+      {
+        'id': 'action-reminder',
+        'type': 'reminder',
+        'title': '기한 알림 자동 예약',
+        'completed': false,
+      },
+  ],
+  LoopKind.place => [
+    if (place != null)
+      {
+        'id': 'action-place',
+        'type': 'place',
+        'title': '$place 지도 열기',
+        'completed': false,
+      },
+  ],
+};
+
+String _localSummary({
+  required String title,
+  required LoopKind kind,
+  required DateTime? date,
+  required String? time,
+  required DateTime? expiresOn,
   required String? place,
   required List<String> missingFields,
 }) {
-  final facts = <String>[title, isDeadline ? '마감' : '일정'];
+  final facts = <String>[
+    title,
+    switch (kind) {
+      LoopKind.appointment => '일정',
+      LoopKind.deadline => '마감',
+      LoopKind.place => '장소 저장',
+      LoopKind.coupon => '쿠폰',
+    },
+  ];
   if (date != null) {
     facts.add(
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
     );
   }
   if (time != null) facts.add(time.substring(0, 5));
+  if (expiresOn != null) {
+    facts.add(
+      '기한 ${expiresOn.year.toString().padLeft(4, '0')}-${expiresOn.month.toString().padLeft(2, '0')}-${expiresOn.day.toString().padLeft(2, '0')}',
+    );
+  }
   if (place != null) facts.add(place);
   if (missingFields.isEmpty) return '${facts.join(' · ')}로 정리했습니다.';
-  const labels = {'date': '날짜', 'start_time': '시간', 'place': '장소'};
+  const labels = {
+    'date': '날짜',
+    'start_time': '시간',
+    'expires_on': '쿠폰 기한',
+    'place': '장소',
+  };
   final unresolved = missingFields
       .map((field) => labels[field] ?? field)
       .join(', ');
@@ -540,11 +630,45 @@ String? _explicitPlace(String text) {
       return candidate;
     }
   }
+  final match = RegExp(
+    r"([가-힣A-Za-z0-9][가-힣A-Za-z0-9 .'’-]{1,39})\s*(?:맛집|카페|식당|레스토랑|매장|호텔|전시)",
+  ).firstMatch(text);
+  if (match != null) return match.group(1)!.trim();
   return null;
 }
 
-String _localTitle(String text, bool isDeadline) {
-  if (isDeadline) return text.contains('공모전') ? '공모전 마감' : '마감 일정';
+LoopKind _localKind(String text, DateTime now) {
+  if (['마감', '제출', '공모전', '접수', '신청 기한', '데드라인'].any(text.contains)) {
+    return LoopKind.deadline;
+  }
+  if (['쿠폰', '할인', '혜택', '바우처', '기프티콘', '프로모션'].any(text.contains)) {
+    return LoopKind.coupon;
+  }
+  if (['회의', '미팅', '약속', '예약', '만나', '만남', '방문'].any(text.contains)) {
+    return LoopKind.appointment;
+  }
+  if (_explicitTime(text) != null && _explicitDate(text, now) != null) {
+    return LoopKind.appointment;
+  }
+  return LoopKind.place;
+}
+
+String _localTitle(String text, LoopKind kind) {
+  if (kind == LoopKind.deadline) {
+    return text.contains('공모전') ? '공모전 마감' : '마감 일정';
+  }
+  if (kind == LoopKind.coupon || kind == LoopKind.place) {
+    final compact = text
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceFirst(
+          RegExp(r'\s*(?:저장(?:해줘|할게|해)?|추천(?:해줘)?|기억(?:해줘)?)\s*[.!?…]*$'),
+          '',
+        )
+        .trim();
+    return compact.isEmpty
+        ? (kind == LoopKind.coupon ? '쿠폰' : '저장한 장소')
+        : compact;
+  }
   for (final word in ['회의', '미팅', '약속', '예약']) {
     if (text.contains(word)) return word;
   }
@@ -556,6 +680,7 @@ String? _localQuestion(List<String> missingFields) {
   return switch (missingFields.first) {
     'date' => '언제로 등록할까요?',
     'start_time' => '몇 시로 등록할까요?',
+    'expires_on' => '쿠폰 기한을 언제로 정리할까요?',
     'place' => '어디에서 진행할까요?',
     _ => '일정 정보를 조금만 더 알려주세요.',
   };

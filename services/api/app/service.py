@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -33,28 +33,22 @@ def _explicit_checkpoint_offsets(event: StructuredEvent) -> list[str]:
 
 
 def _checkpoint_templates(event: StructuredEvent) -> list[tuple[str, str]]:
-    """Return the product's default event-driven follow-up cadence.
+    """Return the single useful default alert for this capture kind.
 
-    A model-supplied checkpoint reminder remains authoritative. The caller
-    filters these templates against the moment a Loop is actually created, so a
-    same-day plan never inherits an already missed "day before" reminder.
+    A model-supplied checkpoint remains authoritative, but the product never
+    turns a saved place into a schedule or adds generic post-event chores.
     """
 
     explicit = _explicit_checkpoint_offsets(event)
     if explicit:
         return [(offset, f"{event.title} {offset} 확인") for offset in explicit]
     if event.type == Intent.DEADLINE:
-        return [
-            ("D-7", f"{event.title} D-7 준비 확인"),
-            ("D-3", f"{event.title} D-3 제출물 점검"),
-            ("D-1", f"{event.title} D-1 최종 확인"),
-        ]
-    return [
-        ("T-24h", f"{event.title} 하루 전 확인"),
-        ("T-2h", f"{event.title} 출발·준비 확인"),
-        ("T-1h", f"{event.title} 한 시간 전 준비 확인"),
-        ("T+1d", f"{event.title} 후속 확인"),
-    ]
+        return [("D-1", f"{event.title} 전날 확인")]
+    if event.type == Intent.COUPON:
+        return [("D-1", f"{event.title} 기한 전날 확인")]
+    if event.type == Intent.APPOINTMENT:
+        return [("T-1h", f"{event.title} 출발·준비 확인")]
+    return []
 
 
 def _canonical_checkpoint_offset(event: StructuredEvent, offset: str) -> str:
@@ -88,7 +82,10 @@ def _offset_to_duration(offset: str) -> timedelta | None:
         "T-24h": timedelta(hours=-24),
         "T-2h": timedelta(hours=-2),
         "T-1h": timedelta(hours=-1),
+        "T-15m": timedelta(minutes=-15),
+        "T-5m": timedelta(minutes=-5),
         "T+1d": timedelta(days=1),
+        "D-day": timedelta(),
     }
     if offset in named:
         return named[offset]
@@ -111,13 +108,34 @@ def _event_at(event: StructuredEvent) -> datetime | None:
     return datetime.combine(event.date, event.start_time, tzinfo=timezone)
 
 
+def _checkpoint_anchor(event: StructuredEvent) -> datetime | None:
+    """Choose an honest reminder anchor without asking a fake time question.
+
+    Deadline and coupon captures commonly state only a date. Their single
+    expiry alert is intentionally scheduled for 10:00 local time on that date,
+    while the visible fact remains a date-only deadline/expiry.
+    """
+
+    if event.type == Intent.APPOINTMENT:
+        return _event_at(event)
+    if event.type not in (Intent.DEADLINE, Intent.COUPON):
+        return None
+    target_date = event.date if event.type == Intent.DEADLINE else event.expires_on
+    if target_date is None:
+        return None
+    timezone = ZoneInfo(os.getenv("OPENLOOP_TIMEZONE", "Asia/Seoul"))
+    anchor_time = event.start_time if event.type == Intent.DEADLINE else None
+    anchor_time = anchor_time or time(hour=10)
+    return datetime.combine(target_date, anchor_time, tzinfo=timezone)
+
+
 def _checkpoint_candidates(
     event: StructuredEvent, reference_at: datetime
 ) -> list[tuple[str, str, datetime]]:
     """Build only future, useful checkpoint prompts for this exact event time."""
 
-    event_at = _event_at(event)
-    if event_at is None:
+    anchor = _checkpoint_anchor(event)
+    if anchor is None or event.type == Intent.PLACE:
         return []
     now = reference_at.astimezone(UTC)
     candidates = [
@@ -130,21 +148,15 @@ def _checkpoint_candidates(
     if _explicit_checkpoint_offsets(event):
         return candidates
 
-    has_upcoming_preparation = any(due_at < event_at for _, _, due_at in candidates)
-    if not has_upcoming_preparation and event_at > now:
+    has_upcoming_preparation = any(due_at < anchor for _, _, due_at in candidates)
+    if not has_upcoming_preparation and anchor > now:
         short_leads = (
             [
-                ("T-3h", f"{event.title} 마감 3시간 전 점검"),
-                ("T-1h", f"{event.title} 마감 한 시간 전 확인"),
-                ("T-30m", f"{event.title} 마감 30분 전 확인"),
-                ("T-5m", f"{event.title} 마감 직전 확인"),
-            ]
-            if event.type == Intent.DEADLINE
-            else [
-                ("T-30m", f"{event.title} 출발 30분 전 확인"),
                 ("T-15m", f"{event.title} 출발 15분 전 확인"),
                 ("T-5m", f"{event.title} 출발 직전 확인"),
             ]
+            if event.type == Intent.APPOINTMENT
+            else [("D-day", f"{event.title} 기한 당일 확인")]
         )
         for offset, title in short_leads:
             due_at = _checkpoint_due_at(event, offset)
@@ -158,13 +170,15 @@ def _default_graph(
     event: StructuredEvent, *, reference_at: datetime | None = None
 ) -> tuple[list[LoopAction], list[ChecklistItem], list[Checkpoint]]:
     now = reference_at or datetime.now(UTC)
-    actions = [LoopAction(id=_id(), type="calendar", title=f"{event.title} 일정 추가")]
-    if event.place:
-        actions.append(LoopAction(id=_id(), type="place", title=event.place.name))
-    if event.date and event.start_time:
-        actions.append(LoopAction(id=_id(), type="reminder", title="알림 자동 예약"))
+    actions: list[LoopAction] = []
     checklist: list[ChecklistItem] = []
-    if event.type == Intent.DEADLINE:
+    if event.type == Intent.APPOINTMENT:
+        actions.append(LoopAction(id=_id(), type="calendar", title=f"{event.title} 일정 추가"))
+        if event.place:
+            actions.append(LoopAction(id=_id(), type="place", title=event.place.name))
+        if _checkpoint_anchor(event):
+            actions.append(LoopAction(id=_id(), type="reminder", title="일정 알림 자동 예약"))
+    elif event.type == Intent.DEADLINE:
         checklist = (
             [
                 ChecklistItem(id=_id(), title=suggestion.title, required=suggestion.required)
@@ -177,6 +191,16 @@ def _default_graph(
             ]
         )
         actions.append(LoopAction(id=_id(), type="checklist", title="마감 체크리스트"))
+        if _checkpoint_anchor(event):
+            actions.append(LoopAction(id=_id(), type="reminder", title="마감 알림 자동 예약"))
+    elif event.type == Intent.COUPON:
+        actions.append(LoopAction(id=_id(), type="coupon", title="쿠폰 사용하기"))
+        if event.place:
+            actions.append(LoopAction(id=_id(), type="place", title=event.place.name))
+        if _checkpoint_anchor(event):
+            actions.append(LoopAction(id=_id(), type="reminder", title="기한 알림 자동 예약"))
+    elif event.type == Intent.PLACE and event.place:
+        actions.append(LoopAction(id=_id(), type="place", title=f"{event.place.name} 지도 열기"))
     checkpoints = [
         Checkpoint(
             id=_id(),
@@ -191,10 +215,10 @@ def _default_graph(
 
 def _checkpoint_due_at(event: StructuredEvent, offset: str) -> datetime | None:
     delta = _offset_to_duration(offset)
-    event_at = _event_at(event)
-    if delta is None or event_at is None:
+    anchor = _checkpoint_anchor(event)
+    if delta is None or anchor is None:
         return None
-    return (event_at + delta).astimezone(UTC)
+    return (anchor + delta).astimezone(UTC)
 
 
 def _refresh_graph(loop: OpenLoop) -> None:
@@ -235,15 +259,56 @@ def _refresh_graph(loop: OpenLoop) -> None:
 def _final_summary(event: StructuredEvent) -> str:
     """Keep the review summary truthful after the user supplies a missing fact."""
 
-    kind = "마감" if event.type == Intent.DEADLINE else "일정"
+    kind = {
+        Intent.APPOINTMENT: "일정",
+        Intent.DEADLINE: "마감",
+        Intent.PLACE: "장소 저장",
+        Intent.COUPON: "쿠폰",
+    }[event.type]
     facts = [event.title, kind]
     if event.date:
         facts.append(event.date.isoformat())
     if event.start_time:
         facts.append(event.start_time.strftime("%H:%M"))
+    if event.expires_on:
+        facts.append(f"기한 {event.expires_on.isoformat()}")
     if event.place:
         facts.append(event.place.name)
     return f"{' · '.join(facts)}로 정리했습니다."
+
+
+def _context_place_key(event: StructuredEvent) -> str | None:
+    """Return a conservative, stable key for cross-Loop context links."""
+
+    if not event.place or not event.place.name.strip():
+        return None
+    key = re.sub(r"[^0-9a-z가-힣]+", "", event.place.name.casefold())
+    return key or None
+
+
+def _related_loops(
+    event: StructuredEvent,
+    owner_id: str,
+    existing: list[OpenLoop],
+    requested_ids: list[str],
+    *,
+    excluded_id: str | None = None,
+) -> list[OpenLoop]:
+    """Link only same-owner captures that share an explicit place value.
+
+    This intentionally avoids fuzzy title matching: a user can understand why a
+    saved restaurant and a reservation at that restaurant are connected.
+    """
+
+    key = _context_place_key(event)
+    requested = set(requested_ids)
+    return [
+        candidate
+        for candidate in existing
+        if candidate.owner_id == owner_id
+        and candidate.id != excluded_id
+        and (candidate.id in requested or (key and _context_place_key(candidate.event) == key))
+    ]
 
 
 class LoopService:
@@ -256,11 +321,23 @@ class LoopService:
             request.event,
             reference_at=now,
         )
-        requested_checkpoints = [
-            checkpoint
-            for checkpoint in request.checkpoints
-            if checkpoint.due_at is not None and checkpoint.due_at > now
-        ]
+        requested_checkpoints: list[Checkpoint] = []
+        for checkpoint in request.checkpoints:
+            if checkpoint.due_at is None:
+                continue
+            due_at = (
+                checkpoint.due_at.replace(tzinfo=UTC)
+                if checkpoint.due_at.tzinfo is None
+                else checkpoint.due_at.astimezone(UTC)
+            )
+            if due_at > now:
+                requested_checkpoints.append(checkpoint.model_copy(update={"due_at": due_at}))
+        peers = _related_loops(
+            request.event,
+            owner_id,
+            self.repository.list(),
+            request.related_loop_ids,
+        )
         loop = OpenLoop(
             id=_id(),
             owner_id=owner_id,
@@ -270,11 +347,19 @@ class LoopService:
             actions=request.actions or generated_actions,
             checklist=request.checklist or generated_checklist,
             checkpoints=requested_checkpoints or generated_checkpoints,
+            related_loop_ids=sorted({peer.id for peer in peers}),
             retention=request.retention,
             created_at=now,
             updated_at=now,
         )
-        return self.repository.save(loop)
+        saved = self.repository.save(loop)
+        for peer in peers:
+            if saved.id in peer.related_loop_ids:
+                continue
+            peer.related_loop_ids = sorted({*peer.related_loop_ids, saved.id})
+            peer.updated_at = now
+            self.repository.save(peer)
+        return saved
 
     def require(self, loop_id: str) -> OpenLoop:
         loop = self.repository.get(loop_id)
@@ -297,7 +382,22 @@ class LoopService:
             loop.event.summary = _final_summary(loop.event)
         _refresh_graph(loop)
         loop.updated_at = datetime.now(UTC)
-        return self.repository.save(loop)
+        peers = _related_loops(
+            loop.event,
+            loop.owner_id,
+            self.repository.list(),
+            loop.related_loop_ids,
+            excluded_id=loop.id,
+        )
+        loop.related_loop_ids = sorted({*loop.related_loop_ids, *(peer.id for peer in peers)})
+        saved = self.repository.save(loop)
+        for peer in peers:
+            if saved.id in peer.related_loop_ids:
+                continue
+            peer.related_loop_ids = sorted({*peer.related_loop_ids, saved.id})
+            peer.updated_at = loop.updated_at
+            self.repository.save(peer)
+        return saved
 
     def complete(self, loop_id: str, retention: RetentionPolicy | None = None) -> OpenLoop:
         loop = self.require(loop_id)
@@ -310,6 +410,17 @@ class LoopService:
         for checkpoint in loop.checkpoints:
             checkpoint.completed = True
         return self.repository.save(loop)
+
+    def delete(self, loop_id: str) -> bool:
+        loop = self.require(loop_id)
+        now = datetime.now(UTC)
+        for peer in self.repository.list():
+            if peer.owner_id != loop.owner_id or loop.id not in peer.related_loop_ids:
+                continue
+            peer.related_loop_ids = [item for item in peer.related_loop_ids if item != loop.id]
+            peer.updated_at = now
+            self.repository.save(peer)
+        return self.repository.delete(loop_id)
 
     def set_retention(self, loop_id: str, retention: RetentionPolicy) -> OpenLoop:
         loop = self.require(loop_id)

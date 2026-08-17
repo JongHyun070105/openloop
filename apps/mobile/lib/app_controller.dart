@@ -108,7 +108,7 @@ class AppController extends ChangeNotifier {
     if (loop.isDraft) {
       throw StateError('분석 초안은 승인 전 저장할 수 없습니다.');
     }
-    loops = [loop, ...loops.where((item) => item.id != loop.id)];
+    loops = _linkContextLocally(loop, loops);
     await repository.save(loops);
     notifyListeners();
     unawaited(_rescheduleLocalReminders());
@@ -250,6 +250,11 @@ class AppController extends ChangeNotifier {
       'date' => loop.copyWith(
         state: state,
         date: DateTime.parse(value as String),
+        missingFields: remaining,
+      ),
+      'expires_on' => loop.copyWith(
+        state: state,
+        expiresOn: DateTime.parse(value as String),
         missingFields: remaining,
       ),
       'place' => loop.copyWith(
@@ -414,7 +419,18 @@ class AppController extends ChangeNotifier {
       }
     }
     await _cancelLocalReminders(loop);
-    loops = loops.where((item) => item.id != loop.id).toList();
+    loops = loops
+        .where((item) => item.id != loop.id)
+        .map(
+          (item) => item.relatedLoopIds.contains(loop.id)
+              ? item.copyWith(
+                  relatedLoopIds: item.relatedLoopIds
+                      .where((id) => id != loop.id)
+                      .toList(),
+                )
+              : item,
+        )
+        .toList();
     await repository.save(loops);
     notifyListeners();
     return true;
@@ -472,22 +488,87 @@ DateTime? _retentionDeadline(RetentionPolicy policy, DateTime completedAt) =>
       RetentionPolicy.keep => null,
     };
 
+List<OpenLoop> _linkContextLocally(OpenLoop loop, List<OpenLoop> existing) {
+  final placeKey = _contextPlaceKey(loop.place);
+  final matchedIds = <String>{...loop.relatedLoopIds};
+  if (placeKey != null) {
+    for (final candidate in existing) {
+      if (candidate.id != loop.id &&
+          _contextPlaceKey(candidate.place) == placeKey) {
+        matchedIds.add(candidate.id);
+      }
+    }
+  }
+  matchedIds.remove(loop.id);
+  final linked = loop.copyWith(relatedLoopIds: matchedIds.toList()..sort());
+  return [
+    linked,
+    for (final candidate in existing)
+      if (candidate.id != loop.id)
+        matchedIds.contains(candidate.id)
+            ? candidate.copyWith(
+                relatedLoopIds: <String>{
+                  ...candidate.relatedLoopIds,
+                  linked.id,
+                }.toList()..sort(),
+              )
+            : candidate,
+  ];
+}
+
+String? _contextPlaceKey(String? value) {
+  if (value == null || value.trim().isEmpty) return null;
+  final normalized = value.toLowerCase().replaceAll(
+    RegExp(r'[^0-9a-z가-힣]+'),
+    '',
+  );
+  return normalized.isEmpty ? null : normalized;
+}
+
 OpenLoop _refreshLocalGraph(OpenLoop loop) {
-  final actions = <LoopAction>[...loop.actions];
+  final existingActions = {for (final item in loop.actions) item.type: item};
+  final actions = <LoopAction>[];
 
   void ensureAction(String type, String title) {
-    if (actions.any((action) => action.type == type)) return;
-    actions.add(LoopAction(id: 'local-action-$type', type: type, title: title));
+    final existing = existingActions[type];
+    actions.add(
+      LoopAction(
+        id: existing?.id ?? 'local-action-$type',
+        type: type,
+        title: title,
+        completed: existing?.completed ?? false,
+        metadata: existing?.metadata ?? const {},
+      ),
+    );
   }
 
-  ensureAction('calendar', '${loop.title} 일정 추가');
-  if (loop.place != null) ensureAction('place', loop.place!);
-  if (loop.startsAt != null) {
-    ensureAction('reminder', '알림 자동 예약');
+  switch (loop.kind) {
+    case LoopKind.appointment:
+      ensureAction('calendar', '${loop.title} 일정 추가');
+      if (loop.place != null) ensureAction('place', loop.place!);
+      if (loop.checkpointAnchor != null) {
+        ensureAction('reminder', '일정 알림 자동 예약');
+      }
+      break;
+    case LoopKind.deadline:
+      ensureAction('checklist', '마감 체크리스트');
+      if (loop.checkpointAnchor != null) {
+        ensureAction('reminder', '마감 알림 자동 예약');
+      }
+      break;
+    case LoopKind.place:
+      if (loop.place != null) ensureAction('place', '${loop.place!} 지도 열기');
+      break;
+    case LoopKind.coupon:
+      ensureAction('coupon', '쿠폰 사용하기');
+      if (loop.place != null) ensureAction('place', loop.place!);
+      if (loop.checkpointAnchor != null) {
+        ensureAction('reminder', '기한 알림 자동 예약');
+      }
+      break;
   }
   var checklist = loop.checklist;
   if (loop.kind == LoopKind.deadline) {
-    ensureAction('checklist', '마감 체크리스트');
     if (checklist.isEmpty) {
       checklist = const [
         LoopChecklistItem(id: 'local-checklist-1', title: '제출물 확인'),
@@ -504,7 +585,7 @@ OpenLoop _refreshLocalGraph(OpenLoop loop) {
   final planned = planCheckpoints(
     kind: loop.kind,
     title: loop.title,
-    eventAt: loop.startsAt,
+    eventAt: loop.checkpointAnchor,
   );
   final checkpoints = <LoopCheckpoint>[
     for (final plan in planned)
@@ -534,7 +615,12 @@ OpenLoop _refreshLocalGraph(OpenLoop loop) {
 String _summaryForLoop(OpenLoop loop) {
   final facts = <String>[
     loop.title,
-    loop.kind == LoopKind.deadline ? '마감' : '일정',
+    switch (loop.kind) {
+      LoopKind.appointment => '일정',
+      LoopKind.deadline => '마감',
+      LoopKind.place => '장소 저장',
+      LoopKind.coupon => '쿠폰',
+    },
   ];
   if (loop.date != null) {
     facts.add(
@@ -542,9 +628,19 @@ String _summaryForLoop(OpenLoop loop) {
     );
   }
   if (loop.time != null) facts.add(loop.time!.substring(0, 5));
+  if (loop.expiresOn != null) {
+    facts.add(
+      '기한 ${loop.expiresOn!.year.toString().padLeft(4, '0')}-${loop.expiresOn!.month.toString().padLeft(2, '0')}-${loop.expiresOn!.day.toString().padLeft(2, '0')}',
+    );
+  }
   if (loop.place != null) facts.add(loop.place!);
   if (loop.missingFields.isEmpty) return '${facts.join(' · ')}로 정리했습니다.';
-  const labels = {'date': '날짜', 'start_time': '시간', 'place': '장소'};
+  const labels = {
+    'date': '날짜',
+    'start_time': '시간',
+    'expires_on': '쿠폰 기한',
+    'place': '장소',
+  };
   final unresolved = loop.missingFields
       .map((field) => labels[field] ?? field)
       .join(', ');

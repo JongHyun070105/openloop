@@ -461,7 +461,7 @@ def create_app(
         installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
     ) -> Response:
         require_owned(loop_id, installation_id)
-        if not repository.delete(loop_id):
+        if not service.delete(loop_id):
             raise _not_found(loop_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 

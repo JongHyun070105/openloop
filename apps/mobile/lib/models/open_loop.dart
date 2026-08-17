@@ -1,4 +1,4 @@
-enum LoopKind { appointment, deadline }
+enum LoopKind { appointment, deadline, place, coupon }
 
 enum LoopState { open, needsInput, closed }
 
@@ -53,6 +53,7 @@ class OpenLoop {
     this.persistence = LoopPersistence.persisted,
     this.date,
     this.time,
+    this.expiresOn,
     this.place,
     this.purpose,
     this.summary,
@@ -64,6 +65,7 @@ class OpenLoop {
     this.actions = const [],
     this.checklist = const [],
     this.checkpoints = const [],
+    this.relatedLoopIds = const [],
     this.completedAt,
     this.deleteAt,
   });
@@ -76,6 +78,7 @@ class OpenLoop {
   final DateTime createdAt;
   final DateTime? date;
   final String? time;
+  final DateTime? expiresOn;
   final String? place;
   final String? purpose;
   final String? summary;
@@ -87,6 +90,7 @@ class OpenLoop {
   final List<LoopAction> actions;
   final List<LoopChecklistItem> checklist;
   final List<LoopCheckpoint> checkpoints;
+  final List<String> relatedLoopIds;
   final DateTime? completedAt;
   final DateTime? deleteAt;
   final Map<String, double> confidence;
@@ -95,13 +99,48 @@ class OpenLoop {
   bool get isDraft => persistence != LoopPersistence.persisted;
 
   DateTime? get startsAt {
-    if (date == null || time == null) return null;
+    if (kind != LoopKind.appointment || date == null || time == null) {
+      return null;
+    }
     final parts = time!.split(':');
     return DateTime(
       date!.year,
       date!.month,
       date!.day,
       int.tryParse(parts.first) ?? 9,
+      parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
+    );
+  }
+
+  DateTime? get checkpointAnchor => switch (kind) {
+    LoopKind.appointment => startsAt,
+    LoopKind.deadline when date != null => _dateTimeAt(
+      date!,
+      time,
+      fallbackHour: 10,
+    ),
+    LoopKind.coupon when expiresOn != null => DateTime(
+      expiresOn!.year,
+      expiresOn!.month,
+      expiresOn!.day,
+      10,
+    ),
+    _ => null,
+  };
+
+  DateTime? get primaryDate => kind == LoopKind.coupon ? expiresOn : date;
+
+  static DateTime _dateTimeAt(
+    DateTime date,
+    String? time, {
+    required int fallbackHour,
+  }) {
+    final parts = time?.split(':') ?? const <String>[];
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      int.tryParse(parts.isEmpty ? '' : parts.first) ?? fallbackHour,
       parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
     );
   }
@@ -113,6 +152,7 @@ class OpenLoop {
     String? title,
     DateTime? date,
     String? time,
+    DateTime? expiresOn,
     String? place,
     String? purpose,
     String? summary,
@@ -122,6 +162,7 @@ class OpenLoop {
     List<LoopAction>? actions,
     List<LoopChecklistItem>? checklist,
     List<LoopCheckpoint>? checkpoints,
+    List<String>? relatedLoopIds,
     DateTime? completedAt,
     DateTime? deleteAt,
   }) => OpenLoop(
@@ -133,6 +174,7 @@ class OpenLoop {
     createdAt: createdAt,
     date: date ?? this.date,
     time: time ?? this.time,
+    expiresOn: expiresOn ?? this.expiresOn,
     place: place ?? this.place,
     purpose: purpose ?? this.purpose,
     summary: summary ?? this.summary,
@@ -144,6 +186,7 @@ class OpenLoop {
     actions: actions ?? this.actions,
     checklist: checklist ?? this.checklist,
     checkpoints: checkpoints ?? this.checkpoints,
+    relatedLoopIds: relatedLoopIds ?? this.relatedLoopIds,
     completedAt: completedAt ?? this.completedAt,
     deleteAt: deleteAt ?? this.deleteAt,
     confidence: confidence,
@@ -163,9 +206,11 @@ class OpenLoop {
       id:
           json['id'] as String? ??
           DateTime.now().microsecondsSinceEpoch.toString(),
-      kind: event['type'] == 'deadline'
-          ? LoopKind.deadline
-          : LoopKind.appointment,
+      kind:
+          LoopKind.values
+              .where((kind) => kind.name == event['type'])
+              .firstOrNull ??
+          LoopKind.appointment,
       state: switch (json['status']) {
         'closed' => LoopState.closed,
         'needs_input' => LoopState.needsInput,
@@ -178,6 +223,9 @@ class OpenLoop {
           DateTime.now(),
       date: dateText == null ? null : DateTime.tryParse(dateText),
       time: event['start_time'] as String?,
+      expiresOn: event['expires_on'] == null
+          ? null
+          : DateTime.tryParse(event['expires_on'] as String),
       place: (event['place'] as Map<String, dynamic>?)?['name'] as String?,
       purpose: event['purpose'] as String?,
       summary: event['summary'] as String?,
@@ -208,6 +256,9 @@ class OpenLoop {
       checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
           .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
           .toList(),
+      relatedLoopIds: List<String>.from(
+        json['related_loop_ids'] as List<dynamic>? ?? const [],
+      ),
       completedAt: json['completed_at'] == null
           ? null
           : DateTime.tryParse(json['completed_at'] as String),
@@ -223,13 +274,20 @@ class OpenLoop {
 
   factory OpenLoop.fromJson(Map<String, dynamic> json) => OpenLoop(
     id: json['id'] as String,
-    kind: LoopKind.values.byName(json['kind'] as String),
+    kind:
+        LoopKind.values
+            .where((kind) => kind.name == json['kind'])
+            .firstOrNull ??
+        LoopKind.appointment,
     state: LoopState.values.byName(json['state'] as String),
     title: json['title'] as String,
     source: json['source'] as String,
     createdAt: DateTime.parse(json['createdAt'] as String),
     date: json['date'] == null ? null : DateTime.parse(json['date'] as String),
     time: json['time'] as String?,
+    expiresOn: json['expiresOn'] == null
+        ? null
+        : DateTime.parse(json['expiresOn'] as String),
     place: json['place'] as String?,
     purpose: json['purpose'] as String?,
     summary: json['summary'] as String?,
@@ -253,6 +311,9 @@ class OpenLoop {
     checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
         .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
         .toList(),
+    relatedLoopIds: List<String>.from(
+      json['relatedLoopIds'] as List<dynamic>? ?? const [],
+    ),
     completedAt: json['completedAt'] == null
         ? null
         : DateTime.tryParse(json['completedAt'] as String),
@@ -278,6 +339,7 @@ class OpenLoop {
     'createdAt': createdAt.toIso8601String(),
     'date': date?.toIso8601String(),
     'time': time,
+    'expiresOn': expiresOn?.toIso8601String(),
     'place': place,
     'purpose': purpose,
     'summary': summary,
@@ -289,6 +351,7 @@ class OpenLoop {
     'actions': actions.map((item) => item.toJson()).toList(),
     'checklist': checklist.map((item) => item.toJson()).toList(),
     'checkpoints': checkpoints.map((item) => item.toJson()).toList(),
+    'relatedLoopIds': relatedLoopIds,
     'completedAt': completedAt?.toIso8601String(),
     'deleteAt': deleteAt?.toIso8601String(),
     'confidence': confidence,
@@ -300,12 +363,15 @@ class OpenLoop {
     'suggested_question': suggestedQuestion,
     'retention': retention,
     'event': {
-      'type': kind == LoopKind.deadline ? 'deadline' : 'appointment',
+      'type': kind.name,
       'title': title,
       'date': date == null
           ? null
           : '${date!.year.toString().padLeft(4, '0')}-${date!.month.toString().padLeft(2, '0')}-${date!.day.toString().padLeft(2, '0')}',
       'start_time': time,
+      'expires_on': expiresOn == null
+          ? null
+          : '${expiresOn!.year.toString().padLeft(4, '0')}-${expiresOn!.month.toString().padLeft(2, '0')}-${expiresOn!.day.toString().padLeft(2, '0')}',
       'place': place == null ? null : {'name': place},
       'participants': participants,
       'purpose': purpose,
@@ -329,6 +395,7 @@ class OpenLoop {
     'actions': actions.map((item) => item.toJson()).toList(),
     'checklist': checklist.map((item) => item.toJson()).toList(),
     'checkpoints': checkpoints.map((item) => item.toJson()).toList(),
+    'related_loop_ids': relatedLoopIds,
   };
 }
 

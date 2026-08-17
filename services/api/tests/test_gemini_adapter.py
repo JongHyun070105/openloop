@@ -326,6 +326,55 @@ class GeminiAdapterTests(unittest.TestCase):
         self.assertEqual(missing_date.event.missing_fields, ["date"])
         self.assertEqual(missing_date.status, LoopStatus.NEEDS_INPUT)
 
+    def test_place_ignores_provider_temporal_questions(self) -> None:
+        payload = _response_payload()
+        payload["event"].update(
+            {
+                "type": "place",
+                "title": "난포 성수",
+                "date": "2026-08-20",
+                "start_time": "19:00:00",
+                "place": {"name": "난포 성수"},
+                "missing_fields": ["date", "start_time"],
+                "confidence": {"date": 0.2, "time": 0.2, "location": 0.98, "title": 0.95},
+            }
+        )
+        self.adapter.client.models.generate_content = lambda **_kwargs: SimpleNamespace(
+            parsed=payload, text=None
+        )
+
+        result = self.adapter.analyze(AnalyzeRequest(text="난포 성수 맛집 저장"))
+
+        self.assertEqual(result.status, LoopStatus.OPEN)
+        self.assertEqual(result.event.missing_fields, [])
+        self.assertIsNone(result.event.date)
+        self.assertIsNone(result.event.start_time)
+
+    def test_coupon_moves_provider_date_to_expiry_without_time_question(self) -> None:
+        payload = _response_payload()
+        payload["event"].update(
+            {
+                "type": "coupon",
+                "title": "커피 쿠폰",
+                "date": "2026-08-31",
+                "start_time": "23:59:00",
+                "place": None,
+                "missing_fields": ["start_time"],
+                "confidence": {"date": 0.98, "time": 0.3, "location": 0.0, "title": 0.95},
+            }
+        )
+        self.adapter.client.models.generate_content = lambda **_kwargs: SimpleNamespace(
+            parsed=payload, text=None
+        )
+
+        result = self.adapter.analyze(AnalyzeRequest(text="커피 쿠폰 저장"))
+
+        self.assertEqual(result.status, LoopStatus.OPEN)
+        self.assertEqual(result.event.expires_on, date(2026, 8, 31))
+        self.assertIsNone(result.event.date)
+        self.assertIsNone(result.event.start_time)
+        self.assertEqual(result.event.missing_fields, [])
+
     def test_recovers_provider_status_and_omitted_default_fields(self) -> None:
         payload = {
             "status": "closed",

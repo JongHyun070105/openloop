@@ -117,7 +117,12 @@ class NativeDeviceActions implements DeviceActions {
           }
           await _notifications.zonedSchedule(
             _notificationId(loop.id, checkpoint.id),
-            loop.kind == LoopKind.deadline ? '마감 확인 시간입니다' : '일정 확인 시간입니다',
+            switch (loop.kind) {
+              LoopKind.appointment => '일정 확인 시간입니다',
+              LoopKind.deadline => '마감 확인 시간입니다',
+              LoopKind.coupon => '쿠폰 기한 확인 시간입니다',
+              LoopKind.place => '저장한 장소입니다',
+            },
             checkpoint.title,
             // TZDateTime needs an absolute instant. Passing a local DateTime
             // to an unconfigured tz.local can shift the reminder to UTC.

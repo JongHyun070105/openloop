@@ -1,8 +1,8 @@
 # OpenLoop product completion plan
 
-Status: Implementation complete; release evidence in progress
+Status: v2 capture expansion implemented; release evidence in progress
 Source: Notion `OpenLoop 구체화`, refreshed 2026-08-16
-Scope: personal Appointment + Deadline product through v1.3
+Scope: personal Appointment + Deadline + Place + Coupon product and deterministic v2.5 context foundation
 
 ## Defects resolved in this implementation
 
@@ -15,7 +15,9 @@ Scope: personal Appointment + Deadline product through v1.3
 7. Provider questions and draft state are preserved through the ambiguity/review flow.
 8. Analysis returns an unpersisted draft; the server Loop is created only after approval.
 9. Low-confidence or absent required fields enter one focused verification gate instead of appearing final.
-10. Appointment checkpoints now include T-24h, T-2h, T-1h, and post-event; contextual provider enrichment remains credential-gated.
+10. Overbuilt reminder cadences were replaced by one useful alert, with no checkpoint at all for saved places.
+11. Place and coupon captures no longer ask appointment-only date/time questions.
+12. Explicit same-place Loops link symmetrically without opaque fuzzy inference.
 
 ## Reference acceptance case
 
@@ -67,12 +69,21 @@ Gate: a clear capture completes in share -> review -> system calendar, and an am
 
 ### Phase 3 - Closure and context
 
-- Verify Appointment checkpoints T-24h, T-2h, T-1h/post-event and Deadline D-7, D-3, D-1.
+- Verify Appointment T-1h/near-term fallback, Deadline/Coupon D-1/day-of fallback, and zero Place checkpoints.
 - Re-evaluate KMA/weather and available place context when a checkpoint fires instead of sending only a static stored sentence.
 - Verify Kakao place, KMA forecast, calendar, local reminder, completion, retention, and deletion flows.
 - Keep remote push credential-gated and clearly report activation state.
 
 Gate: the loop can be created, acted on, completed, and removed under every retention policy.
+
+### Phase 3.5 - v2/v2.5 expansion
+
+- Classify and review saved places and coupons with type-specific required fields.
+- Keep coupon expiry date separate from appointment date/time.
+- Link same-owner Loops only when their explicit normalized place matches.
+- Defer fuzzy semantic relations and purchase/reservation/travel skills until their explanations, data contracts, and acceptance tests are designed.
+
+Gate: place/coupon captures never enter a fake time question, and every displayed relation has a deterministic same-place explanation.
 
 ### Phase 4 - Evaluation and release evidence
 

@@ -30,7 +30,9 @@ class DemoAnalyzerTests(unittest.TestCase):
             reference_date=date(2026, 8, 16),
         )
         self.assertEqual(result.event.type.value, "deadline")
-        self.assertEqual(len(result.event.reminders), 3)
+        self.assertEqual(result.status, LoopStatus.OPEN)
+        self.assertEqual(result.event.reminders, [])
+        self.assertIsNotNone(result.event.date)
         self.assertEqual([item.title for item in result.event.checklist], ["작품 파일", "포트폴리오"])
         self.assertIn("공모전 마감", result.event.summary or "")
         self.assertIn("2026", result.event.summary or "")
@@ -58,6 +60,29 @@ class DemoAnalyzerTests(unittest.TestCase):
 
         self.assertEqual(tomorrow.event.date, date(2027, 1, 1))
         self.assertEqual(next_week.event.date, date(2026, 8, 25))
+
+    def test_saved_place_does_not_ask_for_date_or_time(self) -> None:
+        result = analyze_demo(
+            AnalyzeRequest(text="성수 소문난성수감자탕 맛집 저장해줘"),
+            reference_date=date(2026, 8, 16),
+        )
+
+        self.assertEqual(result.event.type, "place")
+        self.assertEqual(result.status, LoopStatus.OPEN)
+        self.assertEqual(result.event.missing_fields, [])
+        self.assertIsNone(result.event.date)
+        self.assertIsNone(result.event.start_time)
+
+    def test_coupon_uses_expiry_without_requesting_a_time(self) -> None:
+        result = analyze_demo(
+            AnalyzeRequest(text="스타벅스 쿠폰 8월 31일까지 저장"),
+            reference_date=date(2026, 8, 16),
+        )
+
+        self.assertEqual(result.event.type, "coupon")
+        self.assertEqual(result.event.expires_on, date(2026, 8, 31))
+        self.assertEqual(result.status, LoopStatus.OPEN)
+        self.assertNotIn("start_time", result.event.missing_fields)
 
 
 if __name__ == "__main__":
