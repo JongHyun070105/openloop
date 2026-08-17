@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,7 +32,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('capture-button')));
     await tester.pumpAndSettle();
-    expect(find.text('OpenLoop에 공유'), findsOneWidget);
+    expect(find.text('일정 추가'), findsOneWidget);
     expect(find.text('카메라'), findsOneWidget);
     expect(find.text('사진·스크린샷'), findsOneWidget);
     await tester.enterText(
@@ -253,6 +255,113 @@ void main() {
     expect(find.text('이미지 속 어느 지점을 장소로 등록할까요?'), findsOneWidget);
   });
 
+  testWidgets(
+    'a tentative extracted date can be confirmed without selecting it again',
+    (tester) async {
+      final loop = OpenLoop(
+        id: 'tentative-date',
+        kind: LoopKind.appointment,
+        state: LoopState.needsInput,
+        title: '저녁 약속',
+        source: 'image',
+        createdAt: DateTime(2026, 8, 16),
+        date: DateTime(2026, 8, 20),
+        missingFields: const ['date'],
+        confidence: const {'date': .4},
+        persistence: LoopPersistence.remoteDraft,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AmbiguityScreen(controller: controller, loop: loop),
+        ),
+      );
+
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const Key('ambiguity-continue-button')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      expect(find.text('추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('a missing time accepts direct keyboard input', (tester) async {
+    final loop = OpenLoop(
+      id: 'typed-time',
+      kind: LoopKind.appointment,
+      state: LoopState.needsInput,
+      title: '회의',
+      source: 'text',
+      createdAt: DateTime(2026, 8, 16),
+      date: DateTime(2026, 8, 20),
+      missingFields: const ['start_time'],
+      confidence: const {},
+      persistence: LoopPersistence.remoteDraft,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AmbiguityScreen(controller: controller, loop: loop),
+      ),
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('ambiguity-continue-button')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('ambiguity-time-input')),
+      '오후 4시 30분',
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const Key('ambiguity-continue-button')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const Key('ambiguity-continue-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('분석 결과'), findsOneWidget);
+    expect(find.text('16:30'), findsOneWidget);
+  });
+
+  test('normalizes compact manual time input', () {
+    expect(normalizeTimeInput('16:30'), '16:30:00');
+    expect(normalizeTimeInput('오후 4시 30분'), '16:30:00');
+    expect(normalizeTimeInput('930'), '09:30:00');
+    expect(normalizeTimeInput('25:00'), isNull);
+  });
+
+  testWidgets('shared capture starts analysis without a second tap', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CaptureScreen(
+          controller: controller,
+          initialText: 'AI 공모전 제출 마감 8월 22일 23시',
+          autoAnalyze: true,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('DEADLINE'), findsOneWidget);
+  });
+
   testWidgets('appointment primary review action saves and opens calendar', (
     tester,
   ) async {
@@ -321,6 +430,69 @@ void main() {
     expect(repository.loops.single.id, 'persisted-loop');
     expect(repository.loops.single.persistence, LoopPersistence.persisted);
   });
+
+  testWidgets(
+    'calendar composer callback cannot leave the review in a loading state',
+    (tester) async {
+      final deviceActions = _HangingDeviceActions();
+      final appointmentController = AppController(
+        repository: repository,
+        deviceActions: deviceActions,
+        defaultBaseUrl: '',
+      );
+      final loop = OpenLoop(
+        id: 'calendar-handoff',
+        kind: LoopKind.appointment,
+        state: LoopState.open,
+        title: '성수 회의',
+        source: 'image',
+        createdAt: DateTime(2026, 8, 16),
+        date: DateTime(2026, 8, 20),
+        time: '19:00:00',
+        actions: const [
+          LoopAction(id: 'calendar', type: 'calendar', title: '일정 추가'),
+        ],
+        confidence: const {},
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ReviewScreen(controller: appointmentController, loop: loop),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('save-loop-button')));
+      await tester.pumpAndSettle();
+
+      expect(deviceActions.calendarCalls, 1);
+      expect(repository.loops.single.id, loop.id);
+      expect(find.text('저장 중…'), findsNothing);
+      expect(find.text('캘린더 다시 열기'), findsOneWidget);
+    },
+  );
+
+  test(
+    'native calendar handoff has a bounded fallback for a missing callback',
+    () async {
+      final pending = Completer<bool>();
+      final actions = NativeDeviceActions(
+        calendarLauncher: (_) => pending.future,
+        calendarHandoffTimeout: Duration.zero,
+      );
+      final loop = OpenLoop(
+        id: 'calendar-timeout',
+        kind: LoopKind.appointment,
+        state: LoopState.open,
+        title: '회의',
+        source: 'text',
+        createdAt: DateTime(2026, 8, 16),
+        date: DateTime(2026, 8, 20),
+        time: '19:00:00',
+        confidence: const {},
+      );
+
+      expect(await actions.addToCalendar(loop), isTrue);
+    },
+  );
 
   testWidgets(
     'delete confirmation follows the current platform',
@@ -565,6 +737,20 @@ class _RecordingDeviceActions implements DeviceActions {
   Future<bool> addToCalendar(OpenLoop loop) async {
     calendarCalls += 1;
     return calendarResult;
+  }
+
+  @override
+  Future<bool> scheduleReminder(OpenLoop loop) async => true;
+}
+
+class _HangingDeviceActions implements DeviceActions {
+  final _calendarResult = Completer<bool>();
+  int calendarCalls = 0;
+
+  @override
+  Future<bool> addToCalendar(OpenLoop loop) {
+    calendarCalls += 1;
+    return _calendarResult.future;
   }
 
   @override

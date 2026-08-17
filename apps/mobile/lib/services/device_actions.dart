@@ -5,16 +5,24 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/open_loop.dart';
 
+typedef CalendarLauncher = Future<bool> Function(Event event);
+
 abstract interface class DeviceActions {
   Future<bool> addToCalendar(OpenLoop loop);
   Future<bool> scheduleReminder(OpenLoop loop);
 }
 
 class NativeDeviceActions implements DeviceActions {
-  NativeDeviceActions({FlutterLocalNotificationsPlugin? notifications})
-    : _notifications = notifications ?? FlutterLocalNotificationsPlugin();
+  NativeDeviceActions({
+    FlutterLocalNotificationsPlugin? notifications,
+    CalendarLauncher? calendarLauncher,
+    this.calendarHandoffTimeout = const Duration(seconds: 1),
+  }) : _notifications = notifications ?? FlutterLocalNotificationsPlugin(),
+       _calendarLauncher = calendarLauncher ?? Add2Calendar.addEvent2Cal;
 
   final FlutterLocalNotificationsPlugin _notifications;
+  final CalendarLauncher _calendarLauncher;
+  final Duration calendarHandoffTimeout;
   bool _initialized = false;
 
   @override
@@ -22,7 +30,7 @@ class NativeDeviceActions implements DeviceActions {
     final start = loop.startsAt;
     if (start == null) return false;
     try {
-      return await Add2Calendar.addEvent2Cal(
+      final launched = _calendarLauncher(
         Event(
           title: loop.title,
           description: loop.purpose ?? loop.resolutionNote,
@@ -34,6 +42,13 @@ class NativeDeviceActions implements DeviceActions {
                 : const Duration(hours: 1),
           ),
         ),
+      );
+      // iOS's composer is an OS-owned screen. Some versions of the native
+      // plugin never complete their method callback after presenting it, so
+      // this bounded result means a successful handoff cannot freeze Flutter.
+      return await launched.timeout(
+        calendarHandoffTimeout,
+        onTimeout: () => true,
       );
     } catch (_) {
       return false;

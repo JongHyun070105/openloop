@@ -3,9 +3,9 @@
 ## Source of truth
 
 - Status: Active
-- Last refreshed: 2026-08-16
+- Last refreshed: 2026-08-17
 - Primary product surfaces: Flutter iOS/Android app, Android share intent, iOS Share Extension
-- Evidence reviewed: Notion `OpenLoop 구체화` sections 1-33; attached product screenshots 1-3; `docs/PRODUCT_SCOPE.md`; `docs/ARCHITECTURE.md`; `apps/mobile/lib/design_system.dart`; current Flutter screens and platform manifests
+- Evidence reviewed: Notion `OpenLoop 구체화` sections 1-33; prior product screenshots; user-reported iOS simulator behavior on 2026-08-17; `docs/PRODUCT_SCOPE.md`; `docs/ARCHITECTURE.md`; `apps/mobile/lib/design_system.dart`; current Flutter screens and platform manifests
 - Product priority: screenshot accuracy first, context resolution and minimum intervention second, closure third
 
 ## Brand
@@ -19,6 +19,7 @@
 - Turn one shared screenshot into an actionable appointment or deadline without re-entry.
 - Complete clear cases in `share -> review -> add` within two or three decisions.
 - Ask only for one genuinely unresolved field.
+- Let a user confirm an extracted tentative value without making them select it again.
 - Keep the loop active through calendar/reminder/checkpoint actions until completion.
 - Make AI and network failures explicit and recoverable.
 
@@ -38,7 +39,7 @@
 ## Information architecture
 
 - Home: actionable loops grouped by Today, This week, and Date undecided
-- Capture: one image or text; native shared content enters here with one preview
+- Capture: one image or text; native shared content begins analysis immediately and lands in Review or one focused question
 - Processing: truthful remote AI state, cancel/retry affordance
 - Review: title, date, time, place, reminder, and one primary action
 - Ambiguity: exactly one unresolved fact and one decision
@@ -68,7 +69,7 @@
 ## Components
 
 - Existing components to reuse: facts, loop cards, information banners, action/checkpoint rows
-- New/changed components: single-image preview, retryable analysis failure, adaptive destructive confirmation, tappable review fact row, confidence-aware field state
+- New/changed components: single-image preview, retryable analysis failure, adaptive destructive confirmation, compact labeled review-title field, typed-time field with picker alternative, confidence-aware field state
 - Variants and states: loading, success, one-field ambiguity, provider failure, offline, disabled, closed
 - Token/component ownership: `apps/mobile/lib/design_system.dart` owns visual tokens; platform helpers own adaptive/native presentation
 
@@ -76,7 +77,7 @@
 
 - Gallery and camera use the operating system's single-image picker.
 - Destructive confirmation uses a Cupertino destructive/cancel alert on iOS and the platform Material confirmation on Android.
-- Date and time editing use the platform picker.
+- Date editing uses the platform picker. A missing or tentative time also accepts direct keyboard entry (`16:30`, `오후 4시 30분`) while retaining the picker as an alternative.
 - Calendar creation opens the operating system calendar composer.
 - Notification permission is requested only at the moment the user enables a reminder.
 - A denied permission offers a link to the operating system app settings; the app does not recreate settings screens.
@@ -95,7 +96,7 @@ Capture -> nonpersisted Analysis Draft -> focused review -> approval -> Open Loo
 ```
 
 - Leaving Review before approval creates no server Loop.
-- Appointment approval saves the Loop and opens the system calendar composer as the same primary flow.
+- Appointment approval saves the Loop, starts the system calendar composer, and returns the app to Home without waiting for the external composer to dismiss.
 - Default Appointment checkpoints: `T-24h`, `T-2h`, `T-1h`, `T+1d`.
 - Default Deadline checkpoints: `D-7`, `D-3`, `D-1`.
 
@@ -120,14 +121,14 @@ Capture -> nonpersisted Analysis Draft -> focused review -> approval -> Open Loo
 - Loading: `대화의 날짜, 시간, 장소를 확인하고 있어요` with cancel support
 - Empty: explain native share and offer one-image/text capture
 - Error: `이미지를 분석하지 못했어요` with Retry and Use text actions
-- Success: structured result and one primary Add action
+- Success: structured result and one primary Add action; calendar handoff never leaves the app in a loading state
 - Disabled: explain the missing prerequisite next to the disabled action
 - Offline/slow network: never synthesize a successful image result; preserve the image temporarily and allow retry
 
 ## Content voice
 
 - Tone: short, factual, warm but not chatty
-- Terminology: Capture, Open Loop, Loop Closed; use `확인 필요` for uncertainty
+- Terminology: the user-facing creation CTA is `일정 추가`; use `확인 필요` for uncertainty
 - Microcopy rules: name the failed operation, avoid provider jargon, never call a deterministic fallback `AI 분석`
 
 ## Implementation constraints
@@ -136,6 +137,7 @@ Capture -> nonpersisted Analysis Draft -> focused review -> approval -> Open Loo
 - Design-token constraints: extend existing `OLColors` and theme rather than adding another design layer
 - Performance constraints: one image, maximum 10MB, no raw capture persistence, bounded remote timeouts
 - Compatibility constraints: Android SEND image/text; iOS Share Extension image/text/URL; system calendar and local notifications
+- Calendar handoff constraint: an OS composer callback may be absent or delayed, so navigation and persistence must not depend on it.
 - AI temporal contract: every analysis is grounded in an explicit `Asia/Seoul` reference date/time; a missing year defaults to the reference year unless the phrase itself crosses the year boundary
 - AI compute contract: Gemini text analysis uses `MINIMAL` thinking; single-image analysis uses `LOW`; required fields below `0.65` confidence require confirmation
 - Quality contract: the checked-in 100-case evaluation must preserve its `20/20/15/15/15/15` scenario distribution and 95% metric gate; the critical reference case must pass every field

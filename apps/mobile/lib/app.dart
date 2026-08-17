@@ -22,13 +22,21 @@ class OpenLoopApp extends StatefulWidget {
 class _OpenLoopAppState extends State<OpenLoopApp> {
   final navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<List<SharedMediaFile>>? shareSubscription;
+  SharedCapturePayload? _queuedShare;
 
   @override
   void initState() {
     super.initState();
-    widget.controller.initialize();
+    unawaited(_initialize());
     _listenForShares();
     AppIntegrations.instance.pendingLoopId.addListener(_openPushLoop);
+  }
+
+  Future<void> _initialize() async {
+    await widget.controller.initialize();
+    final queuedShare = _queuedShare;
+    _queuedShare = null;
+    if (queuedShare != null) _presentSharedCapture(queuedShare);
   }
 
   void _openPushLoop() {
@@ -59,6 +67,15 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   void _openSharedMedia(List<SharedMediaFile> items) {
     final capture = normalizeSharedMedia(items);
     if (capture.isEmpty) return;
+    ReceiveSharingIntent.instance.reset();
+    if (!widget.controller.ready) {
+      _queuedShare = capture;
+      return;
+    }
+    _presentSharedCapture(capture);
+  }
+
+  void _presentSharedCapture(SharedCapturePayload capture) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final navigator = navigatorKey.currentState;
       if (navigator == null) return;
@@ -68,10 +85,10 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
             controller: widget.controller,
             initialText: capture.text,
             initialImagePath: capture.imagePath,
+            autoAnalyze: true,
           ),
         ),
       );
-      ReceiveSharingIntent.instance.reset();
     });
   }
 
@@ -151,13 +168,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 44),
             const Text(
-              '캡처만 하세요.\n일정은 OpenLoop가 만듭니다.',
+              '일정을 추가하면\n바로 분석해요.',
               style: TextStyle(
                 color: OLColors.navy,
-                fontSize: 34,
-                height: 1.24,
+                fontSize: 30,
+                height: 1.22,
                 fontWeight: FontWeight.w800,
-                letterSpacing: -1.5,
+                letterSpacing: -1.1,
               ),
             ),
             const SizedBox(height: 11),
@@ -234,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
         label: const Text(
-          '캡처 추가',
+          '일정 추가',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
@@ -248,10 +265,12 @@ class CaptureScreen extends StatefulWidget {
     required this.controller,
     this.initialText = '',
     this.initialImagePath,
+    this.autoAnalyze = false,
   });
   final AppController controller;
   final String initialText;
   final String? initialImagePath;
+  final bool autoAnalyze;
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
@@ -262,6 +281,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
   XFile? image;
   String? error;
   String? notice;
+  bool analysisStarted = false;
 
   @override
   void initState() {
@@ -270,6 +290,12 @@ class _CaptureScreenState extends State<CaptureScreen> {
     if (widget.initialImagePath != null) {
       image = XFile(widget.initialImagePath!);
       source = 'image';
+    }
+    if (widget.autoAnalyze &&
+        (textController.text.trim().isNotEmpty || image != null)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_analyze());
+      });
     }
   }
 
@@ -292,6 +318,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
           error = null;
           notice = null;
         });
+        unawaited(_analyze());
       }
     } catch (_) {
       if (mounted) {
@@ -301,12 +328,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
   }
 
   Future<void> _analyze() async {
+    if (analysisStarted) return;
     final text = textController.text.trim();
     if (text.isEmpty && image == null) {
       setState(() => error = '분석할 텍스트나 이미지를 추가해 주세요.');
       return;
     }
-    setState(() => error = null);
+    setState(() {
+      error = null;
+      analysisStarted = true;
+    });
     final result = image == null
         ? widget.controller.analyze(text: text, source: source)
         : widget.controller.analyzeImage(
@@ -314,24 +345,28 @@ class _CaptureScreenState extends State<CaptureScreen> {
             companionText: text,
             source: source,
           );
-    final failure = await Navigator.push<String>(
-      context,
-      MaterialPageRoute<String>(
-        builder: (_) =>
-            ProcessingScreen(result: result, controller: widget.controller),
-      ),
-    );
-    if (failure != null && mounted) setState(() => error = failure);
+    try {
+      final failure = await Navigator.push<String>(
+        context,
+        MaterialPageRoute<String>(
+          builder: (_) =>
+              ProcessingScreen(result: result, controller: widget.controller),
+        ),
+      );
+      if (failure != null && mounted) setState(() => error = failure);
+    } finally {
+      if (mounted) setState(() => analysisStarted = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('OpenLoop에 공유')),
+    appBar: AppBar(title: const Text('일정 추가')),
     body: ListView(
       padding: const EdgeInsets.all(22),
       children: [
         const Text(
-          '이미 이해한 정보를 다시 입력하지 마세요.',
+          '사진을 고르면 바로 분석하고, 텍스트는 붙여 넣은 뒤 분석할 수 있어요.',
           style: TextStyle(color: OLColors.muted),
         ),
         const SizedBox(height: 22),
@@ -367,7 +402,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
         ),
         if (image != null) ...[
           const SizedBox(height: 12),
-          const Text('이미지 1장을 분석합니다.', style: TextStyle(color: OLColors.muted)),
+          const Text(
+            '이미지 1장을 바로 분석합니다.',
+            style: TextStyle(color: OLColors.muted),
+          ),
           const SizedBox(height: 8),
           ListTile(
             tileColor: OLColors.surface,
@@ -401,13 +439,13 @@ class _CaptureScreenState extends State<CaptureScreen> {
         const SizedBox(height: 24),
         FilledButton(
           key: const Key('analyze-button'),
-          onPressed: _analyze,
+          onPressed: analysisStarted ? null : _analyze,
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 17),
           ),
-          child: const Text(
-            '일정 분석',
-            style: TextStyle(fontWeight: FontWeight.w800),
+          child: Text(
+            analysisStarted ? '일정 분석 중…' : '일정 분석',
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
         ),
         const SizedBox(height: 18),
@@ -481,10 +519,57 @@ class AmbiguityScreen extends StatefulWidget {
   State<AmbiguityScreen> createState() => _AmbiguityScreenState();
 }
 
+/// Returns the API's `HH:mm:ss` representation for the compact Korean time
+/// formats a user can comfortably enter with a phone keyboard.
+String? normalizeTimeInput(String raw) {
+  final compact = raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  if (compact.isEmpty) return null;
+
+  String? period;
+  int? hour;
+  int minute = 0;
+  final digits = RegExp(r'^\d{3,4}$').firstMatch(compact);
+  if (digits != null) {
+    final value = digits.group(0)!;
+    hour = int.tryParse(value.substring(0, value.length - 2));
+    minute = int.tryParse(value.substring(value.length - 2)) ?? 0;
+  } else {
+    final match = RegExp(
+      r'^(오전|오후|am|pm)?(\d{1,2})(?:(?::|시)(\d{1,2})?)?(?:분)?$',
+    ).firstMatch(compact);
+    if (match == null) return null;
+    period = match.group(1);
+    hour = int.tryParse(match.group(2)!);
+    minute = int.tryParse(match.group(3) ?? '') ?? 0;
+  }
+
+  if (hour == null || minute > 59) return null;
+  if (period == '오후' || period == 'pm') {
+    if (hour >= 1 && hour <= 11) hour += 12;
+  } else if (period == '오전' || period == 'am') {
+    if (hour == 12) hour = 0;
+  }
+  if (hour > 23) return null;
+  return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}:00';
+}
+
+String _editableTime(String? value) =>
+    value == null ? '' : value.split(':').take(2).join(':');
+
+TimeOfDay _timeOfDayOrDefault(String value, TimeOfDay fallback) {
+  final normalized = normalizeTimeInput(value);
+  if (normalized == null) return fallback;
+  final parts = normalized.split(':');
+  return TimeOfDay(
+    hour: int.tryParse(parts.first) ?? fallback.hour,
+    minute: int.tryParse(parts[1]) ?? fallback.minute,
+  );
+}
+
 class _AmbiguityScreenState extends State<AmbiguityScreen> {
-  TimeOfDay? selectedTime;
   DateTime? selectedDate;
   late final TextEditingController textController;
+  late final TextEditingController timeController;
 
   String get field => widget.loop.missingFields.firstOrNull ?? 'start_time';
 
@@ -497,6 +582,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
   @override
   void initState() {
     super.initState();
+    selectedDate = widget.loop.date;
     textController = TextEditingController(
       text: switch (field) {
         'place' => widget.loop.place ?? '',
@@ -506,11 +592,15 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
         _ => '',
       },
     );
+    timeController = TextEditingController(
+      text: _editableTime(widget.loop.time),
+    );
   }
 
   @override
   void dispose() {
     textController.dispose();
+    timeController.dispose();
     super.dispose();
   }
 
@@ -528,10 +618,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
         };
 
   Object? get value => switch (field) {
-    'start_time' =>
-      selectedTime == null
-          ? null
-          : '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}:00',
+    'start_time' => normalizeTimeInput(timeController.text),
     'date' =>
       selectedDate == null
           ? null
@@ -540,29 +627,61 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
     _ => textController.text.trim().isEmpty ? null : textController.text.trim(),
   };
 
-  Widget _input(BuildContext context) => switch (field) {
-    'start_time' => InkWell(
-      key: const Key('time-picker'),
-      onTap: () async {
-        final selected = await showTimePicker(
-          context: context,
-          initialTime: const TimeOfDay(hour: 19, minute: 0),
-        );
-        if (selected != null) setState(() => selectedTime = selected);
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: OLColors.surface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          selectedTime == null ? '시간 선택' : selectedTime!.format(context),
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-        ),
+  String? get _timeInputError =>
+      timeController.text.trim().isNotEmpty && value == null
+      ? '예: 16:30 또는 오후 4시 30분으로 입력해 주세요.'
+      : null;
+
+  String get _inputHint => switch (field) {
+    'start_time' => '시간을 직접 입력하거나 선택해 주세요.',
+    'date' =>
+      selectedDate == null
+          ? '날짜를 선택하면 다음으로 넘어가요.'
+          : '추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.',
+    _ => '이 정보만 확인하면 일정으로 정리할 수 있어요.',
+  };
+
+  Future<void> _pickAmbiguityTime() async {
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: _timeOfDayOrDefault(
+        timeController.text,
+        const TimeOfDay(hour: 19, minute: 0),
       ),
+    );
+    if (selected != null) {
+      setState(() {
+        timeController.text =
+            '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
+      });
+    }
+  }
+
+  Widget _input(BuildContext context) => switch (field) {
+    'start_time' => Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          key: const Key('ambiguity-time-input'),
+          controller: timeController,
+          autofocus: true,
+          keyboardType: TextInputType.datetime,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: '시간',
+            hintText: '예: 16:30 또는 오후 4시',
+            errorText: _timeInputError,
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          key: const Key('time-picker'),
+          onPressed: _pickAmbiguityTime,
+          icon: const Icon(Icons.schedule_outlined),
+          label: const Text('시간 선택'),
+        ),
+      ],
     ),
     'date' => InkWell(
       key: const Key('date-picker'),
@@ -605,54 +724,73 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('한 가지만 확인할게요')),
-    body: Padding(
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            question,
-            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            widget.loop.title,
-            style: const TextStyle(color: OLColors.muted),
-          ),
-          const SizedBox(height: 26),
-          _input(context),
-          const Spacer(),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: value == null
-                  ? null
-                  : () async {
-                      final resolved = await widget.controller.resolveAmbiguity(
-                        widget.loop,
-                        field: field,
-                        value: value!,
-                      );
-                      if (!context.mounted) return;
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute<void>(
-                          builder: (_) => resolved.state == LoopState.needsInput
-                              ? AmbiguityScreen(
-                                  controller: widget.controller,
-                                  loop: resolved,
-                                )
-                              : ReviewScreen(
-                                  controller: widget.controller,
-                                  loop: resolved,
-                                ),
-                        ),
-                      );
-                    },
-              child: const Text('확인'),
+    body: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ListView(
+                children: [
+                  Text(
+                    question,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    widget.loop.title,
+                    style: const TextStyle(color: OLColors.muted),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _inputHint,
+                    style: const TextStyle(color: OLColors.muted, height: 1.4),
+                  ),
+                  const SizedBox(height: 26),
+                  _input(context),
+                ],
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const Key('ambiguity-continue-button'),
+                onPressed: value == null
+                    ? null
+                    : () async {
+                        final resolved = await widget.controller
+                            .resolveAmbiguity(
+                              widget.loop,
+                              field: field,
+                              value: value!,
+                            );
+                        if (!context.mounted) return;
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                resolved.state == LoopState.needsInput
+                                ? AmbiguityScreen(
+                                    controller: widget.controller,
+                                    loop: resolved,
+                                  )
+                                : ReviewScreen(
+                                    controller: widget.controller,
+                                    loop: resolved,
+                                  ),
+                          ),
+                        );
+                      },
+                child: const Text('다음'),
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -671,6 +809,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   late OpenLoop draft;
   late final TextEditingController titleController;
   late final TextEditingController placeController;
+  late final TextEditingController timeController;
   bool submitting = false;
 
   AppController get controller => widget.controller;
@@ -681,12 +820,14 @@ class _ReviewScreenState extends State<ReviewScreen> {
     draft = widget.loop;
     titleController = TextEditingController(text: draft.title);
     placeController = TextEditingController(text: draft.place ?? '');
+    timeController = TextEditingController(text: _editableTime(draft.time));
   }
 
   @override
   void dispose() {
     titleController.dispose();
     placeController.dispose();
+    timeController.dispose();
     super.dispose();
   }
 
@@ -726,11 +867,32 @@ class _ReviewScreenState extends State<ReviewScreen> {
       ),
     );
     if (selected != null) {
-      _edit(
-        'start_time',
-        '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}:00',
-      );
+      timeController.text =
+          '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
+      _updateTime(timeController.text);
     }
+  }
+
+  bool get _hasInvalidTimeInput =>
+      timeController.text.trim().isNotEmpty &&
+      normalizeTimeInput(timeController.text) == null;
+
+  String? get _timeInputError =>
+      _hasInvalidTimeInput ? '예: 16:30 또는 오후 4시 30분으로 입력해 주세요.' : null;
+
+  void _updateTime(String input) {
+    final normalized = normalizeTimeInput(input);
+    setState(() {
+      if (input.trim().isEmpty) {
+        draft = controller.editDraft(draft, field: 'start_time', value: '');
+      } else if (normalized != null) {
+        draft = controller.editDraft(
+          draft,
+          field: 'start_time',
+          value: normalized,
+        );
+      }
+    });
   }
 
   Future<void> _approve() async {
@@ -741,18 +903,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       if (!mounted) return;
       setState(() => draft = persisted);
       if (persisted.kind == LoopKind.appointment) {
-        final opened = await controller.deviceActions.addToCalendar(persisted);
-        if (!opened) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('캘린더를 열 수 없습니다. 날짜와 기기 설정을 확인해 주세요.'),
-              ),
-            );
-          }
-          return;
-        }
-        await controller.completeActionByType(persisted, 'calendar');
+        _launchCalendarHandoff(controller, persisted);
       }
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
     } finally {
@@ -778,17 +929,57 @@ class _ReviewScreenState extends State<ReviewScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        TextField(
-          key: const Key('review-title-field'),
-          controller: titleController,
-          enabled: draft.isDraft,
-          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
-          decoration: const InputDecoration(
-            labelText: '제목',
-            border: InputBorder.none,
-            contentPadding: EdgeInsets.zero,
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 13, 16, 12),
+          decoration: BoxDecoration(
+            color: OLColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: OLColors.border),
           ),
-          onChanged: (value) => _edit('title', value.trim()),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '일정 제목',
+                style: TextStyle(
+                  color: OLColors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              if (draft.isDraft)
+                TextField(
+                  key: const Key('review-title-field'),
+                  controller: titleController,
+                  maxLines: 2,
+                  minLines: 1,
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(
+                    color: OLColors.navy,
+                    fontSize: 22,
+                    height: 1.25,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                  ),
+                  onChanged: (value) => _edit('title', value.trim()),
+                )
+              else
+                Text(
+                  draft.title,
+                  style: const TextStyle(
+                    color: OLColors.navy,
+                    fontSize: 22,
+                    height: 1.25,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+            ],
+          ),
         ),
         if (draft.summary?.trim().isNotEmpty == true) ...[
           const SizedBox(height: 16),
@@ -802,12 +993,24 @@ class _ReviewScreenState extends State<ReviewScreen> {
           enabled: draft.isDraft,
           onTap: _pickDate,
         ),
-        _EditableReviewFact(
+        TextField(
           key: const Key('review-time-field'),
-          icon: Icons.schedule_outlined,
-          label: draft.time?.substring(0, 5) ?? '시간 미정',
+          controller: timeController,
           enabled: draft.isDraft,
-          onTap: _pickTime,
+          keyboardType: TextInputType.datetime,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            labelText: '시간',
+            hintText: '시간 미정',
+            prefixIcon: const Icon(Icons.schedule_outlined),
+            suffixIcon: IconButton(
+              tooltip: '시간 선택',
+              onPressed: draft.isDraft ? _pickTime : null,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded),
+            ),
+            errorText: _timeInputError,
+          ),
+          onChanged: _updateTime,
         ),
         TextField(
           key: const Key('review-place-field'),
@@ -838,7 +1041,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         const SizedBox(height: 24),
         FilledButton(
           key: const Key('save-loop-button'),
-          onPressed: submitting || draft.missingFields.isNotEmpty
+          onPressed:
+              submitting ||
+                  draft.missingFields.isNotEmpty ||
+                  _hasInvalidTimeInput
               ? null
               : _approve,
           style: FilledButton.styleFrom(
@@ -857,6 +1063,26 @@ class _ReviewScreenState extends State<ReviewScreen> {
       ],
     ),
   );
+}
+
+/// Starts the OS-owned composer without making the Flutter navigation wait for
+/// the user to save or dismiss it. The completion flag tracks a successful
+/// handoff, not the user's private calendar decision.
+void _launchCalendarHandoff(AppController controller, OpenLoop loop) {
+  unawaited(_finishCalendarHandoff(controller, loop));
+}
+
+Future<void> _finishCalendarHandoff(
+  AppController controller,
+  OpenLoop loop,
+) async {
+  try {
+    if (await controller.deviceActions.addToCalendar(loop)) {
+      await controller.completeActionByType(loop, 'calendar');
+    }
+  } catch (_) {
+    // Calendar handoff is a convenience action; the saved Loop remains usable.
+  }
 }
 
 class _EditableReviewFact extends StatelessWidget {
@@ -1195,23 +1421,15 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 label: const Text('장소·날씨 보기'),
               ),
             OutlinedButton.icon(
-              onPressed: () async {
-                final ok = await widget.controller.deviceActions.addToCalendar(
-                  loop,
+              onPressed: () {
+                if (loop.startsAt == null) {
+                  setState(() => notice = '날짜와 시간을 먼저 확인한 뒤 캘린더에 추가해 주세요.');
+                  return;
+                }
+                _launchCalendarHandoff(widget.controller, loop);
+                setState(
+                  () => notice = '기기 캘린더 작성 화면을 열었습니다. 저장 후 OpenLoop로 돌아오세요.',
                 );
-                if (ok) {
-                  await widget.controller.completeActionByType(
-                    loop,
-                    'calendar',
-                  );
-                }
-                if (mounted) {
-                  setState(
-                    () => notice = ok
-                        ? '기기 캘린더 작성 화면을 열었습니다.'
-                        : '캘린더를 열 수 없습니다. 날짜 또는 기기 권한을 확인해 주세요.',
-                  );
-                }
               },
               icon: const Icon(Icons.calendar_month_outlined),
               label: const Text('캘린더에 추가'),
