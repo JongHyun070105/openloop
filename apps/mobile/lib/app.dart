@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -65,10 +67,7 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
           builder: (_) => CaptureScreen(
             controller: widget.controller,
             initialText: capture.text,
-            initialImagePaths: capture.imagePaths.take(5).toList(),
-            initialNotice: capture.imagePaths.length > 5
-                ? '공유된 이미지 ${capture.imagePaths.length}장 중 최대 5장을 한 번에 분석할 수 있어요.'
-                : null,
+            initialImagePath: capture.imagePath,
           ),
         ),
       );
@@ -248,13 +247,11 @@ class CaptureScreen extends StatefulWidget {
     super.key,
     required this.controller,
     this.initialText = '',
-    this.initialImagePaths = const [],
-    this.initialNotice,
+    this.initialImagePath,
   });
   final AppController controller;
   final String initialText;
-  final List<String> initialImagePaths;
-  final String? initialNotice;
+  final String? initialImagePath;
   @override
   State<CaptureScreen> createState() => _CaptureScreenState();
 }
@@ -262,7 +259,7 @@ class CaptureScreen extends StatefulWidget {
 class _CaptureScreenState extends State<CaptureScreen> {
   late final TextEditingController textController;
   String source = 'text';
-  List<XFile> images = [];
+  XFile? image;
   String? error;
   String? notice;
 
@@ -270,11 +267,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
   void initState() {
     super.initState();
     textController = TextEditingController(text: widget.initialText);
-    if (widget.initialImagePaths.isNotEmpty) {
-      images = widget.initialImagePaths.map(XFile.new).toList();
+    if (widget.initialImagePath != null) {
+      image = XFile(widget.initialImagePath!);
       source = 'image';
     }
-    notice = widget.initialNotice;
   }
 
   @override
@@ -285,22 +281,16 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _pickImage(ImageSource imageSource) async {
     try {
-      final picked = imageSource == ImageSource.camera
-          ? await ImagePicker().pickImage(source: imageSource, imageQuality: 82)
-          : null;
-      final selected = picked == null && imageSource == ImageSource.gallery
-          ? await ImagePicker().pickMultiImage(imageQuality: 82)
-          : picked == null
-          ? const <XFile>[]
-          : [picked];
-      if (selected.isNotEmpty && mounted) {
+      final picked = await ImagePicker().pickImage(
+        source: imageSource,
+        imageQuality: 82,
+      );
+      if (picked != null && mounted) {
         setState(() {
-          images = selected.take(5).toList();
+          image = picked;
           source = imageSource == ImageSource.camera ? 'screenshot' : 'image';
           error = null;
-          notice = selected.length > 5
-              ? '한 번에 최대 5장까지 분석할 수 있어 처음 5장을 선택했어요.'
-              : null;
+          notice = null;
         });
       }
     } catch (_) {
@@ -312,24 +302,26 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _analyze() async {
     final text = textController.text.trim();
-    if (text.isEmpty && images.isEmpty) {
+    if (text.isEmpty && image == null) {
       setState(() => error = '분석할 텍스트나 이미지를 추가해 주세요.');
       return;
     }
-    final result = images.isEmpty
+    setState(() => error = null);
+    final result = image == null
         ? widget.controller.analyze(text: text, source: source)
-        : widget.controller.analyzeImages(
-            imagePaths: images.map((image) => image.path).toList(),
+        : widget.controller.analyzeImage(
+            imagePath: image!.path,
             companionText: text,
             source: source,
           );
-    await Navigator.push(
+    final failure = await Navigator.push<String>(
       context,
-      MaterialPageRoute<void>(
+      MaterialPageRoute<String>(
         builder: (_) =>
             ProcessingScreen(result: result, controller: widget.controller),
       ),
     );
+    if (failure != null && mounted) setState(() => error = failure);
   }
 
   @override
@@ -350,7 +342,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
           maxLines: 10,
           decoration: const InputDecoration(hintText: '대화, 공지, 예약 내용을 붙여 넣으세요'),
           onChanged: (_) {
-            if (images.isEmpty) setState(() => source = 'text');
+            if (image == null) setState(() => source = 'text');
           },
         ),
         const SizedBox(height: 14),
@@ -373,32 +365,28 @@ class _CaptureScreenState extends State<CaptureScreen> {
             ),
           ],
         ),
-        if (images.isNotEmpty) ...[
+        if (image != null) ...[
           const SizedBox(height: 12),
-          Text(
-            images.length == 1
-                ? '이미지 1장을 분석합니다.'
-                : '이미지 ${images.length}장을 하나의 맥락으로 분석합니다.',
-            style: const TextStyle(color: OLColors.muted),
-          ),
+          const Text('이미지 1장을 분석합니다.', style: TextStyle(color: OLColors.muted)),
           const SizedBox(height: 8),
-          ...images.asMap().entries.map(
-            (entry) => ListTile(
-              tileColor: OLColors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              leading: const Icon(Icons.image_outlined),
-              title: Text(
-                entry.value.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: IconButton(
-                tooltip: '이미지 제거',
-                onPressed: () => setState(() => images.removeAt(entry.key)),
-                icon: const Icon(Icons.close),
-              ),
+          ListTile(
+            tileColor: OLColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            leading: const Icon(Icons.image_outlined),
+            title: Text(
+              image!.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: IconButton(
+              tooltip: '이미지 제거',
+              onPressed: () => setState(() {
+                image = null;
+                if (textController.text.trim().isNotEmpty) source = 'text';
+              }),
+              icon: const Icon(Icons.close),
             ),
           ),
         ],
@@ -460,12 +448,9 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
               : ReviewScreen(controller: widget.controller, loop: loop),
         ),
       );
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('분석하지 못했습니다: $error')));
-      Navigator.pop(context);
+      Navigator.pop(context, '일정을 분석하지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.');
     }
   }
 
@@ -529,15 +514,18 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
     super.dispose();
   }
 
-  String get question => switch (field) {
-    'start_time' => '몇 시로 등록할까요?',
-    'date' => '언제인지 알려줄래요?',
-    'place' => '어디에서 만날까요?',
-    'title' => '이 일정의 이름은 무엇인가요?',
-    'purpose' => '무엇을 위한 일정인가요?',
-    'participants' => '누구와 함께하나요?',
-    _ => '한 가지만 확인할게요',
-  };
+  String get question =>
+      widget.loop.suggestedQuestion?.trim().isNotEmpty == true
+      ? widget.loop.suggestedQuestion!.trim()
+      : switch (field) {
+          'start_time' => '몇 시로 등록할까요?',
+          'date' => '언제인지 알려줄래요?',
+          'place' => '어디에서 만날까요?',
+          'title' => '이 일정의 이름은 무엇인가요?',
+          'purpose' => '무엇을 위한 일정인가요?',
+          'participants' => '누구와 함께하나요?',
+          _ => '한 가지만 확인할게요',
+        };
 
   Object? get value => switch (field) {
     'start_time' =>
@@ -670,10 +658,108 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
   );
 }
 
-class ReviewScreen extends StatelessWidget {
+class ReviewScreen extends StatefulWidget {
   const ReviewScreen({super.key, required this.controller, required this.loop});
   final AppController controller;
   final OpenLoop loop;
+
+  @override
+  State<ReviewScreen> createState() => _ReviewScreenState();
+}
+
+class _ReviewScreenState extends State<ReviewScreen> {
+  late OpenLoop draft;
+  late final TextEditingController titleController;
+  late final TextEditingController placeController;
+  bool submitting = false;
+
+  AppController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    draft = widget.loop;
+    titleController = TextEditingController(text: draft.title);
+    placeController = TextEditingController(text: draft.place ?? '');
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    placeController.dispose();
+    super.dispose();
+  }
+
+  void _edit(String field, Object value) {
+    if (!draft.isDraft) return;
+    setState(
+      () => draft = controller.editDraft(draft, field: field, value: value),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    if (!draft.isDraft) return;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: draft.date ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
+    );
+    if (selected != null) {
+      _edit(
+        'date',
+        '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}',
+      );
+    }
+  }
+
+  Future<void> _pickTime() async {
+    if (!draft.isDraft) return;
+    final parts = draft.time?.split(':');
+    final selected = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: parts == null ? 9 : int.tryParse(parts.first) ?? 9,
+        minute: parts == null || parts.length < 2
+            ? 0
+            : int.tryParse(parts[1]) ?? 0,
+      ),
+    );
+    if (selected != null) {
+      _edit(
+        'start_time',
+        '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}:00',
+      );
+    }
+  }
+
+  Future<void> _approve() async {
+    if (submitting || draft.missingFields.isNotEmpty) return;
+    setState(() => submitting = true);
+    try {
+      final persisted = await controller.approveDraft(draft);
+      if (!mounted) return;
+      setState(() => draft = persisted);
+      if (persisted.kind == LoopKind.appointment) {
+        final opened = await controller.deviceActions.addToCalendar(persisted);
+        if (!opened) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('캘린더를 열 수 없습니다. 날짜와 기기 설정을 확인해 주세요.'),
+              ),
+            );
+          }
+          return;
+        }
+        await controller.completeActionByType(persisted, 'calendar');
+      }
+      if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+    } finally {
+      if (mounted) setState(() => submitting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('분석 결과')),
@@ -681,10 +767,10 @@ class ReviewScreen extends StatelessWidget {
       padding: const EdgeInsets.all(22),
       children: [
         if (controller.lastAnalysisWasLocal)
-          const _InfoBanner(text: 'API가 연결되지 않아 로컬 데모 분석을 사용했습니다.'),
+          const _InfoBanner(text: '원격 AI를 설정하지 않아 로컬 규칙 분석을 사용했습니다.'),
         const SizedBox(height: 12),
         Text(
-          loop.kind == LoopKind.deadline ? 'DEADLINE' : 'APPOINTMENT',
+          draft.kind == LoopKind.deadline ? 'DEADLINE' : 'APPOINTMENT',
           style: const TextStyle(
             color: OLColors.cobalt,
             fontWeight: FontWeight.w800,
@@ -692,55 +778,107 @@ class ReviewScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Text(
-          loop.title,
-          style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+        TextField(
+          key: const Key('review-title-field'),
+          controller: titleController,
+          enabled: draft.isDraft,
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+          decoration: const InputDecoration(
+            labelText: '제목',
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.zero,
+          ),
+          onChanged: (value) => _edit('title', value.trim()),
         ),
-        if (loop.summary?.trim().isNotEmpty == true) ...[
+        if (draft.summary?.trim().isNotEmpty == true) ...[
           const SizedBox(height: 16),
-          _SummaryCard(summary: loop.summary!),
+          _SummaryCard(summary: draft.summary!),
         ],
         const SizedBox(height: 22),
-        _Fact(icon: Icons.calendar_today_outlined, label: dateText(loop.date)),
-        _Fact(
-          icon: Icons.schedule_outlined,
-          label: loop.time?.substring(0, 5) ?? '시간 미정',
+        _EditableReviewFact(
+          key: const Key('review-date-field'),
+          icon: Icons.calendar_today_outlined,
+          label: dateText(draft.date),
+          enabled: draft.isDraft,
+          onTap: _pickDate,
         ),
-        if (loop.place != null)
-          _Fact(icon: Icons.place_outlined, label: loop.place!),
-        if (loop.participants.isNotEmpty)
+        _EditableReviewFact(
+          key: const Key('review-time-field'),
+          icon: Icons.schedule_outlined,
+          label: draft.time?.substring(0, 5) ?? '시간 미정',
+          enabled: draft.isDraft,
+          onTap: _pickTime,
+        ),
+        TextField(
+          key: const Key('review-place-field'),
+          controller: placeController,
+          enabled: draft.isDraft,
+          decoration: const InputDecoration(
+            labelText: '장소',
+            prefixIcon: Icon(Icons.place_outlined),
+            hintText: '장소 미정',
+          ),
+          onChanged: (value) => _edit('place', value.trim()),
+        ),
+        if (draft.participants.isNotEmpty)
           _Fact(
             icon: Icons.group_outlined,
-            label: loop.participants.join(', '),
+            label: draft.participants.join(', '),
           ),
-        if (loop.purpose != null)
-          _Fact(icon: Icons.subject_outlined, label: loop.purpose!),
-        if (loop.resolutionNote != null) ...[
+        if (draft.purpose != null)
+          _Fact(icon: Icons.subject_outlined, label: draft.purpose!),
+        if (draft.resolutionNote != null) ...[
           const SizedBox(height: 18),
-          _InfoBanner(text: loop.resolutionNote!),
+          _InfoBanner(text: draft.resolutionNote!),
         ],
-        if (loop.confidence.isNotEmpty) ...[
+        if (shouldShowConfidence(draft.confidence)) ...[
           const SizedBox(height: 18),
-          _ConfidenceCard(confidence: loop.confidence),
+          _ConfidenceCard(confidence: draft.confidence),
         ],
         const SizedBox(height: 24),
         FilledButton(
           key: const Key('save-loop-button'),
-          onPressed: () async {
-            await controller.saveLoop(loop);
-            if (context.mounted) {
-              Navigator.popUntil(context, (route) => route.isFirst);
-            }
-          },
+          onPressed: submitting || draft.missingFields.isNotEmpty
+              ? null
+              : _approve,
           style: FilledButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 17),
           ),
           child: Text(
-            loop.kind == LoopKind.deadline ? 'OpenLoop 생성' : '일정 준비 완료',
+            submitting
+                ? '저장 중…'
+                : draft.kind == LoopKind.deadline
+                ? 'OpenLoop 생성'
+                : draft.isDraft
+                ? '저장하고 캘린더 열기'
+                : '캘린더 다시 열기',
           ),
         ),
       ],
     ),
+  );
+}
+
+class _EditableReviewFact extends StatelessWidget {
+  const _EditableReviewFact({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+    contentPadding: EdgeInsets.zero,
+    leading: Icon(icon, color: OLColors.cobalt),
+    title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+    trailing: enabled ? const Icon(Icons.chevron_right) : null,
+    onTap: enabled ? onTap : null,
   );
 }
 
@@ -844,22 +982,8 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 IconButton(
                   tooltip: '삭제',
                   onPressed: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Loop 삭제'),
-                        content: const Text('이 Loop를 목록에서 삭제할까요?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('취소'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('삭제'),
-                          ),
-                        ],
-                      ),
+                    final confirm = await showAdaptiveDeleteConfirmation(
+                      context,
                     );
                     if (confirm != true) return;
                     await widget.controller.deleteLoop(loop);
@@ -912,7 +1036,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             ),
           if (loop.purpose != null)
             _Fact(icon: Icons.subject_outlined, label: loop.purpose!),
-          if (loop.confidence.isNotEmpty) ...[
+          if (shouldShowConfidence(loop.confidence)) ...[
             const SizedBox(height: 14),
             _ConfidenceCard(confidence: loop.confidence),
           ],
@@ -1137,6 +1261,51 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
   }
 }
 
+@visibleForTesting
+Future<bool> showAdaptiveDeleteConfirmation(BuildContext context) async {
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    return await showCupertinoDialog<bool>(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Loop 삭제'),
+            content: const Text('이 Loop를 목록에서 삭제할까요?'),
+            actions: [
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소'),
+              ),
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('삭제'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+  return await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Loop 삭제'),
+          content: const Text('이 Loop를 목록에서 삭제할까요?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('삭제'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+}
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.controller});
   final AppController controller;
@@ -1153,7 +1322,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     urlController = TextEditingController(text: widget.controller.baseUrl);
     retention = widget.controller.retention;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshCapabilities());
+    if (kDebugMode) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _refreshCapabilities(),
+      );
+    }
   }
 
   Future<void> _refreshCapabilities() async {
@@ -1196,63 +1369,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
     body: ListView(
       padding: const EdgeInsets.all(22),
       children: [
-        const Text(
-          '분석 API',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _connectionStatus,
-          style: TextStyle(color: OLColors.muted, height: 1.45),
-        ),
-        if (_integrationStatus.isNotEmpty) ...[
-          const SizedBox(height: 4),
+        if (kDebugMode) ...[
+          const Text(
+            '개발자 연결 설정',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
           Text(
-            _integrationStatus,
-            style: const TextStyle(color: OLColors.muted, height: 1.45),
+            _connectionStatus,
+            style: TextStyle(color: OLColors.muted, height: 1.45),
           ),
-        ],
-        const SizedBox(height: 6),
-        const Text(
-          '요청 실패 시 결과 화면에 로컬 fallback 사용 여부를 표시합니다. OPENLOOP_API_BASE_URL로 빌드별 서버를 지정할 수 있습니다.',
-          style: TextStyle(color: OLColors.muted, height: 1.45),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          key: const Key('base-url-field'),
-          controller: urlController,
-          keyboardType: TextInputType.url,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            hintText: 'https://api.example.com',
+          if (_integrationStatus.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              _integrationStatus,
+              style: const TextStyle(color: OLColors.muted, height: 1.45),
+            ),
+          ],
+          const SizedBox(height: 6),
+          const Text(
+            '텍스트는 오프라인 규칙 분석을 지원합니다. 이미지 분석 실패는 결과로 대체하지 않고 다시 시도할 수 있게 표시합니다.',
+            style: TextStyle(color: OLColors.muted, height: 1.45),
           ),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _refreshCapabilities,
-          icon: const Icon(Icons.refresh_rounded),
-          label: const Text('연결 상태 새로고침'),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final enabled = await AppIntegrations.instance
-                .enablePushNotifications(apiBaseUrl: urlController.text);
-            if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  enabled
-                      ? '서버 체크포인트 알림을 켰습니다.'
-                      : '알림을 켜지 못했습니다. Firebase 설정과 기기 권한을 확인해 주세요.',
+          const SizedBox(height: 14),
+          TextField(
+            key: const Key('base-url-field'),
+            controller: urlController,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              hintText: 'https://api.example.com',
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _refreshCapabilities,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('연결 상태 새로고침'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final enabled = await AppIntegrations.instance
+                  .enablePushNotifications(apiBaseUrl: urlController.text);
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    enabled
+                        ? '서버 체크포인트 알림을 켰습니다.'
+                        : '알림을 켜지 못했습니다. Firebase 설정과 기기 권한을 확인해 주세요.',
+                  ),
                 ),
-              ),
-            );
-          },
-          icon: const Icon(Icons.notifications_outlined),
-          label: const Text('서버 체크포인트 알림 켜기'),
-        ),
-        const SizedBox(height: 28),
+              );
+            },
+            icon: const Icon(Icons.notifications_outlined),
+            label: const Text('서버 체크포인트 알림 켜기'),
+          ),
+          const SizedBox(height: 28),
+        ],
         const Text(
           'Close & Forget',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
@@ -1293,6 +1468,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
   );
 }
+
+@visibleForTesting
+bool shouldShowConfidence(
+  Map<String, double> confidence, {
+  bool debug = kDebugMode,
+}) =>
+    confidence.isNotEmpty &&
+    (debug || confidence.values.any((value) => value < 0.8));
 
 class LoopCard extends StatelessWidget {
   const LoopCard({super.key, required this.loop, required this.onTap});
@@ -1477,7 +1660,9 @@ class _ConfidenceCard extends StatelessWidget {
         confidence.entries
             .where((entry) => labels.containsKey(entry.key))
             .toList()
-          ..sort((left, right) => order[left.key]!.compareTo(order[right.key]!));
+          ..sort(
+            (left, right) => order[left.key]!.compareTo(order[right.key]!),
+          );
     if (entries.isEmpty) return const SizedBox.shrink();
     return OLCard(
       child: Column(

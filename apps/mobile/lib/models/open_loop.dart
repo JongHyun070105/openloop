@@ -2,6 +2,8 @@ enum LoopKind { appointment, deadline }
 
 enum LoopState { open, needsInput, closed }
 
+enum LoopPersistence { remoteDraft, localDraft, persisted }
+
 enum RetentionPolicy { immediately, sevenDays, thirtyDays, keep }
 
 class LoopChecklistItem {
@@ -48,6 +50,7 @@ class OpenLoop {
     required this.source,
     required this.createdAt,
     required this.confidence,
+    this.persistence = LoopPersistence.persisted,
     this.date,
     this.time,
     this.place,
@@ -55,6 +58,7 @@ class OpenLoop {
     this.summary,
     this.participants = const [],
     this.resolutionNote,
+    this.suggestedQuestion,
     this.missingFields = const [],
     this.reminderOffsets = const [],
     this.actions = const [],
@@ -77,6 +81,7 @@ class OpenLoop {
   final String? summary;
   final List<String> participants;
   final String? resolutionNote;
+  final String? suggestedQuestion;
   final List<String> missingFields;
   final List<String> reminderOffsets;
   final List<LoopAction> actions;
@@ -85,6 +90,9 @@ class OpenLoop {
   final DateTime? completedAt;
   final DateTime? deleteAt;
   final Map<String, double> confidence;
+  final LoopPersistence persistence;
+
+  bool get isDraft => persistence != LoopPersistence.persisted;
 
   DateTime? get startsAt {
     if (date == null) return null;
@@ -99,6 +107,8 @@ class OpenLoop {
   }
 
   OpenLoop copyWith({
+    String? id,
+    LoopPersistence? persistence,
     LoopState? state,
     String? title,
     DateTime? date,
@@ -106,6 +116,7 @@ class OpenLoop {
     String? place,
     String? purpose,
     String? summary,
+    String? suggestedQuestion,
     List<String>? participants,
     List<String>? missingFields,
     List<LoopAction>? actions,
@@ -114,7 +125,7 @@ class OpenLoop {
     DateTime? completedAt,
     DateTime? deleteAt,
   }) => OpenLoop(
-    id: id,
+    id: id ?? this.id,
     kind: kind,
     state: state ?? this.state,
     title: title ?? this.title,
@@ -127,6 +138,7 @@ class OpenLoop {
     summary: summary ?? this.summary,
     participants: participants ?? this.participants,
     resolutionNote: resolutionNote,
+    suggestedQuestion: suggestedQuestion ?? this.suggestedQuestion,
     missingFields: missingFields ?? this.missingFields,
     reminderOffsets: reminderOffsets,
     actions: actions ?? this.actions,
@@ -135,9 +147,13 @@ class OpenLoop {
     completedAt: completedAt ?? this.completedAt,
     deleteAt: deleteAt ?? this.deleteAt,
     confidence: confidence,
+    persistence: persistence ?? this.persistence,
   );
 
-  factory OpenLoop.fromAnalyzeJson(Map<String, dynamic> json) {
+  factory OpenLoop.fromAnalyzeJson(
+    Map<String, dynamic> json, {
+    LoopPersistence persistence = LoopPersistence.remoteDraft,
+  }) {
     final event = json['event'] as Map<String, dynamic>? ?? const {};
     final dateText = event['date'] as String?;
     final confidenceJson =
@@ -169,6 +185,7 @@ class OpenLoop {
         event['participants'] as List<dynamic>? ?? const [],
       ),
       resolutionNote: event['resolution_note'] as String?,
+      suggestedQuestion: json['suggested_question'] as String?,
       missingFields: List<String>.from(
         event['missing_fields'] as List<dynamic>? ?? const [],
       ),
@@ -200,6 +217,7 @@ class OpenLoop {
       confidence: confidenceJson.map(
         (key, value) => MapEntry(key, (value as num).toDouble()),
       ),
+      persistence: persistence,
     );
   }
 
@@ -219,6 +237,7 @@ class OpenLoop {
       json['participants'] as List<dynamic>? ?? const [],
     ),
     resolutionNote: json['resolutionNote'] as String?,
+    suggestedQuestion: json['suggestedQuestion'] as String?,
     missingFields: List<String>.from(
       json['missingFields'] as List<dynamic>? ?? const [],
     ),
@@ -243,6 +262,11 @@ class OpenLoop {
     confidence: (json['confidence'] as Map<String, dynamic>).map(
       (key, value) => MapEntry(key, (value as num).toDouble()),
     ),
+    persistence:
+        LoopPersistence.values
+            .where((value) => value.name == json['persistence'])
+            .firstOrNull ??
+        LoopPersistence.persisted,
   );
 
   Map<String, dynamic> toJson() => {
@@ -259,6 +283,7 @@ class OpenLoop {
     'summary': summary,
     'participants': participants,
     'resolutionNote': resolutionNote,
+    'suggestedQuestion': suggestedQuestion,
     'missingFields': missingFields,
     'reminderOffsets': reminderOffsets,
     'actions': actions.map((item) => item.toJson()).toList(),
@@ -267,6 +292,43 @@ class OpenLoop {
     'completedAt': completedAt?.toIso8601String(),
     'deleteAt': deleteAt?.toIso8601String(),
     'confidence': confidence,
+    'persistence': persistence.name,
+  };
+
+  Map<String, dynamic> toCreateJson({required String retention}) => {
+    'status': state == LoopState.needsInput ? 'needs_input' : 'open',
+    'suggested_question': suggestedQuestion,
+    'retention': retention,
+    'event': {
+      'type': kind == LoopKind.deadline ? 'deadline' : 'appointment',
+      'title': title,
+      'date': date == null
+          ? null
+          : '${date!.year.toString().padLeft(4, '0')}-${date!.month.toString().padLeft(2, '0')}-${date!.day.toString().padLeft(2, '0')}',
+      'start_time': time,
+      'place': place == null ? null : {'name': place},
+      'participants': participants,
+      'purpose': purpose,
+      'summary': summary,
+      'reminders': reminderOffsets
+          .map((offset) => {'type': 'default', 'offset': offset})
+          .toList(),
+      'checklist': checklist
+          .map((item) => {'title': item.title, 'required': item.isRequired})
+          .toList(),
+      'source': source,
+      'confidence': {
+        'date': confidence['date'] ?? 0.0,
+        'time': confidence['time'] ?? 0.0,
+        'location': confidence['location'] ?? 0.0,
+        'title': confidence['title'] ?? 0.0,
+      },
+      'missing_fields': missingFields,
+      'resolution_note': resolutionNote,
+    },
+    'actions': actions.map((item) => item.toJson()).toList(),
+    'checklist': checklist.map((item) => item.toJson()).toList(),
+    'checkpoints': checkpoints.map((item) => item.toJson()).toList(),
   };
 }
 

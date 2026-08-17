@@ -48,6 +48,7 @@ def _checkpoint_templates(event: StructuredEvent) -> list[tuple[str, str]]:
     return [
         ("T-24h", f"{event.title} 하루 전 확인"),
         ("T-2h", f"{event.title} 출발·준비 확인"),
+        ("T-1h", f"{event.title} 한 시간 전 준비 확인"),
         ("T+1d", f"{event.title} 후속 확인"),
     ]
 
@@ -68,6 +69,7 @@ def _canonical_checkpoint_offset(event: StructuredEvent, offset: str) -> str:
     return {
         "-24h": "T-24h",
         "-2h": "T-2h",
+        "-1h": "T-1h",
         "+1d": "T+1d",
     }.get(normalized, normalized)
 
@@ -81,6 +83,7 @@ def _offset_to_duration(offset: str) -> timedelta | None:
         "D-1": timedelta(days=-1),
         "T-24h": timedelta(hours=-24),
         "T-2h": timedelta(hours=-2),
+        "T-1h": timedelta(hours=-1),
         "T+1d": timedelta(days=1),
     }
     if offset in named:

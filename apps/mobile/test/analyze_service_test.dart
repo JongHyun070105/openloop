@@ -14,17 +14,23 @@ void main() {
       'anonymous_installation_id': 'test-install',
     }),
   );
+  test('text and image analysis share one server-aligned timeout', () {
+    expect(ApiAnalyzeService.analysisTimeout, const Duration(seconds: 25));
+  });
   test('API client parses the snake_case analyze contract', () async {
     final client = MockClient((request) async {
-      expect(request.url.toString(), 'https://api.example/v1/loops/analyze');
+      expect(request.url.toString(), 'https://api.example/v1/analyze');
       expect(request.headers['x-openloop-install-id'], 'test-install');
-      expect(jsonDecode(request.body), {'text': '7시 성수 예약', 'source': 'text'});
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      expect(body['text'], '7시 성수 예약');
+      expect(body['source'], 'text');
+      expect(DateTime.tryParse(body['reference_at'] as String), isNotNull);
       return http.Response.bytes(
         utf8.encode(
           jsonEncode({
             'id': 'loop-42',
             'status': 'open',
-            'suggested_question': null,
+            'suggested_question': '참석자는 누구인가요?',
             'event': {
               'type': 'appointment',
               'title': '성수 약속',
@@ -89,6 +95,8 @@ void main() {
     expect(result.actions.single.metadata['duration_minutes'], 60);
     expect(result.checkpoints.single.dueAt, isNotNull);
     expect(result.deleteAt, isNotNull);
+    expect(result.suggestedQuestion, '참석자는 누구인가요?');
+    expect(result.persistence, LoopPersistence.remoteDraft);
   });
 
   test(
@@ -142,64 +150,138 @@ void main() {
     },
   );
 
-  test(
-    'API client sends every selected image in one multipart request',
-    () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'openloop-share-test-',
-      );
-      addTearDown(() => directory.delete(recursive: true));
-      final first = File('${directory.path}/first.png');
-      final second = File('${directory.path}/second.png');
-      await first.writeAsBytes([1, 2, 3]);
-      await second.writeAsBytes([4, 5, 6]);
+  test('API client sends one image with its supported MIME type', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'openloop-share-test-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final first = File('${directory.path}/first.png');
+    await first.writeAsBytes([1, 2, 3]);
 
+    final client = MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.toString(), 'https://api.example/v1/analyze/image');
+      expect(request.headers['x-openloop-install-id'], 'test-install');
+      expect(
+        request.headers['content-type'],
+        startsWith('multipart/form-data; boundary='),
+      );
+      expect(RegExp('name="file"').allMatches(request.body).length, 1);
+      expect(request.body, contains('content-type: image/png'));
+      expect(request.body, contains('name="source"'));
+      expect(request.body, contains('screenshot'));
+      expect(request.body, contains('name="reference_at"'));
+      return http.Response(
+        jsonEncode({
+          'id': 'shared-loop',
+          'status': 'open',
+          'event': {
+            'type': 'appointment',
+            'title': '공유 일정',
+            'source': 'screenshot',
+            'confidence': {},
+            'missing_fields': [],
+            'reminders': [],
+          },
+        }),
+        201,
+        headers: const {'content-type': 'application/json'},
+      );
+    });
+
+    final result =
+        await ApiAnalyzeService(
+          baseUrl: 'https://api.example',
+          client: client,
+        ).analyzeImage(
+          imagePath: first.path,
+          companionText: '이 이미지를 분석해 주세요',
+          source: 'screenshot',
+        );
+
+    expect(result.id, 'shared-loop');
+    expect(result.source, 'screenshot');
+    expect(result.isDraft, isTrue);
+  });
+
+  test(
+    'API client persists a reviewed draft only through POST /v1/loops',
+    () async {
       final client = MockClient((request) async {
         expect(request.method, 'POST');
-        expect(
-          request.url.toString(),
-          'https://api.example/v1/loops/analyze/image',
-        );
+        expect(request.url.toString(), 'https://api.example/v1/loops');
         expect(request.headers['x-openloop-install-id'], 'test-install');
-        expect(
-          request.headers['content-type'],
-          startsWith('multipart/form-data; boundary='),
-        );
-        expect(RegExp('name="file"').allMatches(request.body).length, 2);
-        expect(request.body, contains('name="source"'));
-        expect(request.body, contains('screenshot'));
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect((body['event'] as Map<String, dynamic>)['title'], '향수 거래');
+        expect(body['retention'], '7_days');
         return http.Response(
           jsonEncode({
-            'id': 'shared-loop',
+            'id': 'persisted-42',
             'status': 'open',
+            'created_at': '2026-08-16T11:00:00+09:00',
             'event': {
               'type': 'appointment',
-              'title': '공유 일정',
-              'source': 'screenshot',
-              'confidence': {},
+              'title': '향수 거래',
+              'date': '2026-08-16',
+              'start_time': '16:00:00',
+              'place': {'name': '종로5가역 12번 출구'},
+              'source': 'image',
+              'confidence': {
+                'date': .98,
+                'time': .98,
+                'location': .98,
+                'title': .9,
+              },
               'missing_fields': [],
               'reminders': [],
             },
+            'actions': [
+              {'id': 'calendar-42', 'type': 'calendar', 'title': '일정 추가'},
+            ],
           }),
           201,
           headers: const {'content-type': 'application/json'},
         );
       });
+      final draft = OpenLoop(
+        id: 'draft-42',
+        kind: LoopKind.appointment,
+        state: LoopState.open,
+        title: '향수 거래',
+        source: 'image',
+        createdAt: DateTime(2026, 8, 16),
+        date: DateTime(2026, 8, 16),
+        time: '16:00:00',
+        place: '종로5가역 12번 출구',
+        confidence: const {
+          'date': .98,
+          'time': .98,
+          'location': .98,
+          'title': .9,
+        },
+        persistence: LoopPersistence.remoteDraft,
+      );
 
-      final result =
-          await ApiAnalyzeService(
-            baseUrl: 'https://api.example',
-            client: client,
-          ).analyzeImages(
-            imagePaths: [first.path, second.path],
-            companionText: '두 장을 함께 봐 주세요',
-            source: 'screenshot',
-          );
+      final result = await ApiAnalyzeService(
+        baseUrl: 'https://api.example',
+        client: client,
+      ).createLoop(draft: draft, retention: '7_days');
 
-      expect(result.id, 'shared-loop');
-      expect(result.source, 'screenshot');
+      expect(result.id, 'persisted-42');
+      expect(result.persistence, LoopPersistence.persisted);
+      expect(result.actions.single.id, 'calendar-42');
     },
   );
+
+  test('image MIME mapping matches every server-supported extension', () {
+    expect(imageMediaType('capture.JPG').toString(), 'image/jpeg');
+    expect(imageMediaType('capture.jpeg').toString(), 'image/jpeg');
+    expect(imageMediaType('capture.png').toString(), 'image/png');
+    expect(imageMediaType('capture.webp').toString(), 'image/webp');
+    expect(imageMediaType('capture.heic').toString(), 'image/heic');
+    expect(imageMediaType('capture.heif').toString(), 'image/heif');
+    expect(() => imageMediaType('capture.gif'), throwsArgumentError);
+  });
 
   test('local analyzer asks only for a missing time', () async {
     final result = await LocalAnalyzeService().analyze(
@@ -259,6 +341,7 @@ void main() {
       expect(result.checkpoints.map((item) => item.offset), [
         'T-24h',
         'T-2h',
+        'T-1h',
         'T+1d',
       ]);
     },

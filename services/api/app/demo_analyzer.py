@@ -6,8 +6,9 @@ fictional demo appointment. It extracts values it can establish from the text
 and explicitly asks for every important value it cannot.
 """
 
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 import re
+from zoneinfo import ZoneInfo
 
 from .models import (
     AnalyzeRequest,
@@ -32,6 +33,7 @@ _WEEKDAYS = {
     "일요일": 6,
 }
 _DEADLINE_TERMS = ("마감", "제출", "접수", "신청 기한", "데드라인")
+_KST = ZoneInfo("Asia/Seoul")
 
 
 def _extract_date(text: str, today: date | None = None) -> date | None:
@@ -60,6 +62,13 @@ def _extract_date(text: str, today: date | None = None) -> date | None:
         return today + timedelta(days=1)
     if "오늘" in text:
         return today
+
+    if "담주" in text or re.search(r"다음\s*주", text):
+        for weekday_name, weekday in _WEEKDAYS.items():
+            if weekday_name in text:
+                days_until_next_sunday = 7 - ((today.weekday() + 1) % 7)
+                next_sunday = today + timedelta(days=days_until_next_sunday)
+                return next_sunday + timedelta(days=weekday + 1)
 
     for weekday_name, weekday in _WEEKDAYS.items():
         if weekday_name in text:
@@ -170,11 +179,11 @@ def _suggested_question(missing_fields: list[str]) -> str | None:
     return questions[missing_fields[0]]
 
 
-def analyze_demo(request: AnalyzeRequest) -> AnalyzeResponse:
+def analyze_demo(request: AnalyzeRequest, reference_date: date | None = None) -> AnalyzeResponse:
     """Extract only explicit values when no remote model credential is configured."""
     text = request.text
     intent = Intent.DEADLINE if any(term in text for term in _DEADLINE_TERMS) else Intent.APPOINTMENT
-    event_date = _extract_date(text)
+    event_date = _extract_date(text, reference_date or datetime.now(_KST).date())
     event_time = _extract_time(text)
     place_name = _extract_place(text)
 

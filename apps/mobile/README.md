@@ -2,7 +2,7 @@
 
 Flutter client for the OpenLoop AI Action Calendar.
 
-The client supports text/image capture, Android share intents, an iOS Share Extension, confidence-aware review, local persistence and retention, calendar handoff, local notifications, and API-to-local fallback. The Firebase SDK requires an iOS 15.0 deployment target.
+The client supports text/image capture, Android share intents, an iOS Share Extension, confidence-aware review, local persistence and retention, calendar handoff, and local notifications. A deterministic text fallback is available only when a remote API is intentionally not configured; configured remote failures remain retryable errors. The Firebase SDK requires an iOS 15.0 deployment target.
 
 ```bash
 flutter pub get

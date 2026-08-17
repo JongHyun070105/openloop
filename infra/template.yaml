@@ -55,10 +55,9 @@ Parameters:
     Default: 0
     MinValue: 0
     MaxValue: 10
-    Description: Optional API Lambda concurrency cap; 0 preserves the account default.
+    Description: Leave at 0 for low-concurrency accounts; HTTP API throttling and the install-ID gate remain the cost controls. Set a nonzero reservation only when the account has enough unreserved concurrency.
 
 Conditions:
-  IsProduction: !Equals [!Ref Environment, prod]
   HasIntegrationSecret: !Not [!Equals [!Ref IntegrationSecretArn, ""]]
   HasFcmSecret: !Not [!Equals [!Ref FcmSecretArn, ""]]
   HasBudgetEmail: !Not [!Equals [!Ref BudgetAlertEmail, ""]]
@@ -95,8 +94,8 @@ Resources:
         DestinationArn: !GetAtt HttpApiAccessLog.Arn
         Format: '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}'
       DefaultRouteSettings:
-        ThrottlingBurstLimit: 10
-        ThrottlingRateLimit: 5
+        ThrottlingBurstLimit: 4
+        ThrottlingRateLimit: 2
 
   HttpApiAccessLog:
     Type: AWS::Logs::LogGroup
@@ -124,10 +123,15 @@ Resources:
         Variables:
           OPENLOOP_TABLE_NAME: !Ref OpenLoopTable
           OPENLOOP_DEFAULT_USER_ID: !Ref DefaultUserId
-          OPENLOOP_REQUIRE_INSTALL_ID: !If [IsProduction, "true", "false"]
+          # Deployed environments always require the mobile installation UUID
+          # before analysis/context providers can consume paid capacity. Local
+          # direct development retains its explicit environment fallback.
+          OPENLOOP_REQUIRE_INSTALL_ID: "true"
           OPENLOOP_PUSH_DISPATCH_ENABLED: !If [HasFcmSecret, "true", "false"]
           INTEGRATION_SECRET_ARN: !Ref IntegrationSecretArn
           GEMINI_MODEL: !Ref GeminiModel
+          # Two bounded 12 s provider attempts fit inside this 30 s Lambda timeout.
+          GEMINI_TIMEOUT_SECONDS: "12"
           POSTHOG_HOST: !Ref PosthogHost
           AWS_LWA_REMOVE_BASE_PATH: !Sub "/${Environment}"
       Events:

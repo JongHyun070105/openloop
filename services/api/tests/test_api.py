@@ -37,6 +37,29 @@ class ApiTests(unittest.TestCase):
         self.assertIn("resolution_note", body["event"])
         self.assertIn("suggested_question", body)
 
+    def test_reference_at_grounds_relative_dates_without_persisting_a_draft(self) -> None:
+        response = self.client.post(
+            "/v1/analyze",
+            json={
+                "text": "오늘 오후 4시 종로5가역 12번 출구에서 향수 거래",
+                "source": "text",
+                "reference_at": "2026-08-16T11:01:00+09:00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["event"]["date"], "2026-08-16")
+        self.assertEqual(self.client.get("/v1/loops").json(), [])
+
+        invalid = self.client.post(
+            "/v1/analyze",
+            json={
+                "text": "오늘 오후 4시 종로5가역 12번 출구에서 향수 거래",
+                "reference_at": "2026-08-16T11:01:00",
+            },
+        )
+        self.assertEqual(invalid.status_code, 422)
+
     def test_capabilities_expose_provider_state_without_configuration_values(self) -> None:
         response = self.client.get("/v1/capabilities")
         self.assertEqual(response.status_code, 200)
@@ -94,6 +117,18 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.json()["status"], "needs_input")
         self.assertEqual(response.json()["event"]["source"], "screenshot")
 
+        grounded = self.client.post(
+            "/v1/analyze/image",
+            files={"file": ("capture.png", b"not-decoded-by-api", "image/png")},
+            data={
+                "companion_text": "오늘 오후 4시 종로5가역 12번 출구에서 향수 거래",
+                "source": "screenshot",
+                "reference_at": "2026-08-16T11:01:00+09:00",
+            },
+        )
+        self.assertEqual(grounded.status_code, 200)
+        self.assertEqual(grounded.json()["event"]["date"], "2026-08-16")
+
         unsupported = self.client.post(
             "/v1/analyze/image", files={"file": ("capture.txt", b"text", "text/plain")}
         )
@@ -124,7 +159,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(persisted.status_code, 200)
         self.assertEqual(persisted.json()["id"], loop["id"])
 
-    def test_multiple_shared_images_use_one_capture_contract(self) -> None:
+    def test_multiple_shared_images_are_rejected_by_single_capture_contract(self) -> None:
         response = self.client.post(
             "/v1/loops/analyze/image",
             files=[
@@ -137,11 +172,8 @@ class ApiTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 201)
-        loop = response.json()
-        self.assertEqual(loop["event"]["source"], "screenshot")
-        self.assertEqual(loop["event"]["type"], "deadline")
-        self.assertEqual([item["offset"] for item in loop["checkpoints"]], ["D-7", "D-3", "D-1"])
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Exactly one image is required"})
 
     def test_dynamodb_is_selected_only_when_table_environment_is_present(self) -> None:
         repository = Mock()
@@ -211,6 +243,58 @@ class ApiTests(unittest.TestCase):
                 missing = required_client.get("/v1/loops")
                 self.assertEqual(missing.status_code, 422)
                 required_client.close()
+
+    def test_paid_routes_reject_missing_identity_before_provider_work(self) -> None:
+        class CountingAnalyzer(DeterministicAnalysisAdapter):
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def analyze(self, request):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                return super().analyze(request)
+
+            def analyze_image(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                return super().analyze_image(**kwargs)
+
+        with tempfile.TemporaryDirectory() as directory:
+            analyzer = CountingAnalyzer()
+            with patch.dict(environ, {"OPENLOOP_REQUIRE_INSTALL_ID": "true"}, clear=False):
+                client = TestClient(
+                    create_app(
+                        database_path=Path(directory) / "required.sqlite3",
+                        analyzer=analyzer,
+                    )
+                )
+                self.assertEqual(
+                    client.post("/v1/analyze", json={"text": "오늘 오후 4시 성수 약속"}).status_code,
+                    422,
+                )
+                self.assertEqual(
+                    client.post(
+                        "/v1/analyze/image",
+                        files={"file": ("capture.png", b"image", "image/png")},
+                    ).status_code,
+                    422,
+                )
+                self.assertEqual(
+                    client.post(
+                        "/v1/loops/analyze", json={"text": "오늘 오후 4시 성수 약속"}
+                    ).status_code,
+                    422,
+                )
+                self.assertEqual(analyzer.calls, 0)
+                headers = {"X-OpenLoop-Install-Id": "11111111-1111-4111-8111-111111111111"}
+                self.assertEqual(
+                    client.post(
+                        "/v1/analyze",
+                        headers=headers,
+                        json={"text": "오늘 오후 4시 성수 약속"},
+                    ).status_code,
+                    200,
+                )
+                self.assertEqual(analyzer.calls, 1)
+                client.close()
 
     def test_external_errors_return_safe_gateway_statuses(self) -> None:
         class FailingPlace:

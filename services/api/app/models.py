@@ -4,7 +4,7 @@ from datetime import time as Time
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Intent(str, Enum):
@@ -76,6 +76,14 @@ class StructuredEvent(BaseModel):
 class AnalyzeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)
     source: Literal["screenshot", "image", "text"] = "text"
+    reference_at: datetime | None = None
+
+    @field_validator("reference_at")
+    @classmethod
+    def reference_at_requires_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("reference_at must include a timezone")
+        return value
 
 
 class AnalyzeResponse(BaseModel):

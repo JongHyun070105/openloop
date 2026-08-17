@@ -6,7 +6,7 @@ ECS service, RDS database, or NAT Gateway.
 ## Resources
 
 - API Gateway HTTP API invokes the FastAPI container on Lambda through AWS Lambda Web Adapter.
-- HTTP API throttling defaults to 5 requests/second with a burst of 10. API Lambda reservation is optional and defaults to 0 (the account default), because AWS can reject a small reservation when the account has too little unreserved concurrency. These are abuse/cost guards, not a billing hard cap.
+- HTTP API throttling defaults to 2 requests/second with a burst of 4. API Lambda reservation defaults to `0`, which keeps the stack deployable in AWS accounts with only the minimum unreserved concurrency; set a nonzero reservation only when the account can support it. These are abuse/cost guards, not a billing hard cap.
 - DynamoDB uses on-demand capacity and a retained table. `GSI1` indexes due checkpoints.
 - EventBridge Scheduler wakes one 128 MB Lambda every 15 minutes. The schedule is disabled by default.
 - The dispatcher sends due checkpoint work to a FIFO SQS queue.
@@ -148,7 +148,7 @@ Deployed on 2026-08-16 in `ap-northeast-2`:
 - Kakao Local place search: configured and live-verified;
 - KMA weather: 4.3 단기예보 API utilization approval applied; the live endpoint was verified with a successful forecast response on 2026-08-16.
 
-The dev API is intentionally unauthenticated for integration testing. Add authentication, restrict CORS, and enable request-abuse controls before treating it as a production endpoint.
+The dev API requires a syntactically valid, stable mobile installation UUID before it can invoke Gemini, Kakao, or KMA. This is a low-cost abuse gate and ownership key, **not** user authentication: add real authentication and restrict CORS before treating the endpoint as a public production service.
 
 ## Checkpoint item contract
 
@@ -190,7 +190,7 @@ The API owns registration, refresh, and user-scoped deletion of device tokens. T
 - On FCM `UNREGISTERED`, or a token-specific `INVALID_ARGUMENT`, the worker marks the token inactive instead of retrying it forever.
 - Mobile clients must upsert after installation and token refresh, and deactivate the record on logout before switching accounts.
 - Until authentication is implemented, the client sends a stable random UUID through `X-OpenLoop-Install-Id`. The API validates the UUID and uses it as `owner_id`; checkpoints copy that value to `userId`, and device records use `PK=USER#<installation-id>`.
-- `OPENLOOP_DEFAULT_USER_ID=dev-local` is only a local/dev fallback when the header is absent. The SAM template sets `OPENLOOP_REQUIRE_INSTALL_ID=true` for `Environment=prod`, so production requests must never share the fallback partition.
+- `OPENLOOP_DEFAULT_USER_ID=dev-local` is only a local direct-development fallback when the header is absent. Every SAM-deployed environment sets `OPENLOOP_REQUIRE_INSTALL_ID=true`, so deployed paid routes never share the fallback partition.
 - Token values are sensitive operational identifiers. Do not log them or include them in analytics or error payloads.
 - DynamoDB encryption at rest is enabled, but API authorization must still ensure a user can mutate only their own `USER#<user-id>` partition.
 

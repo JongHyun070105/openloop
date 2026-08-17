@@ -10,8 +10,8 @@ OpenLoop는 카카오톡 대화, 공지, 포스터처럼 흩어진 비정형 정
 Capture -> Create -> Close
 ```
 
-- **Capture** — screenshot, image, text를 공유합니다. 공유된 이미지는 최대 5장을 한 번의 맥락으로 분석합니다.
-- **Create** — AI가 최종 합의, 한두 문장 요약, 누락 필드, 신뢰도를 포함한 구조화된 일정을 만듭니다.
+- **Capture** — screenshot/image 한 장 또는 text를 공유합니다.
+- **Create** — AI가 최종 합의, 요약, 누락 필드, 신뢰도를 포함한 저장 전 `Analysis Draft`를 만듭니다. 사용자가 승인할 때만 Open Loop가 생성됩니다.
 - **Close** — calendar, reminder, checklist, checkpoint를 연결해 완료까지 추적합니다.
 
 MVP는 `Appointment`와 `Deadline` 두 가지 intent에 집중합니다. AI가 확실하면 한 번의 확인으로 등록하고, 애매하면 필요한 필드 하나만 묻습니다.
@@ -64,20 +64,23 @@ flutter run --dart-define=OPENLOOP_API_BASE_URL=http://127.0.0.1:8000
 
 Optional Flutter analytics, Sentry, and Firebase client identifiers belong in `apps/mobile/.env` (copy `apps/mobile/.env.example`) and are passed with `--dart-define-from-file=.env`.
 
-## Implemented
+## Current product contract
 
-- 텍스트·사진·공유 Capture(최대 5장)와 Appointment/Deadline 분석
-- Gemini 구조화 결과의 AI 요약과 필드별 신뢰도 리뷰
-- confidence review와 필요한 모호성 필드 하나만 재질문
-- Open Loop 목록, 상세, 체크리스트, 마감, 완료 보관함, retention 설정
-- Android 공유 인텐트와 iOS Share Extension
-- 캘린더·로컬 알림 연결 및 네트워크 실패 시 local-first 저장
-- FastAPI lifecycle API, SQLite/DynamoDB 저장소, 개인정보 redaction
-- Lambda/API Gateway/DynamoDB 기반 pay-per-use AWS 배포
+- 앱 선택기, Android `SEND`, iOS Share Extension, API가 이미지 한 장만 받습니다. 이미지 업로드는 실제 MIME type과 10 MB 제한을 사용합니다.
+- `/v1/analyze`와 `/v1/analyze/image`는 저장되지 않은 `Analysis Draft`를 반환합니다. Review에서 승인하면 `/v1/loops`가 구조화된 Loop, action, checklist, checkpoint를 저장합니다.
+- Capture 시각을 `reference_at`으로 함께 보내 Gemini의 모든 요청을 `Asia/Seoul` 기준시각에 고정합니다. text는 `MINIMAL`, image는 `LOW` thinking을 사용하며, 상대 날짜·생략 연도·최종 합의를 후처리와 회귀 테스트로 검증합니다.
+- 필수 필드가 없거나 confidence가 `0.65` 미만이면 해당 필드 하나만 확인합니다. 정상 빌드에서는 원시 confidence 백분율을 숨깁니다.
+- 설정된 원격 AI의 text/image 실패는 로컬 분석 성공으로 위장하지 않고 재시도 가능한 오류로 표시합니다.
+- Appointment 승인 버튼은 Loop를 저장한 뒤 시스템 calendar composer를 엽니다. 삭제 확인은 iOS Cupertino, Android Material 방식입니다.
+- Appointment checkpoint는 `T-24h`, `T-2h`, `T-1h`, `T+1d`; Deadline은 `D-7`, `D-3`, `D-1`입니다.
+- Open Loop 목록/상세, action/checklist/checkpoint 완료, local reminder, Kakao place handoff, KMA weather, Close & Forget 보관 정책이 연결돼 있습니다.
+- FastAPI lifecycle API, SQLite/DynamoDB 저장소와 Lambda/API Gateway 기반 AWS 배포 구성이 있습니다.
 
 현재 dev API: <https://mrodt7pxq4.execute-api.ap-northeast-2.amazonaws.com/dev>
 
-실제 AI 공급자 키가 없을 때는 결정적 fallback 분석기가 동작합니다. 이 모드는 입력에 명시된 값만 추출하고 빈 날짜·시간·장소는 질문으로 남기며, 예시용 가짜 일정을 만들지 않습니다. 공급자를 정하면 키는 커밋하지 않고 로컬 `services/api/.env` 또는 AWS Secrets Manager로만 주입합니다. `.env.example`은 공유 가능한 빈 템플릿입니다.
+원격 API를 의도적으로 비워 둔 로컬 개발에서만 결정적 text fallback이 명시된 값을 추출합니다. image는 픽셀을 읽을 수 있는 Gemini가 없거나 실패하면 분석 성공을 만들지 않습니다. 공급자 키는 커밋하지 않고 로컬 `services/api/.env` 또는 AWS Secrets Manager로만 주입합니다. `.env.example`은 공유 가능한 빈 템플릿입니다.
+
+FCM remote push, PostHog, Sentry는 구현돼 있지만 대응 자격증명과 실제 기기 권한이 없으면 안전하게 비활성입니다. 현재 installation UUID는 데이터 분리용 식별자이지 production authentication이 아닙니다.
 
 ## Validation
 
@@ -87,4 +90,4 @@ cd services/api && .venv/bin/python -m unittest discover -s tests -v
 cd apps/mobile && flutter analyze && flutter test
 ```
 
-자세한 제품 범위와 경계는 [PRODUCT_SCOPE.md](docs/PRODUCT_SCOPE.md), 시스템 구조는 [ARCHITECTURE.md](docs/ARCHITECTURE.md), AWS 운영은 [AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md)를 참고하세요.
+자세한 제품 범위와 경계는 [PRODUCT_SCOPE.md](docs/PRODUCT_SCOPE.md), 시스템 구조는 [ARCHITECTURE.md](docs/ARCHITECTURE.md), AI 평가 방법은 [AI_EVALUATION.md](docs/AI_EVALUATION.md), AWS 운영은 [AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md)를 참고하세요.

@@ -4,10 +4,22 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import JSONResponse
 
-from .analyzer import AnalysisAdapter, ImageInput, analysis_adapter_from_env
+from .analyzer import AnalysisAdapter, analysis_adapter_from_env
 from .context_providers import (
     PlaceAdapter,
     WeatherAdapter,
@@ -40,8 +52,6 @@ from .service import LoopService
 
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
-MAX_IMAGE_COUNT = 5
-MAX_TOTAL_IMAGE_BYTES = 25 * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
 
 
@@ -121,6 +131,16 @@ def create_app(
             raise HTTPException(status_code=422, detail="X-OpenLoop-Install-Id is required")
         return os.getenv("OPENLOOP_DEFAULT_USER_ID", "dev-local")
 
+    def require_client_identity(installation_id: UUID | None) -> str:
+        """Apply the deployment's client-identity gate before any paid provider call.
+
+        A UUID is only an MVP ownership boundary, not user authentication. It is
+        nevertheless required by the deployed service so a request missing the
+        mobile installation identity cannot consume Gemini/Kakao/KMA capacity.
+        """
+
+        return owner_id(installation_id)
+
     def require_owned(loop_id: str, installation_id: UUID | None) -> OpenLoop:
         try:
             loop = service.require(loop_id)
@@ -168,62 +188,68 @@ def create_app(
         )
 
     @api.post("/v1/analyze", response_model=AnalyzeResponse)
-    def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
+    def analyze(
+        request: AnalyzeRequest,
+        installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
+    ) -> AnalyzeResponse:
+        require_client_identity(installation_id)
         result = analysis.analyze(request)
         track_analysis(result)
         return result
 
-    async def analyze_uploaded_images(
-        files: list[UploadFile],
+    async def single_image_upload(
+        request: Request,
+        file: UploadFile = File(...),
+    ) -> UploadFile:
+        form = await request.form()
+        uploads = form.getlist("file")
+        if len(uploads) != 1:
+            for upload in uploads:
+                close = getattr(upload, "close", None)
+                if close is not None:
+                    await close()
+            raise HTTPException(status_code=400, detail="Exactly one image is required")
+        return file
+
+    async def analyze_uploaded_image(
+        file: UploadFile,
         companion_text: str | None,
         source: Literal["screenshot", "image"],
+        reference_at: datetime | None,
     ) -> AnalyzeResponse:
-        if not files:
-            raise HTTPException(status_code=400, detail="At least one image is required")
-        if len(files) > MAX_IMAGE_COUNT:
-            for file in files:
-                await file.close()
-            raise HTTPException(
-                status_code=413,
-                detail=f"A maximum of {MAX_IMAGE_COUNT} images can be analyzed together",
-            )
-        captures: list[ImageInput] = []
-        total_bytes = 0
+        filename = file.filename or "capture"
+        content_type = file.content_type
         try:
-            for file in files:
-                if file.content_type not in ALLOWED_IMAGE_TYPES:
-                    raise HTTPException(status_code=415, detail="Unsupported image type")
-                content = await file.read(MAX_IMAGE_BYTES + 1)
-                if len(content) > MAX_IMAGE_BYTES:
-                    raise HTTPException(status_code=413, detail="Each image must be 10 MB or smaller")
-                if not content:
-                    raise HTTPException(status_code=400, detail="Image is empty")
-                total_bytes += len(content)
-                if total_bytes > MAX_TOTAL_IMAGE_BYTES:
-                    raise HTTPException(status_code=413, detail="Shared images exceed the 25 MB total limit")
-                captures.append(
-                    ImageInput(
-                        filename=file.filename or "capture",
-                        content_type=file.content_type,
-                        content=content,
-                    )
-                )
+            if content_type not in ALLOWED_IMAGE_TYPES:
+                raise HTTPException(status_code=415, detail="Unsupported image type")
+            content = await file.read(MAX_IMAGE_BYTES + 1)
+            if len(content) > MAX_IMAGE_BYTES:
+                raise HTTPException(status_code=413, detail="Image must be 10 MB or smaller")
+            if not content:
+                raise HTTPException(status_code=400, detail="Image is empty")
         finally:
-            for file in files:
-                await file.close()
-        return analysis.analyze_images(
-            images=captures,
+            await file.close()
+        return analysis.analyze_image(
+            filename=filename,
+            content_type=content_type,
+            content=content,
             companion_text=companion_text,
             source=source,
+            reference_at=reference_at,
         )
 
     @api.post("/v1/analyze/image", response_model=AnalyzeResponse)
     async def analyze_image(
-        file: list[UploadFile] = File(...),
+        file: UploadFile = Depends(single_image_upload),
         companion_text: str | None = Form(default=None, max_length=20_000),
         source: Literal["screenshot", "image"] = Form(default="image"),
+        reference_at: datetime | None = Form(default=None),
+        installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
     ) -> AnalyzeResponse:
-        result = await analyze_uploaded_images(file, companion_text, source)
+        require_client_identity(installation_id)
+        if reference_at is not None and reference_at.tzinfo is None:
+            raise HTTPException(status_code=422, detail="reference_at must include a timezone")
+        result = await analyze_uploaded_image(file, companion_text, source, reference_at)
         track_analysis(result)
         return result
 
@@ -232,6 +258,7 @@ def create_app(
         request: AnalyzeRequest,
         installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
     ) -> OpenLoop:
+        require_client_identity(installation_id)
         result = analysis.analyze(request)
         track_analysis(result)
         return persist_analysis(result, installation_id)
@@ -242,12 +269,16 @@ def create_app(
         status_code=status.HTTP_201_CREATED,
     )
     async def analyze_image_and_create(
-        file: list[UploadFile] = File(...),
+        file: UploadFile = Depends(single_image_upload),
         companion_text: str | None = Form(default=None, max_length=20_000),
         source: Literal["screenshot", "image"] = Form(default="image"),
+        reference_at: datetime | None = Form(default=None),
         installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
     ) -> OpenLoop:
-        result = await analyze_uploaded_images(file, companion_text, source)
+        require_client_identity(installation_id)
+        if reference_at is not None and reference_at.tzinfo is None:
+            raise HTTPException(status_code=422, detail="reference_at must include a timezone")
+        result = await analyze_uploaded_image(file, companion_text, source, reference_at)
         track_analysis(result)
         return persist_analysis(result, installation_id)
 
@@ -272,7 +303,9 @@ def create_app(
         q: str = Query(min_length=1, max_length=100),
         lat: float | None = Query(default=None, ge=-90, le=90),
         lon: float | None = Query(default=None, ge=-180, le=180),
+        installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
     ) -> list[NormalizedPlace]:
+        require_client_identity(installation_id)
         if (lat is None) != (lon is None):
             raise HTTPException(status_code=422, detail="lat and lon must be provided together")
         results = places.search(q, latitude=lat, longitude=lon)
@@ -287,7 +320,9 @@ def create_app(
         lat: float = Query(ge=31.0, le=44.0),
         lon: float = Query(ge=123.0, le=133.0),
         at: datetime | None = Query(default=None),
+        installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
     ) -> WeatherForecast:
+        require_client_identity(installation_id)
         result = weather.forecast(latitude=lat, longitude=lon, at=at)
         telemetry.capture(
             "weather_lookup_completed",

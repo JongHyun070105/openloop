@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../models/open_loop.dart';
 import 'installation_identity.dart';
@@ -9,12 +10,50 @@ abstract interface class AnalyzeService {
   Future<OpenLoop> analyze({required String text, required String source});
 }
 
-class ApiAnalyzeService implements AnalyzeService {
+abstract interface class LoopApi implements AnalyzeService {
+  Future<OpenLoop> analyzeImage({
+    required String imagePath,
+    String? companionText,
+    String source,
+  });
+  Future<OpenLoop> createLoop({
+    required OpenLoop draft,
+    required String retention,
+  });
+  Future<OpenLoop> resolveAmbiguity({
+    required String loopId,
+    required String field,
+    required Object value,
+  });
+  Future<OpenLoop> complete({
+    required String loopId,
+    required String retention,
+  });
+  Future<OpenLoop> updateChecklist({
+    required String loopId,
+    required String itemId,
+    required bool completed,
+  });
+  Future<OpenLoop> updateAction({
+    required String loopId,
+    required String itemId,
+    required bool completed,
+  });
+  Future<OpenLoop> updateCheckpoint({
+    required String loopId,
+    required String itemId,
+    required bool completed,
+  });
+  Future<void> deleteLoop({required String loopId});
+}
+
+class ApiAnalyzeService implements LoopApi {
   ApiAnalyzeService({required this.baseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
+  static const analysisTimeout = Duration(seconds: 25);
 
   @override
   Future<OpenLoop> analyze({
@@ -24,14 +63,18 @@ class ApiAnalyzeService implements AnalyzeService {
     final installationId = await InstallationIdentity.get();
     final response = await _client
         .post(
-          Uri.parse('$_root/v1/loops/analyze'),
+          Uri.parse('$_root/v1/analyze'),
           headers: {
             'content-type': 'application/json',
             'X-OpenLoop-Install-Id': installationId,
           },
-          body: jsonEncode({'text': text, 'source': source}),
+          body: jsonEncode({
+            'text': text,
+            'source': source,
+            'reference_at': DateTime.now().toUtc().toIso8601String(),
+          }),
         )
-        .timeout(const Duration(seconds: 15));
+        .timeout(analysisTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('분석 서버 오류 (${response.statusCode})');
     }
@@ -42,47 +85,30 @@ class ApiAnalyzeService implements AnalyzeService {
 
   String get _root => baseUrl.replaceAll(RegExp(r'/$'), '');
 
+  @override
   Future<OpenLoop> analyzeImage({
     required String imagePath,
     String? companionText,
     String source = 'image',
-  }) => analyzeImages(
-    imagePaths: [imagePath],
-    companionText: companionText,
-    source: source,
-  );
-
-  Future<OpenLoop> analyzeImages({
-    required List<String> imagePaths,
-    String? companionText,
-    String source = 'image',
   }) async {
-    if (imagePaths.isEmpty) {
-      throw ArgumentError.value(
-        imagePaths,
-        'imagePaths',
-        'At least one image is required',
-      );
-    }
     final request = http.MultipartRequest(
       'POST',
-      Uri.parse('$_root/v1/loops/analyze/image'),
+      Uri.parse('$_root/v1/analyze/image'),
     );
     request.headers['X-OpenLoop-Install-Id'] = await InstallationIdentity.get();
-    request.files.addAll(
-      await Future.wait(
-        imagePaths.map(
-          (imagePath) => http.MultipartFile.fromPath('file', imagePath),
-        ),
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        imagePath,
+        contentType: imageMediaType(imagePath),
       ),
     );
     if (companionText?.trim().isNotEmpty == true) {
       request.fields['companion_text'] = companionText!.trim();
     }
     request.fields['source'] = source;
-    final streamed = await _client
-        .send(request)
-        .timeout(const Duration(seconds: 25));
+    request.fields['reference_at'] = DateTime.now().toUtc().toIso8601String();
+    final streamed = await _client.send(request).timeout(analysisTimeout);
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError('이미지 분석 서버 오류 (${response.statusCode})');
@@ -92,6 +118,32 @@ class ApiAnalyzeService implements AnalyzeService {
     );
   }
 
+  @override
+  Future<OpenLoop> createLoop({
+    required OpenLoop draft,
+    required String retention,
+  }) async {
+    final installationId = await InstallationIdentity.get();
+    final response = await _client
+        .post(
+          Uri.parse('$_root/v1/loops'),
+          headers: {
+            'content-type': 'application/json',
+            'X-OpenLoop-Install-Id': installationId,
+          },
+          body: jsonEncode(draft.toCreateJson(retention: retention)),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Loop 생성 오류 (${response.statusCode})');
+    }
+    return OpenLoop.fromAnalyzeJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+      persistence: LoopPersistence.persisted,
+    );
+  }
+
+  @override
   Future<OpenLoop> resolveAmbiguity({
     required String loopId,
     required String field,
@@ -102,6 +154,7 @@ class ApiAnalyzeService implements AnalyzeService {
     body: {'field': field, 'value': value},
   );
 
+  @override
   Future<OpenLoop> complete({
     required String loopId,
     required String retention,
@@ -111,6 +164,7 @@ class ApiAnalyzeService implements AnalyzeService {
     body: {'retention': retention},
   );
 
+  @override
   Future<OpenLoop> updateChecklist({
     required String loopId,
     required String itemId,
@@ -121,6 +175,7 @@ class ApiAnalyzeService implements AnalyzeService {
     body: {'completed': completed},
   );
 
+  @override
   Future<OpenLoop> updateAction({
     required String loopId,
     required String itemId,
@@ -131,6 +186,7 @@ class ApiAnalyzeService implements AnalyzeService {
     body: {'completed': completed},
   );
 
+  @override
   Future<OpenLoop> updateCheckpoint({
     required String loopId,
     required String itemId,
@@ -141,6 +197,7 @@ class ApiAnalyzeService implements AnalyzeService {
     body: {'completed': completed},
   );
 
+  @override
   Future<void> deleteLoop({required String loopId}) async {
     final request = http.Request('DELETE', Uri.parse('$_root/v1/loops/$loopId'))
       ..headers['X-OpenLoop-Install-Id'] = await InstallationIdentity.get();
@@ -171,8 +228,25 @@ class ApiAnalyzeService implements AnalyzeService {
     }
     return OpenLoop.fromAnalyzeJson(
       jsonDecode(response.body) as Map<String, dynamic>,
+      persistence: LoopPersistence.persisted,
     );
   }
+}
+
+MediaType imageMediaType(String imagePath) {
+  final extension = imagePath.split('.').last.toLowerCase();
+  return switch (extension) {
+    'jpg' || 'jpeg' => MediaType('image', 'jpeg'),
+    'png' => MediaType('image', 'png'),
+    'webp' => MediaType('image', 'webp'),
+    'heic' => MediaType('image', 'heic'),
+    'heif' => MediaType('image', 'heif'),
+    _ => throw ArgumentError.value(
+      imagePath,
+      'imagePath',
+      '지원하지 않는 이미지 형식입니다.',
+    ),
+  };
 }
 
 class LocalAnalyzeService implements AnalyzeService {
@@ -276,7 +350,10 @@ class LocalAnalyzeService implements AnalyzeService {
       'checklist': checklist,
       'checkpoints': checkpoints,
     };
-    return OpenLoop.fromAnalyzeJson(fallbackJson);
+    return OpenLoop.fromAnalyzeJson(
+      fallbackJson,
+      persistence: LoopPersistence.localDraft,
+    );
   }
 }
 
@@ -351,6 +428,12 @@ List<Map<String, dynamic>> _localCheckpoints({
             offset: 'T-2h',
             title: '$title 출발·준비 확인',
             delta: const Duration(hours: -2),
+          ),
+          (
+            id: 't1h',
+            offset: 'T-1h',
+            title: '$title 한 시간 전 준비 확인',
+            delta: const Duration(hours: -1),
           ),
           (
             id: 't1d',

@@ -41,7 +41,7 @@ class LoopServiceTests(unittest.TestCase):
         self.assertTrue(resolved.event.summary)
         self.assertEqual(
             [checkpoint.offset for checkpoint in resolved.checkpoints],
-            ["T-24h", "T-2h", "T+1d"],
+            ["T-24h", "T-2h", "T-1h", "T+1d"],
         )
         self.assertTrue(all(checkpoint.due_at for checkpoint in resolved.checkpoints))
 

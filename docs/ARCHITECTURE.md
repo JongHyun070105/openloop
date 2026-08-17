@@ -1,19 +1,19 @@
 # Architecture
 
 ```text
-Screenshot / Image / Text
+One screenshot / image or text
             |
       Flutter mobile
-            |
-   local preprocessing
             |
          FastAPI
             |
   multimodal AI adapter
             |
- StructuredEvent + confidence
+ Analysis Draft + confidence
             |
       user verification
+            |
+         approval
             |
        OpenLoop store
         /    |     \
@@ -32,8 +32,7 @@ Screenshot / Image / Text
 
 ## Core entities
 
-- `StructuredEvent`: normalized appointment or deadline with a factual Korean
-  review summary and field confidence.
+- `AnalyzeResponse`: nonpersisted `Analysis Draft` containing a normalized appointment or deadline, a factual Korean summary, confidence, missing fields, and one focused question.
 - `OpenLoop`: event plus lifecycle (`open`, `needs_input`, `closed`).
 - `LoopAction`: calendar, reminder, place, or checklist action.
 - `Checkpoint`: scheduled context reevaluation, not a continuously running agent.
@@ -42,18 +41,30 @@ Screenshot / Image / Text
 
 - The API persists local development data in SQLite and deployed data in
   DynamoDB. Its Lambda/Web Adapter deployment is defined in `infra/`.
-- Gemini accepts text and one-to-five-image analysis through a server-only
-  adapter; raw uploads are type/size constrained and not persisted.
+- `POST /v1/analyze` and `POST /v1/analyze/image` do not persist. The Flutter Review screen edits the draft locally; approval calls `POST /v1/loops` exactly once.
+- The image API accepts exactly one JPEG, PNG, WebP, HEIC, or HEIF file up to 10 MB. Raw uploads remain request-scoped and are not part of Loop data.
+- Flutter sends its capture-time `reference_at`; the Gemini adapter uses that authoritative `Asia/Seoul` instant in every prompt, uses `MINIMAL` thinking for text and `LOW` for image, validates structured output, and gates required fields below `0.65` confidence. The server uses its KST clock only for legacy callers that omit it.
+- Image analysis never falls back to a text-only parser. Text analysis may use the deterministic, explicit-facts-only adapter when Gemini is unavailable.
 - Kakao and KMA provide normalized place and weather data. The Flutter client
   opens the native Kakao map when possible and otherwise uses the web URL.
 - Action, checklist, and checkpoint mutations are installation-scoped and
   local-first: a failed remote request preserves the user’s local progress.
-- Checkpoint scheduling, FCM delivery, PostHog, and Sentry are credential-gated
-  optional integrations with disabled-safe defaults.
+- Default checkpoint cadence is Appointment `T-24h` / `T-2h` / `T-1h` / `T+1d` and Deadline `D-7` / `D-3` / `D-1`.
+
+## Delivery status
+
+| Boundary | Status |
+| --- | --- |
+| Single-image capture, nonpersisted draft, KST Gemini contract, confidence gate, lifecycle API | Implemented with automated contract tests |
+| 100-case synthetic evaluation harness | Implemented and dataset-validated; live provider runs remain opt-in and billable |
+| System calendar, local reminders, adaptive delete confirmation | Implemented; release evidence still requires Android/iOS runtime checks |
+| FCM checkpoint push | Credential-gated; do not claim live delivery until Firebase/APNs setup and device acceptance tests pass |
+| PostHog and Sentry | Credential-gated; disabled-safe without keys |
+| Production authorization | Not implemented; installation UUID ownership is not authentication |
 
 ## Remaining production slices
 
-1. User authentication and a durable authorization model beyond anonymous installation IDs.
-2. A golden evaluation dataset focused on Final Agreement Accuracy.
+1. User authentication and durable authorization beyond installation IDs.
+2. Checkpoint-time weather/place context reevaluation instead of a static stored payload.
 3. Provider credential activation and real-device permission/push acceptance testing.
 4. Billing and multi-user sharing only after the personal-loop flow is validated.

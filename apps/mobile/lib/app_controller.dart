@@ -7,16 +7,25 @@ import 'services/device_actions.dart';
 import 'services/external_integrations.dart';
 import 'services/loop_repository.dart';
 
+typedef LoopApiFactory = LoopApi Function(String baseUrl);
+
 class AppController extends ChangeNotifier {
   AppController({
     required this.repository,
     required this.deviceActions,
     String defaultBaseUrl = configuredOpenLoopApiBaseUrl,
-  }) : _defaultBaseUrl = defaultBaseUrl;
+    LoopApiFactory? apiFactory,
+  }) : _defaultBaseUrl = defaultBaseUrl,
+       _apiFactory = apiFactory ?? ((url) => ApiAnalyzeService(baseUrl: url));
 
   final LoopRepository repository;
   final DeviceActions deviceActions;
   final String _defaultBaseUrl;
+  final LoopApiFactory _apiFactory;
+  final Map<String, Future<OpenLoop>> _approvalInFlight = {};
+  final Map<String, OpenLoop> _approvedDrafts = {};
+
+  LoopApi get _api => _apiFactory(baseUrl.trim());
 
   List<OpenLoop> loops = [];
   String baseUrl = '';
@@ -45,16 +54,20 @@ class AppController extends ChangeNotifier {
   }) async {
     processing = true;
     notifyListeners();
-    final fallback = FallbackAnalyzeService(
-      remote: baseUrl.trim().isEmpty
-          ? null
-          : ApiAnalyzeService(baseUrl: baseUrl.trim()),
-      local: LocalAnalyzeService(),
-    );
+    lastAnalysisWasLocal = false;
     try {
-      final loop = await fallback.analyze(text: text, source: source);
-      lastAnalysisWasLocal = fallback.usedFallback;
-      return loop;
+      if (baseUrl.trim().isNotEmpty) {
+        try {
+          return await _api.analyze(text: text, source: source);
+        } catch (_) {
+          // A configured remote provider must not be represented as an AI result
+          // produced locally. The capture UI keeps the original input and offers
+          // an explicit retry instead.
+          throw StateError('원격 AI 분석이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.');
+        }
+      }
+      lastAnalysisWasLocal = true;
+      return LocalAnalyzeService().analyze(text: text, source: source);
     } finally {
       processing = false;
       notifyListeners();
@@ -65,47 +78,23 @@ class AppController extends ChangeNotifier {
     required String imagePath,
     String? companionText,
     String source = 'image',
-  }) => analyzeImages(
-    imagePaths: [imagePath],
-    companionText: companionText,
-    source: source,
-  );
-
-  Future<OpenLoop> analyzeImages({
-    required List<String> imagePaths,
-    String? companionText,
-    String source = 'image',
   }) async {
-    if (imagePaths.isEmpty) {
-      throw ArgumentError.value(
-        imagePaths,
-        'imagePaths',
-        'At least one image is required',
-      );
-    }
     processing = true;
     notifyListeners();
     lastAnalysisWasLocal = false;
     try {
       if (baseUrl.trim().isNotEmpty) {
         try {
-          return await ApiAnalyzeService(baseUrl: baseUrl.trim()).analyzeImages(
-            imagePaths: imagePaths,
+          return await _api.analyzeImage(
+            imagePath: imagePath,
             companionText: companionText,
             source: source,
           );
         } catch (_) {
-          lastAnalysisWasLocal = true;
+          throw StateError('이미지 AI 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.');
         }
-      } else {
-        lastAnalysisWasLocal = true;
       }
-      return LocalAnalyzeService().analyze(
-        text: companionText?.trim().isNotEmpty == true
-            ? companionText!.trim()
-            : '선택한 이미지에서 일정을 분석해 주세요.',
-        source: source,
-      );
+      throw StateError('이미지 AI 분석 서버가 설정되지 않았습니다. 설정을 확인한 뒤 다시 시도해 주세요.');
     } finally {
       processing = false;
       notifyListeners();
@@ -113,6 +102,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> saveLoop(OpenLoop loop) async {
+    if (loop.isDraft) {
+      throw StateError('분석 초안은 승인 전 저장할 수 없습니다.');
+    }
     loops = [loop, ...loops.where((item) => item.id != loop.id)];
     await repository.save(loops);
     notifyListeners();
@@ -132,17 +124,84 @@ class AppController extends ChangeNotifier {
       value: value,
       remaining: remaining,
     );
+    if (loop.isDraft) {
+      return resolved;
+    }
     if (baseUrl.trim().isNotEmpty) {
       try {
-        resolved = await ApiAnalyzeService(
-          baseUrl: baseUrl.trim(),
-        ).resolveAmbiguity(loopId: loop.id, field: field, value: value);
+        resolved = await _api.resolveAmbiguity(
+          loopId: loop.id,
+          field: field,
+          value: value,
+        );
       } catch (_) {
         lastAnalysisWasLocal = true;
       }
     }
     await saveLoop(resolved);
     return resolved;
+  }
+
+  OpenLoop editDraft(
+    OpenLoop draft, {
+    required String field,
+    required Object value,
+  }) {
+    if (!draft.isDraft) {
+      throw StateError('저장된 Loop는 초안 편집 경로를 사용할 수 없습니다.');
+    }
+    final remaining = draft.missingFields.toSet();
+    final isEmpty = switch (value) {
+      String text => text.trim().isEmpty,
+      List<Object?> values => values.isEmpty,
+      _ => false,
+    };
+    if (isEmpty) {
+      remaining.add(field);
+    } else {
+      remaining.remove(field);
+    }
+    return _applyAmbiguityLocally(
+      draft,
+      field: field,
+      value: value,
+      remaining: remaining.toList(),
+    );
+  }
+
+  Future<OpenLoop> approveDraft(OpenLoop draft) async {
+    if (!draft.isDraft) {
+      await saveLoop(draft);
+      return draft;
+    }
+    final approved = _approvedDrafts[draft.id];
+    if (approved != null) return approved;
+    final existing = _approvalInFlight[draft.id];
+    if (existing != null) return existing;
+
+    final operation = _persistDraft(draft);
+    _approvalInFlight[draft.id] = operation;
+    try {
+      final persisted = await operation;
+      _approvedDrafts[draft.id] = persisted;
+      await saveLoop(persisted);
+      return persisted;
+    } finally {
+      _approvalInFlight.remove(draft.id);
+    }
+  }
+
+  Future<OpenLoop> _persistDraft(OpenLoop draft) async {
+    if (draft.persistence == LoopPersistence.remoteDraft &&
+        baseUrl.trim().isNotEmpty) {
+      return _api.createLoop(
+        draft: draft,
+        retention: _retentionApiValue(retention),
+      );
+    }
+    return _refreshLocalGraph(
+      draft.copyWith(persistence: LoopPersistence.persisted),
+    );
   }
 
   OpenLoop _applyAmbiguityLocally(
@@ -199,9 +258,10 @@ class AppController extends ChangeNotifier {
     );
     if (baseUrl.trim().isNotEmpty) {
       try {
-        closed = await ApiAnalyzeService(
-          baseUrl: baseUrl.trim(),
-        ).complete(loopId: loop.id, retention: _retentionApiValue(retention));
+        closed = await _api.complete(
+          loopId: loop.id,
+          retention: _retentionApiValue(retention),
+        );
       } catch (_) {
         // The local copy still closes when the network is unavailable.
       }
@@ -231,12 +291,11 @@ class AppController extends ChangeNotifier {
     );
     if (baseUrl.trim().isNotEmpty) {
       try {
-        updated = await ApiAnalyzeService(baseUrl: baseUrl.trim())
-            .updateChecklist(
-              loopId: loop.id,
-              itemId: item.id,
-              completed: completed,
-            );
+        updated = await _api.updateChecklist(
+          loopId: loop.id,
+          itemId: item.id,
+          completed: completed,
+        );
       } catch (_) {
         // Checklist remains available offline and sync can be retried by the user.
       }
@@ -266,9 +325,11 @@ class AppController extends ChangeNotifier {
     );
     if (baseUrl.trim().isNotEmpty) {
       try {
-        updated = await ApiAnalyzeService(
-          baseUrl: baseUrl.trim(),
-        ).updateAction(loopId: loop.id, itemId: item.id, completed: completed);
+        updated = await _api.updateAction(
+          loopId: loop.id,
+          itemId: item.id,
+          completed: completed,
+        );
       } catch (_) {
         // Action completion remains local-first so the user can keep moving.
       }
@@ -301,12 +362,11 @@ class AppController extends ChangeNotifier {
     );
     if (baseUrl.trim().isNotEmpty) {
       try {
-        updated = await ApiAnalyzeService(baseUrl: baseUrl.trim())
-            .updateCheckpoint(
-              loopId: loop.id,
-              itemId: item.id,
-              completed: completed,
-            );
+        updated = await _api.updateCheckpoint(
+          loopId: loop.id,
+          itemId: item.id,
+          completed: completed,
+        );
       } catch (_) {
         // Checkpoints stay available offline and can be re-synced later.
       }
@@ -317,9 +377,7 @@ class AppController extends ChangeNotifier {
   Future<bool> deleteLoop(OpenLoop loop) async {
     if (baseUrl.trim().isNotEmpty) {
       try {
-        await ApiAnalyzeService(
-          baseUrl: baseUrl.trim(),
-        ).deleteLoop(loopId: loop.id);
+        await _api.deleteLoop(loopId: loop.id);
       } catch (_) {
         // Fall back to local deletion below.
       }
@@ -434,6 +492,11 @@ OpenLoop _refreshLocalGraph(OpenLoop loop) {
             offset: 'T-2h',
             title: '${loop.title} 출발·준비 확인',
             delta: const Duration(hours: -2),
+          ),
+          (
+            offset: 'T-1h',
+            title: '${loop.title} 한 시간 전 준비 확인',
+            delta: const Duration(hours: -1),
           ),
           (
             offset: 'T+1d',

@@ -1,0 +1,1936 @@
+[
+  {
+    "id": "clear_appointment-01",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 20일 오후 2시에 성수역에서 제품 회의를 해.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-20",
+      "time": "14:00",
+      "place": "성수역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-20",
+        "time": "14:00",
+        "place": "성수역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-02",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 21일 오전 10시 광화문에서 기획 점검 미팅이 있어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-21",
+      "time": "10:00",
+      "place": "광화문",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-21",
+        "time": "10:00",
+        "place": "광화문"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-03",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 22일 오후 7시 합정역에서 스터디 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-22",
+      "time": "19:00",
+      "place": "합정역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-22",
+        "time": "19:00",
+        "place": "합정역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-04",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 24일 오전 9시 판교역에서 주간 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-24",
+      "time": "09:00",
+      "place": "판교역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-24",
+        "time": "09:00",
+        "place": "판교역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-05",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 25일 오후 3시 잠실역에서 디자인 리뷰를 진행해.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-25",
+      "time": "15:00",
+      "place": "잠실역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-25",
+        "time": "15:00",
+        "place": "잠실역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-06",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 26일 오전 11시 서울숲에서 프로젝트 회고.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-26",
+      "time": "11:00",
+      "place": "서울숲",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-26",
+        "time": "11:00",
+        "place": "서울숲"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-07",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 27일 오후 1시 강남역에서 점심 미팅.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-27",
+      "time": "13:00",
+      "place": "강남역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-27",
+        "time": "13:00",
+        "place": "강남역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-08",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 28일 오후 4시 시청역에서 운영 회의를 해.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-28",
+      "time": "16:00",
+      "place": "시청역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-28",
+        "time": "16:00",
+        "place": "시청역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-09",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 29일 오전 10시 30분 대학로에서 독서 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-29",
+      "time": "10:30",
+      "place": "대학로",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-29",
+        "time": "10:30",
+        "place": "대학로"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-10",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 31일 오후 6시 여의도역에서 네트워킹 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-31",
+      "time": "18:00",
+      "place": "여의도역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-31",
+        "time": "18:00",
+        "place": "여의도역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-11",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 1일 오전 8시 용산역에서 출발 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-01",
+      "time": "08:00",
+      "place": "용산역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-01",
+        "time": "08:00",
+        "place": "용산역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-12",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 2일 오후 2시 30분 마포역에서 콘텐츠 검토.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-02",
+      "time": "14:30",
+      "place": "마포역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-02",
+        "time": "14:30",
+        "place": "마포역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-13",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 3일 오후 5시 종로3가역에서 발표 리허설.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-03",
+      "time": "17:00",
+      "place": "종로3가역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-03",
+        "time": "17:00",
+        "place": "종로3가역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-14",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 4일 오전 9시 30분 을지로입구역에서 예산 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-04",
+      "time": "09:30",
+      "place": "을지로입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-04",
+        "time": "09:30",
+        "place": "을지로입구역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-15",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 5일 오후 12시 건대입구역에서 동아리 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-05",
+      "time": "12:00",
+      "place": "건대입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-05",
+        "time": "12:00",
+        "place": "건대입구역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-16",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 7일 오후 3시 홍대입구역에서 인터뷰 준비 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-07",
+      "time": "15:00",
+      "place": "홍대입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-07",
+        "time": "15:00",
+        "place": "홍대입구역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-17",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 8일 오전 11시 신촌역에서 연구 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-08",
+      "time": "11:00",
+      "place": "신촌역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-08",
+        "time": "11:00",
+        "place": "신촌역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-18",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 9일 오후 8시 고속터미널역에서 공연 관람 약속.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-09",
+      "time": "20:00",
+      "place": "고속터미널역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-09",
+        "time": "20:00",
+        "place": "고속터미널역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-19",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 10일 오후 1시 삼성역에서 파트너 미팅.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-10",
+      "time": "13:00",
+      "place": "삼성역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-10",
+        "time": "13:00",
+        "place": "삼성역"
+      }
+    }
+  },
+  {
+    "id": "clear_appointment-20",
+    "category": "clear_appointment",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 11일 오후 4시 선릉역에서 분기 계획 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-11",
+      "time": "16:00",
+      "place": "선릉역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-11",
+        "time": "16:00",
+        "place": "선릉역"
+      }
+    }
+  },
+  {
+    "id": "time_change-01",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 20일 성수역 제품 회의는 오후 2시가 아니라 오후 4시로 확정했어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-20",
+      "time": "16:00",
+      "place": "성수역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-20",
+        "time": "16:00",
+        "place": "성수역"
+      }
+    }
+  },
+  {
+    "id": "time_change-02",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 21일 광화문 기획 회의, 오전 9시 취소하고 오전 11시에 만나.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-21",
+      "time": "11:00",
+      "place": "광화문",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-21",
+        "time": "11:00",
+        "place": "광화문"
+      }
+    }
+  },
+  {
+    "id": "time_change-03",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 22일 합정역 스터디는 오후 6시에서 오후 7시 30분으로 변경.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-22",
+      "time": "19:30",
+      "place": "합정역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-22",
+        "time": "19:30",
+        "place": "합정역"
+      }
+    }
+  },
+  {
+    "id": "time_change-04",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 24일 판교역 회의 처음엔 10시였지만 최종 오전 9시야.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-24",
+      "time": "09:00",
+      "place": "판교역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-24",
+        "time": "09:00",
+        "place": "판교역"
+      }
+    }
+  },
+  {
+    "id": "time_change-05",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 25일 잠실역 리뷰는 오후 1시 말고 오후 3시로 하자.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-25",
+      "time": "15:00",
+      "place": "잠실역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-25",
+        "time": "15:00",
+        "place": "잠실역"
+      }
+    }
+  },
+  {
+    "id": "time_change-06",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 26일 서울숲 회고, 오전 11시는 어렵고 오후 2시로 확정.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-26",
+      "time": "14:00",
+      "place": "서울숲",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-26",
+        "time": "14:00",
+        "place": "서울숲"
+      }
+    }
+  },
+  {
+    "id": "time_change-07",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 27일 강남역 미팅은 정오에서 오후 1시로 미뤘어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-27",
+      "time": "13:00",
+      "place": "강남역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-27",
+        "time": "13:00",
+        "place": "강남역"
+      }
+    }
+  },
+  {
+    "id": "time_change-08",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 28일 시청역 운영 회의는 오후 5시 취소, 오후 4시가 최종이야.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-28",
+      "time": "16:00",
+      "place": "시청역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-28",
+        "time": "16:00",
+        "place": "시청역"
+      }
+    }
+  },
+  {
+    "id": "time_change-09",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 29일 대학로 모임은 오전 10시, 아니 최종 오전 10시 30분.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-29",
+      "time": "10:30",
+      "place": "대학로",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-29",
+        "time": "10:30",
+        "place": "대학로"
+      }
+    }
+  },
+  {
+    "id": "time_change-10",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 31일 여의도역 모임 오후 7시에서 오후 6시로 당겼어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-31",
+      "time": "18:00",
+      "place": "여의도역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-31",
+        "time": "18:00",
+        "place": "여의도역"
+      }
+    }
+  },
+  {
+    "id": "time_change-11",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 1일 용산역 회의는 오전 7시가 아니라 오전 8시.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-01",
+      "time": "08:00",
+      "place": "용산역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-01",
+        "time": "08:00",
+        "place": "용산역"
+      }
+    }
+  },
+  {
+    "id": "time_change-12",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 2일 마포역 검토는 오후 2시에서 오후 2시 30분으로 변경.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-02",
+      "time": "14:30",
+      "place": "마포역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-02",
+        "time": "14:30",
+        "place": "마포역"
+      }
+    }
+  },
+  {
+    "id": "time_change-13",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 3일 종로3가역 리허설, 오후 4시는 취소하고 오후 5시에 해.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-03",
+      "time": "17:00",
+      "place": "종로3가역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-03",
+        "time": "17:00",
+        "place": "종로3가역"
+      }
+    }
+  },
+  {
+    "id": "time_change-14",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 4일 을지로입구역 회의 오전 10시 말고 오전 9시 30분으로 확정.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-04",
+      "time": "09:30",
+      "place": "을지로입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-04",
+        "time": "09:30",
+        "place": "을지로입구역"
+      }
+    }
+  },
+  {
+    "id": "time_change-15",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 5일 건대입구역 모임은 오후 1시에서 정오로 변경됐어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-05",
+      "time": "12:00",
+      "place": "건대입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-05",
+        "time": "12:00",
+        "place": "건대입구역"
+      }
+    }
+  },
+  {
+    "id": "time_change-16",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 7일 홍대입구역 회의는 오후 2시, 다시 오후 3시로 최종 확정.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-07",
+      "time": "15:00",
+      "place": "홍대입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-07",
+        "time": "15:00",
+        "place": "홍대입구역"
+      }
+    }
+  },
+  {
+    "id": "time_change-17",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 8일 신촌역 연구 회의 오전 10시는 취소, 오전 11시야.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-08",
+      "time": "11:00",
+      "place": "신촌역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-08",
+        "time": "11:00",
+        "place": "신촌역"
+      }
+    }
+  },
+  {
+    "id": "time_change-18",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 9일 고속터미널역 약속은 오후 7시가 아니라 오후 8시로 정했어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-09",
+      "time": "20:00",
+      "place": "고속터미널역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-09",
+        "time": "20:00",
+        "place": "고속터미널역"
+      }
+    }
+  },
+  {
+    "id": "time_change-19",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 10일 삼성역 미팅은 정오에서 오후 1시로 미뤄졌어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-10",
+      "time": "13:00",
+      "place": "삼성역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-10",
+        "time": "13:00",
+        "place": "삼성역"
+      }
+    }
+  },
+  {
+    "id": "time_change-20",
+    "category": "time_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 11일 선릉역 회의 오후 5시 말고 오후 4시가 최종 시간이야.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-11",
+      "time": "16:00",
+      "place": "선릉역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-11",
+        "time": "16:00",
+        "place": "선릉역"
+      }
+    }
+  },
+  {
+    "id": "place_change-01",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 20일 오후 2시 회의는 강남역이 아니라 성수역에서 만나.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-20",
+      "time": "14:00",
+      "place": "성수역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-20",
+        "time": "14:00",
+        "place": "성수역"
+      }
+    }
+  },
+  {
+    "id": "place_change-02",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 21일 오전 10시 기획 회의 장소를 시청역에서 광화문으로 바꿨어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-21",
+      "time": "10:00",
+      "place": "광화문",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-21",
+        "time": "10:00",
+        "place": "광화문"
+      }
+    }
+  },
+  {
+    "id": "place_change-03",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 22일 오후 7시 스터디, 홍대입구역 취소하고 합정역으로 확정.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-22",
+      "time": "19:00",
+      "place": "합정역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-22",
+        "time": "19:00",
+        "place": "합정역"
+      }
+    }
+  },
+  {
+    "id": "place_change-04",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 24일 오전 9시 회의는 강남역, 아니 최종 판교역이야.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-24",
+      "time": "09:00",
+      "place": "판교역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-24",
+        "time": "09:00",
+        "place": "판교역"
+      }
+    }
+  },
+  {
+    "id": "place_change-05",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 25일 오후 3시 리뷰 장소는 석촌역 말고 잠실역.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-25",
+      "time": "15:00",
+      "place": "잠실역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-25",
+        "time": "15:00",
+        "place": "잠실역"
+      }
+    }
+  },
+  {
+    "id": "place_change-06",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 26일 오전 11시 회고를 뚝섬역에서 서울숲으로 변경했어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-26",
+      "time": "11:00",
+      "place": "서울숲",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-26",
+        "time": "11:00",
+        "place": "서울숲"
+      }
+    }
+  },
+  {
+    "id": "place_change-07",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 27일 오후 1시 미팅은 선릉역이 아니라 강남역에서 해.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-27",
+      "time": "13:00",
+      "place": "강남역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-27",
+        "time": "13:00",
+        "place": "강남역"
+      }
+    }
+  },
+  {
+    "id": "place_change-08",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 28일 오후 4시 운영 회의 장소, 광화문 취소하고 시청역 확정.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-28",
+      "time": "16:00",
+      "place": "시청역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-28",
+        "time": "16:00",
+        "place": "시청역"
+      }
+    }
+  },
+  {
+    "id": "place_change-09",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 29일 오전 10시 30분 모임은 혜화역 말고 대학로에서 만나.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-29",
+      "time": "10:30",
+      "place": "대학로",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-29",
+        "time": "10:30",
+        "place": "대학로"
+      }
+    }
+  },
+  {
+    "id": "place_change-10",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 31일 오후 6시 모임 장소를 마포역에서 여의도역으로 옮겼어.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-31",
+      "time": "18:00",
+      "place": "여의도역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-31",
+        "time": "18:00",
+        "place": "여의도역"
+      }
+    }
+  },
+  {
+    "id": "place_change-11",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 1일 오전 8시 출발 회의는 서울역이 아니라 용산역.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-01",
+      "time": "08:00",
+      "place": "용산역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-01",
+        "time": "08:00",
+        "place": "용산역"
+      }
+    }
+  },
+  {
+    "id": "place_change-12",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 2일 오후 2시 30분 검토 장소, 공덕역에서 마포역으로 변경.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-02",
+      "time": "14:30",
+      "place": "마포역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-02",
+        "time": "14:30",
+        "place": "마포역"
+      }
+    }
+  },
+  {
+    "id": "place_change-13",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 3일 오후 5시 리허설은 종각역 취소, 종로3가역에서 해.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-03",
+      "time": "17:00",
+      "place": "종로3가역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-03",
+        "time": "17:00",
+        "place": "종로3가역"
+      }
+    }
+  },
+  {
+    "id": "place_change-14",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 4일 오전 9시 30분 회의는 을지로3가역 말고 을지로입구역.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-04",
+      "time": "09:30",
+      "place": "을지로입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-04",
+        "time": "09:30",
+        "place": "을지로입구역"
+      }
+    }
+  },
+  {
+    "id": "place_change-15",
+    "category": "place_change",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 5일 정오 모임은 성수역에서 건대입구역으로 최종 변경.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-05",
+      "time": "12:00",
+      "place": "건대입구역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-05",
+        "time": "12:00",
+        "place": "건대입구역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-01",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "혹시 오늘 오후에도 거래 괜찮으세요? 그럼 4시 정도 어떠세요? 종로5가역 12번 출구에서 뵐게요. 향수 거래입니다.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-16",
+      "time": "16:00",
+      "place": "종로5가역 12번 출구",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-16",
+        "time": "16:00",
+        "place": "종로5가역 12번 출구"
+      }
+    }
+  },
+  {
+    "id": "relative_date-02",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "내일 오전 10시 광화문에서 기획 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-17",
+      "time": "10:00",
+      "place": "광화문",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-17",
+        "time": "10:00",
+        "place": "광화문"
+      }
+    }
+  },
+  {
+    "id": "relative_date-03",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "모레 오후 7시 합정역에서 스터디.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-18",
+      "time": "19:00",
+      "place": "합정역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-18",
+        "time": "19:00",
+        "place": "합정역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-04",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "오늘 오후 4시 시청역에서 운영 점검.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-16",
+      "time": "16:00",
+      "place": "시청역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-16",
+        "time": "16:00",
+        "place": "시청역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-05",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "내일 오후 3시 잠실역에서 디자인 리뷰.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-17",
+      "time": "15:00",
+      "place": "잠실역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-17",
+        "time": "15:00",
+        "place": "잠실역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-06",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "모레 오전 11시 서울숲에서 회고.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-18",
+      "time": "11:00",
+      "place": "서울숲",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-18",
+        "time": "11:00",
+        "place": "서울숲"
+      }
+    }
+  },
+  {
+    "id": "relative_date-07",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "이번 주 수요일 오후 1시 강남역에서 점심 미팅.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-19",
+      "time": "13:00",
+      "place": "강남역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-19",
+        "time": "13:00",
+        "place": "강남역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-08",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "이번 주 목요일 오후 4시 마포역에서 콘텐츠 검토.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-20",
+      "time": "16:00",
+      "place": "마포역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-20",
+        "time": "16:00",
+        "place": "마포역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-09",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "이번 주 금요일 오전 10시 대학로에서 독서 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-21",
+      "time": "10:00",
+      "place": "대학로",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-21",
+        "time": "10:00",
+        "place": "대학로"
+      }
+    }
+  },
+  {
+    "id": "relative_date-10",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "이번 주 토요일 오후 6시 여의도역에서 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-22",
+      "time": "18:00",
+      "place": "여의도역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-22",
+        "time": "18:00",
+        "place": "여의도역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-11",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "다음 주 월요일 오전 9시 판교역에서 주간 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-24",
+      "time": "09:00",
+      "place": "판교역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-24",
+        "time": "09:00",
+        "place": "판교역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-12",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "다음 주 화요일 오후 2시 삼성역에서 파트너 미팅.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-25",
+      "time": "14:00",
+      "place": "삼성역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-25",
+        "time": "14:00",
+        "place": "삼성역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-13",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "다음 주 수요일 오후 5시 종로3가역에서 리허설.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-26",
+      "time": "17:00",
+      "place": "종로3가역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-26",
+        "time": "17:00",
+        "place": "종로3가역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-14",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "다음 주 목요일 오전 11시 신촌역에서 연구 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-27",
+      "time": "11:00",
+      "place": "신촌역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-27",
+        "time": "11:00",
+        "place": "신촌역"
+      }
+    }
+  },
+  {
+    "id": "relative_date-15",
+    "category": "relative_date",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "다음 주 금요일 오후 8시 고속터미널역에서 공연 약속.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-28",
+      "time": "20:00",
+      "place": "고속터미널역",
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-28",
+        "time": "20:00",
+        "place": "고속터미널역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-01",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 20일 성수역에서 제품 회의하자.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-20",
+      "time": null,
+      "place": "성수역",
+      "missing_fields": [
+        "start_time"
+      ],
+      "final_agreement": {
+        "date": "2026-08-20",
+        "time": null,
+        "place": "성수역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-02",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "오후 3시에 잠실역에서 디자인 리뷰.",
+    "expected": {
+      "intent": "appointment",
+      "date": null,
+      "time": "15:00",
+      "place": "잠실역",
+      "missing_fields": [
+        "date"
+      ],
+      "final_agreement": {
+        "date": null,
+        "time": "15:00",
+        "place": "잠실역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-03",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 22일 오후 7시에 스터디하자.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-22",
+      "time": "19:00",
+      "place": null,
+      "missing_fields": [
+        "place"
+      ],
+      "final_agreement": {
+        "date": "2026-08-22",
+        "time": "19:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "missing_fields-04",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "광화문에서 기획 회의하자.",
+    "expected": {
+      "intent": "appointment",
+      "date": null,
+      "time": null,
+      "place": "광화문",
+      "missing_fields": [
+        "date",
+        "start_time"
+      ],
+      "final_agreement": {
+        "date": null,
+        "time": null,
+        "place": "광화문"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-05",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "내일 오전 10시에 운영 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-17",
+      "time": "10:00",
+      "place": null,
+      "missing_fields": [
+        "place"
+      ],
+      "final_agreement": {
+        "date": "2026-08-17",
+        "time": "10:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "missing_fields-06",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 24일 판교역에서 주간 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-24",
+      "time": null,
+      "place": "판교역",
+      "missing_fields": [
+        "start_time"
+      ],
+      "final_agreement": {
+        "date": "2026-08-24",
+        "time": null,
+        "place": "판교역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-07",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "오후 1시 강남역에서 점심 미팅.",
+    "expected": {
+      "intent": "appointment",
+      "date": null,
+      "time": "13:00",
+      "place": "강남역",
+      "missing_fields": [
+        "date"
+      ],
+      "final_agreement": {
+        "date": null,
+        "time": "13:00",
+        "place": "강남역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-08",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 28일 오후 4시 운영 점검.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-28",
+      "time": "16:00",
+      "place": null,
+      "missing_fields": [
+        "place"
+      ],
+      "final_agreement": {
+        "date": "2026-08-28",
+        "time": "16:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "missing_fields-09",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "대학로에서 독서 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": null,
+      "time": null,
+      "place": "대학로",
+      "missing_fields": [
+        "date",
+        "start_time"
+      ],
+      "final_agreement": {
+        "date": null,
+        "time": null,
+        "place": "대학로"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-10",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "8월 31일 여의도역에서 네트워킹 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-08-31",
+      "time": null,
+      "place": "여의도역",
+      "missing_fields": [
+        "start_time"
+      ],
+      "final_agreement": {
+        "date": "2026-08-31",
+        "time": null,
+        "place": "여의도역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-11",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "오전 8시 용산역에서 출발 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": null,
+      "time": "08:00",
+      "place": "용산역",
+      "missing_fields": [
+        "date"
+      ],
+      "final_agreement": {
+        "date": null,
+        "time": "08:00",
+        "place": "용산역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-12",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 2일 오후 2시 30분에 콘텐츠 검토.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-02",
+      "time": "14:30",
+      "place": null,
+      "missing_fields": [
+        "place"
+      ],
+      "final_agreement": {
+        "date": "2026-09-02",
+        "time": "14:30",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "missing_fields-13",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "종로3가역에서 발표 리허설.",
+    "expected": {
+      "intent": "appointment",
+      "date": null,
+      "time": null,
+      "place": "종로3가역",
+      "missing_fields": [
+        "date",
+        "start_time"
+      ],
+      "final_agreement": {
+        "date": null,
+        "time": null,
+        "place": "종로3가역"
+      }
+    }
+  },
+  {
+    "id": "missing_fields-14",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "9월 4일 오전 9시 30분에 예산 회의.",
+    "expected": {
+      "intent": "appointment",
+      "date": "2026-09-04",
+      "time": "09:30",
+      "place": null,
+      "missing_fields": [
+        "place"
+      ],
+      "final_agreement": {
+        "date": "2026-09-04",
+        "time": "09:30",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "missing_fields-15",
+    "category": "missing_fields",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "건대입구역에서 동아리 모임.",
+    "expected": {
+      "intent": "appointment",
+      "date": null,
+      "time": null,
+      "place": "건대입구역",
+      "missing_fields": [
+        "date",
+        "start_time"
+      ],
+      "final_agreement": {
+        "date": null,
+        "time": null,
+        "place": "건대입구역"
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-01",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "[공모전 안내] 포스터 제출 마감 8월 31일 오후 6시. 제출물: 포스터 파일, 작품 설명서.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-31",
+      "time": "18:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-31",
+        "time": "18:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-02",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "지원서 접수 마감은 8월 25일 오후 5시이며 제출물은 지원서와 활동 계획서야.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-25",
+      "time": "17:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-25",
+        "time": "17:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-03",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "사진전 작품 제출: 9월 1일 자정. 사진 파일과 작품 소개문 필수.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-09-01",
+      "time": "00:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-01",
+        "time": "00:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-04",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "발표 자료 최종 제출 기한은 8월 28일 오후 3시. 슬라이드와 발표 원고 제출.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-28",
+      "time": "15:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-28",
+        "time": "15:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-05",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "아이디어 공모전 마감 9월 5일 오후 11시 59분, 기획서와 요약본을 내야 해.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-09-05",
+      "time": "23:59",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-05",
+        "time": "23:59",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-06",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "보고서 제출 마감은 8월 20일 오전 10시. 보고서 파일과 참고 문헌 목록 필수.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-20",
+      "time": "10:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-20",
+        "time": "10:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-07",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "영상제 출품 마감 9월 10일 오후 6시. 영상 파일, 자막 파일, 소개문 제출.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-09-10",
+      "time": "18:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-10",
+        "time": "18:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-08",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "포트폴리오 심사 접수는 8월 27일 오후 2시 마감. 포트폴리오와 자기소개서 필요.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-27",
+      "time": "14:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-27",
+        "time": "14:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-09",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "연구 제안서 마감 9월 3일 오후 5시. 제안서와 예산안을 제출해.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-09-03",
+      "time": "17:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-03",
+        "time": "17:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-10",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "동아리 행사 포스터 접수 마감은 8월 22일 정오. 포스터 원본과 미리보기 제출.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-22",
+      "time": "12:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-22",
+        "time": "12:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-11",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "프로젝트 결과물 제출 기한 9월 7일 오전 9시. 결과 보고서와 시연 영상 필수.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-09-07",
+      "time": "09:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-07",
+        "time": "09:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-12",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "디자인 챌린지 마감 8월 30일 오후 8시. 디자인 시안과 설명 자료를 내야 해.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-30",
+      "time": "20:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-30",
+        "time": "20:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-13",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "논문 초록 제출 마감은 9월 2일 오후 4시. 초록과 키워드 목록 제출.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-09-02",
+      "time": "16:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-02",
+        "time": "16:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-14",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "전시 참가 신청 마감 8월 26일 오후 1시. 신청서와 작품 목록이 필요해.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-08-26",
+      "time": "13:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-08-26",
+        "time": "13:00",
+        "place": null
+      }
+    }
+  },
+  {
+    "id": "poster_deadline-15",
+    "category": "poster_deadline",
+    "timezone": "Asia/Seoul",
+    "reference_at": "2026-08-16T09:00:00+09:00",
+    "input": "개발 과제 제출은 9월 4일 오후 10시 마감. 소스 압축 파일과 실행 설명서 제출.",
+    "expected": {
+      "intent": "deadline",
+      "date": "2026-09-04",
+      "time": "22:00",
+      "place": null,
+      "missing_fields": [],
+      "final_agreement": {
+        "date": "2026-09-04",
+        "time": "22:00",
+        "place": null
+      }
+    }
+  }
+]

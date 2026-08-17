@@ -7,25 +7,23 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 /// device channel. Image paths are temporary files supplied by the plugin and
 /// are never written to the app's loop repository.
 class SharedCapturePayload {
-  const SharedCapturePayload({required this.imagePaths, required this.text});
+  const SharedCapturePayload({required this.imagePath, required this.text});
 
-  final List<String> imagePaths;
+  final String? imagePath;
   final String text;
 
-  bool get isEmpty => imagePaths.isEmpty && text.isEmpty;
-  bool get hasMultipleImages => imagePaths.length > 1;
+  bool get isEmpty => imagePath == null && text.isEmpty;
 }
 
 SharedCapturePayload normalizeSharedMedia(List<SharedMediaFile> items) {
-  final seenImages = <String>{};
-  final imagePaths = <String>[];
+  String? imagePath;
   final textParts = <String>[];
 
   for (final item in items) {
     final value = item.path.trim();
     if (value.isEmpty) continue;
     if (item.type == SharedMediaType.image) {
-      if (seenImages.add(value)) imagePaths.add(value);
+      imagePath ??= value;
       continue;
     }
     if (item.type == SharedMediaType.text || item.type == SharedMediaType.url) {
@@ -33,8 +31,5 @@ SharedCapturePayload normalizeSharedMedia(List<SharedMediaFile> items) {
     }
   }
 
-  return SharedCapturePayload(
-    imagePaths: List.unmodifiable(imagePaths),
-    text: textParts.join('\n'),
-  );
+  return SharedCapturePayload(imagePath: imagePath, text: textParts.join('\n'));
 }
