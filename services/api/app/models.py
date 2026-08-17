@@ -12,6 +12,8 @@ class Intent(str, Enum):
     DEADLINE = "deadline"
     PLACE = "place"
     COUPON = "coupon"
+    PURCHASE = "purchase"
+    RESERVATION = "reservation"
 
 
 class LoopStatus(str, Enum):
@@ -114,7 +116,7 @@ class ChecklistItem(BaseModel):
 
 class LoopAction(BaseModel):
     id: str
-    type: Literal["calendar", "reminder", "place", "checklist", "coupon"]
+    type: Literal["calendar", "reminder", "place", "checklist", "coupon", "purchase", "reservation"]
     title: str
     completed: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)

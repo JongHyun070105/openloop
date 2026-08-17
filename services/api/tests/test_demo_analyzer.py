@@ -73,16 +73,27 @@ class DemoAnalyzerTests(unittest.TestCase):
         self.assertIsNone(result.event.date)
         self.assertIsNone(result.event.start_time)
 
-    def test_coupon_uses_expiry_without_requesting_a_time(self) -> None:
+    def test_purchase_uses_expiry_without_requesting_a_time(self) -> None:
         result = analyze_demo(
-            AnalyzeRequest(text="스타벅스 쿠폰 8월 31일까지 저장"),
+            AnalyzeRequest(text="쿠팡 무선 이어폰 주문 완료 8월 25일까지 반품 가능"),
             reference_date=date(2026, 8, 16),
         )
 
-        self.assertEqual(result.event.type, "coupon")
-        self.assertEqual(result.event.expires_on, date(2026, 8, 31))
+        self.assertEqual(result.event.type, "purchase")
+        self.assertEqual(result.event.expires_on, date(2026, 8, 25))
         self.assertEqual(result.status, LoopStatus.OPEN)
         self.assertNotIn("start_time", result.event.missing_fields)
+
+    def test_reservation_extracts_time_and_place(self) -> None:
+        result = analyze_demo(
+            AnalyzeRequest(text="8월 20일 14:30 김포공항 제주 항공권 예약 완료"),
+            reference_date=date(2026, 8, 16),
+        )
+
+        self.assertEqual(result.event.type, "reservation")
+        self.assertEqual(result.event.date, date(2026, 8, 20))
+        self.assertEqual(result.event.start_time.hour, 14)
+        self.assertEqual(result.status, LoopStatus.OPEN)
 
 
 if __name__ == "__main__":

@@ -63,4 +63,26 @@ void main() {
 
     expect(planned.map((item) => item.offset), ['D-1']);
   });
+
+  test('purchase receives one return deadline alert', () {
+    final planned = planCheckpoints(
+      kind: LoopKind.purchase,
+      title: '무선 이어폰',
+      eventAt: DateTime(2026, 8, 25, 10),
+      now: DateTime(2026, 8, 17, 11),
+    );
+
+    expect(planned.map((item) => item.offset), ['D-1']);
+  });
+
+  test('reservation receives T-2h alert', () {
+    final planned = planCheckpoints(
+      kind: LoopKind.reservation,
+      title: '제주 항공권',
+      eventAt: DateTime(2026, 8, 20, 14, 30),
+      now: DateTime(2026, 8, 17, 11),
+    );
+
+    expect(planned.map((item) => item.offset), ['T-2h']);
+  });
 }

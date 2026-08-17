@@ -566,6 +566,21 @@ OpenLoop _refreshLocalGraph(OpenLoop loop) {
         ensureAction('reminder', '기한 알림 자동 예약');
       }
       break;
+    case LoopKind.purchase:
+      ensureAction('purchase', '${loop.title} 구매·배송 조회');
+      if (loop.place != null) ensureAction('place', loop.place!);
+      if (loop.checkpointAnchor != null) {
+        ensureAction('reminder', '반품·보증 알림 자동 예약');
+      }
+      break;
+    case LoopKind.reservation:
+      ensureAction('reservation', '${loop.title} 예약 확인');
+      ensureAction('calendar', '${loop.title} 캘린더 등록');
+      if (loop.place != null) ensureAction('place', loop.place!);
+      if (loop.checkpointAnchor != null) {
+        ensureAction('reminder', '예약 당일 알림 자동 예약');
+      }
+      break;
   }
   var checklist = loop.checklist;
   if (loop.kind == LoopKind.deadline) {
@@ -620,6 +635,8 @@ String _summaryForLoop(OpenLoop loop) {
       LoopKind.deadline => '마감',
       LoopKind.place => '장소 저장',
       LoopKind.coupon => '쿠폰',
+      LoopKind.purchase => '구매',
+      LoopKind.reservation => '예약',
     },
   ];
   if (loop.date != null) {

@@ -178,6 +178,43 @@ class LoopServiceTests(unittest.TestCase):
         self.assertIsNone(self.repository.get(first.id))
         self.assertIsNotNone(self.repository.get(second.id))
 
+    def test_purchase_has_purchase_action_and_d1_checkpoint(self) -> None:
+        event = StructuredEvent(
+            type=Intent.PURCHASE,
+            title="무선 이어폰",
+            expires_on=date(2026, 8, 25),
+            place={"name": "쿠팡"},
+            source="text",
+            confidence=Confidence(date=1, time=0, location=1, title=1),
+        )
+        actions, checklist, checkpoints = _default_graph(
+            event,
+            reference_at=datetime(2026, 8, 17, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual([item.type for item in actions], ["purchase", "place", "reminder"])
+        self.assertEqual(checklist, [])
+        self.assertEqual([item.offset for item in checkpoints], ["D-1"])
+
+    def test_reservation_has_calendar_and_t2h_checkpoint(self) -> None:
+        event = StructuredEvent(
+            type=Intent.RESERVATION,
+            title="제주 항공권",
+            date=date(2026, 8, 20),
+            start_time=time(14, 30),
+            place={"name": "김포공항"},
+            source="text",
+            confidence=Confidence(date=1, time=1, location=1, title=1),
+        )
+        actions, checklist, checkpoints = _default_graph(
+            event,
+            reference_at=datetime(2026, 8, 17, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual([item.type for item in actions], ["reservation", "calendar", "place", "reminder"])
+        self.assertEqual(checklist, [])
+        self.assertEqual([item.offset for item in checkpoints], ["T-2h"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -268,10 +268,16 @@ class LocalAnalyzeService implements AnalyzeService {
     final date = kind == LoopKind.coupon || kind == LoopKind.place
         ? null
         : extractedDate;
-    final expiresOn = kind == LoopKind.coupon ? extractedDate : null;
-    final startTime = kind == LoopKind.appointment || kind == LoopKind.deadline
-        ? _explicitTime(text)
-        : null;
+    final expiresOn =
+        (kind == LoopKind.coupon || kind == LoopKind.purchase)
+            ? extractedDate
+            : null;
+    final startTime =
+        (kind == LoopKind.appointment ||
+                kind == LoopKind.deadline ||
+                kind == LoopKind.reservation)
+            ? _explicitTime(text)
+            : null;
     final title = _localTitle(text, kind);
     final place = kind == LoopKind.place
         ? _explicitPlace(text) ?? title
@@ -482,6 +488,56 @@ List<Map<String, dynamic>> _localActions({
         'completed': false,
       },
   ],
+  LoopKind.purchase => [
+    {
+      'id': 'action-purchase',
+      'type': 'purchase',
+      'title': '$title 구매·배송 조회',
+      'completed': false,
+    },
+    if (place != null)
+      {
+        'id': 'action-place',
+        'type': 'place',
+        'title': place,
+        'completed': false,
+      },
+    if (checkpoints.isNotEmpty)
+      {
+        'id': 'action-reminder',
+        'type': 'reminder',
+        'title': '반품·보증 알림 자동 예약',
+        'completed': false,
+      },
+  ],
+  LoopKind.reservation => [
+    {
+      'id': 'action-reservation',
+      'type': 'reservation',
+      'title': '$title 예약 확인',
+      'completed': false,
+    },
+    {
+      'id': 'action-calendar',
+      'type': 'calendar',
+      'title': '$title 캘린더 등록',
+      'completed': false,
+    },
+    if (place != null)
+      {
+        'id': 'action-place',
+        'type': 'place',
+        'title': place,
+        'completed': false,
+      },
+    if (checkpoints.isNotEmpty)
+      {
+        'id': 'action-reminder',
+        'type': 'reminder',
+        'title': '예약 당일 알림 자동 예약',
+        'completed': false,
+      },
+  ],
   LoopKind.place => [
     if (place != null)
       {
@@ -509,6 +565,8 @@ String _localSummary({
       LoopKind.deadline => '마감',
       LoopKind.place => '장소 저장',
       LoopKind.coupon => '쿠폰',
+      LoopKind.purchase => '구매',
+      LoopKind.reservation => '예약',
     },
   ];
   if (date != null) {
@@ -644,7 +702,13 @@ LoopKind _localKind(String text, DateTime now) {
   if (['쿠폰', '할인', '혜택', '바우처', '기프티콘', '프로모션'].any(text.contains)) {
     return LoopKind.coupon;
   }
-  if (['회의', '미팅', '약속', '예약', '만나', '만남', '방문'].any(text.contains)) {
+  if (['구매', '주문', '결제', '배송', '반품', '영수증', '쇼핑', '주문번호', '송장'].any(text.contains)) {
+    return LoopKind.purchase;
+  }
+  if (['예약', '체크인', '항공권', '호텔', '숙소', '티켓', '탑승', '진료', '예매'].any(text.contains)) {
+    return LoopKind.reservation;
+  }
+  if (['회의', '미팅', '약속', '만나', '만남', '방문'].any(text.contains)) {
     return LoopKind.appointment;
   }
   if (_explicitTime(text) != null && _explicitDate(text, now) != null) {
@@ -657,7 +721,10 @@ String _localTitle(String text, LoopKind kind) {
   if (kind == LoopKind.deadline) {
     return text.contains('공모전') ? '공모전 마감' : '마감 일정';
   }
-  if (kind == LoopKind.coupon || kind == LoopKind.place) {
+  if (kind == LoopKind.coupon ||
+      kind == LoopKind.place ||
+      kind == LoopKind.purchase ||
+      kind == LoopKind.reservation) {
     final compact = text
         .replaceAll(RegExp(r'\s+'), ' ')
         .replaceFirst(
@@ -666,10 +733,15 @@ String _localTitle(String text, LoopKind kind) {
         )
         .trim();
     return compact.isEmpty
-        ? (kind == LoopKind.coupon ? '쿠폰' : '저장한 장소')
+        ? switch (kind) {
+            LoopKind.coupon => '쿠폰',
+            LoopKind.purchase => '구매 내역',
+            LoopKind.reservation => '예약',
+            _ => '저장한 장소',
+          }
         : compact;
   }
-  for (final word in ['회의', '미팅', '약속', '예약']) {
+  for (final word in ['회의', '미팅', '약속']) {
     if (text.contains(word)) return word;
   }
   return '새 일정';

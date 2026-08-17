@@ -29,7 +29,7 @@ and preserve only explicitly requested reminder offsets. Classify a real meeting
 date/time as appointment. Classify a submission or due date as deadline: its date matters, but absent time is not a
 missing field. Classify a restaurant, cafe, store, venue, or place the user wants to keep as place: never request a
 date or time for it. Classify a coupon, voucher, discount, or benefit as coupon: use expires_on only when an expiry
-date is visible, never put an expiry in date, and never request a time. For place and coupon captures, a confident
+date is visible, never put an expiry in date, and never request a time. Classify a shopping order, receipt, or delivery as purchase: its vendor/store place, item title, and return/warranty/delivery expiry in expires_on or date matter, never request a time. Classify a flight, hotel check-in, ticket, or medical/service booking as reservation: extract date/time and venue place. For place, coupon, and purchase captures, a confident
 title is enough to return open. For a complete new event, status must be open; never return closed.
 Dates must be YYYY-MM-DD and times must be local Korean time in HH:MM:SS without a timezone suffix. Resolve Korean
 relative dates against the reference instant included in the user prompt: 오늘 is the reference date, 내일 is +1 day,

@@ -860,7 +860,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
     );
     if (selected != null) {
       _edit(
-        draft.kind == LoopKind.coupon ? 'expires_on' : 'date',
+        (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
+            ? 'expires_on'
+            : 'date',
         '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}',
       );
     }
@@ -1001,16 +1003,18 @@ class _ReviewScreenState extends State<ReviewScreen> {
         if (draft.kind != LoopKind.place)
           _EditableReviewFact(
             key: const Key('review-date-field'),
-            icon: draft.kind == LoopKind.coupon
+            icon: (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
                 ? Icons.timer_outlined
                 : Icons.calendar_today_outlined,
-            label: draft.kind == LoopKind.coupon
-                ? '기한 ${dateText(draft.expiresOn)}'
+            label: (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
+                ? '기한 ${dateText(draft.expiresOn ?? draft.date)}'
                 : dateText(draft.date),
             enabled: draft.isDraft,
             onTap: _pickDate,
           ),
-        if (draft.kind == LoopKind.appointment || draft.time != null)
+        if (draft.kind == LoopKind.appointment ||
+            draft.kind == LoopKind.reservation ||
+            draft.time != null)
           TextField(
             key: const Key('review-time-field'),
             controller: timeController,
@@ -1018,7 +1022,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
             keyboardType: TextInputType.datetime,
             textInputAction: TextInputAction.done,
             decoration: InputDecoration(
-              labelText: draft.kind == LoopKind.deadline ? '마감 시간 (선택)' : '시간',
+              labelText: draft.kind == LoopKind.deadline
+                  ? '마감 시간 (선택)'
+                  : (draft.kind == LoopKind.reservation ? '예약 시간' : '시간'),
               hintText: draft.kind == LoopKind.deadline ? '시간 없음' : '시간 미정',
               prefixIcon: const Icon(Icons.schedule_outlined),
               suffixIcon: IconButton(
@@ -1031,16 +1037,24 @@ class _ReviewScreenState extends State<ReviewScreen> {
             onChanged: _updateTime,
           ),
         if (draft.kind == LoopKind.appointment ||
+            draft.kind == LoopKind.reservation ||
             draft.kind == LoopKind.place ||
+            draft.kind == LoopKind.purchase ||
             draft.place != null)
           TextField(
             key: const Key('review-place-field'),
             controller: placeController,
             enabled: draft.isDraft,
             decoration: InputDecoration(
-              labelText: draft.kind == LoopKind.place ? '저장할 장소' : '장소',
+              labelText: draft.kind == LoopKind.place
+                  ? '저장할 장소'
+                  : (draft.kind == LoopKind.purchase
+                      ? '구매처/판매처'
+                      : (draft.kind == LoopKind.reservation ? '예약 장소' : '장소')),
               prefixIcon: const Icon(Icons.place_outlined),
-              hintText: draft.kind == LoopKind.place ? '장소명' : '장소 미정',
+              hintText: draft.kind == LoopKind.place
+                  ? '장소명'
+                  : (draft.kind == LoopKind.purchase ? '예: 쿠팡, 네이버쇼핑' : '장소 미정'),
             ),
             onChanged: (value) => _edit('place', value.trim()),
           ),
@@ -1264,22 +1278,25 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             const SizedBox(height: 18),
           ],
           if (loop.kind == LoopKind.appointment ||
-              loop.kind == LoopKind.deadline)
+              loop.kind == LoopKind.deadline ||
+              loop.kind == LoopKind.reservation)
             _Fact(
               icon: Icons.calendar_today_outlined,
               label: dateText(loop.date),
             ),
-          if (loop.kind == LoopKind.appointment || loop.time != null)
+          if (loop.kind == LoopKind.appointment ||
+              loop.kind == LoopKind.reservation ||
+              loop.time != null)
             _Fact(
               icon: Icons.schedule_outlined,
               label: loop.time?.substring(0, 5) ?? '시간 미정',
             ),
-          if (loop.kind == LoopKind.coupon)
+          if (loop.kind == LoopKind.coupon || loop.kind == LoopKind.purchase)
             _Fact(
               icon: Icons.timer_outlined,
-              label: loop.expiresOn == null
+              label: (loop.expiresOn ?? loop.date) == null
                   ? '기한 정보 없음'
-                  : '기한 ${dateText(loop.expiresOn)}',
+                  : '기한 ${dateText(loop.expiresOn ?? loop.date)}',
             ),
           if (loop.place != null)
             _Fact(icon: Icons.place_outlined, label: loop.place!),
@@ -1516,7 +1533,8 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 icon: const Icon(Icons.map_outlined),
                 label: const Text('장소·날씨 보기'),
               ),
-            if (loop.kind == LoopKind.appointment)
+            if (loop.kind == LoopKind.appointment ||
+                loop.kind == LoopKind.reservation)
               OutlinedButton.icon(
                 key: const Key('calendar-add-button'),
                 onPressed: () {
@@ -2032,6 +2050,8 @@ String loopKindLabel(LoopKind kind) => switch (kind) {
   LoopKind.deadline => '마감',
   LoopKind.place => '장소',
   LoopKind.coupon => '쿠폰',
+  LoopKind.purchase => '구매',
+  LoopKind.reservation => '예약',
 };
 
 IconData loopKindIcon(LoopKind kind) => switch (kind) {
@@ -2039,6 +2059,8 @@ IconData loopKindIcon(LoopKind kind) => switch (kind) {
   LoopKind.deadline => Icons.flag_outlined,
   LoopKind.place => Icons.bookmark_border_rounded,
   LoopKind.coupon => Icons.local_activity_outlined,
+  LoopKind.purchase => Icons.shopping_bag_outlined,
+  LoopKind.reservation => Icons.confirmation_number_outlined,
 };
 
 String reviewPrimaryActionText(OpenLoop loop) => switch (loop.kind) {
@@ -2046,6 +2068,8 @@ String reviewPrimaryActionText(OpenLoop loop) => switch (loop.kind) {
   LoopKind.deadline => '마감 저장',
   LoopKind.place => '장소 저장',
   LoopKind.coupon => '쿠폰 저장',
+  LoopKind.purchase => '구매 내역 저장',
+  LoopKind.reservation => loop.isDraft ? '저장하고 캘린더 열기' : '캘린더 다시 열기',
 };
 
 String loopCardMeta(OpenLoop loop) => switch (loop.kind) {
@@ -2061,6 +2085,17 @@ String loopCardMeta(OpenLoop loop) => switch (loop.kind) {
   LoopKind.place => loop.place ?? '장소 정보',
   LoopKind.coupon => [
     loop.expiresOn == null ? '기한 정보 없음' : '기한 ${dateText(loop.expiresOn)}',
+    if (loop.place != null) loop.place!,
+  ].join(' · '),
+  LoopKind.purchase => [
+    (loop.expiresOn ?? loop.date) == null
+        ? '기한 없음'
+        : '기한 ${dateText(loop.expiresOn ?? loop.date)}',
+    if (loop.place != null) loop.place!,
+  ].join(' · '),
+  LoopKind.reservation => [
+    dateText(loop.date),
+    loop.time?.substring(0, 5) ?? '시간 미정',
     if (loop.place != null) loop.place!,
   ].join(' · '),
 };

@@ -121,6 +121,8 @@ class NativeDeviceActions implements DeviceActions {
               LoopKind.appointment => '일정 확인 시간입니다',
               LoopKind.deadline => '마감 확인 시간입니다',
               LoopKind.coupon => '쿠폰 기한 확인 시간입니다',
+              LoopKind.purchase => '반품·보증 기한 확인 시간입니다',
+              LoopKind.reservation => '예약 확인 시간입니다',
               LoopKind.place => '저장한 장소입니다',
             },
             checkpoint.title,

@@ -40,6 +40,20 @@ List<CheckpointPlan> planCheckpoints({
         delta: const Duration(days: -1),
       ),
     ],
+    LoopKind.purchase => <({String offset, String label, Duration delta})>[
+      (
+        offset: 'D-1',
+        label: '$title 반품·보증 기한 전날 확인',
+        delta: const Duration(days: -1),
+      ),
+    ],
+    LoopKind.reservation => <({String offset, String label, Duration delta})>[
+      (
+        offset: 'T-2h',
+        label: '$title 예약·체크인 2시간 전 확인',
+        delta: const Duration(hours: -2),
+      ),
+    ],
     LoopKind.place => const <({String offset, String label, Duration delta})>[],
   };
 
@@ -57,16 +71,16 @@ List<CheckpointPlan> planCheckpoints({
     (item) => item.dueAt.isBefore(eventAt),
   );
   if (!hasUpcomingPreparation && eventAt.isAfter(reference)) {
-    final shortLeadTimes = kind == LoopKind.appointment
+    final shortLeadTimes = (kind == LoopKind.appointment || kind == LoopKind.reservation)
         ? <({String offset, String label, Duration delta})>[
             (
               offset: 'T-15m',
-              label: '$title 출발 15분 전 확인',
+              label: '$title 준비 15분 전 확인',
               delta: const Duration(minutes: -15),
             ),
             (
               offset: 'T-5m',
-              label: '$title 출발 직전 확인',
+              label: '$title 직전 확인',
               delta: const Duration(minutes: -5),
             ),
           ]

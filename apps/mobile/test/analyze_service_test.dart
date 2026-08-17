@@ -379,4 +379,32 @@ void main() {
     expect(result.missingFields, isEmpty);
     expect(result.checkpoints.map((item) => item.offset), ['D-1']);
   });
+
+  test('local purchase keeps an expiry date without asking for a time', () async {
+    final result = await LocalAnalyzeService(
+      clock: () => DateTime(2026, 8, 1, 9),
+    ).analyze(text: '쿠팡 무선 이어폰 주문 2026-08-25까지 반품 가능', source: 'text');
+
+    expect(result.kind, LoopKind.purchase);
+    expect(result.state, LoopState.open);
+    expect(result.expiresOn, DateTime(2026, 8, 25));
+    expect(result.time, isNull);
+    expect(result.missingFields, isEmpty);
+    expect(result.checkpoints.map((item) => item.offset), ['D-1']);
+    expect(result.actions.map((item) => item.type), contains('purchase'));
+  });
+
+  test('local reservation extracts date, time, place and creates T-2h checkpoint', () async {
+    final result = await LocalAnalyzeService(
+      clock: () => DateTime(2026, 8, 1, 9),
+    ).analyze(text: '2026-08-20 14:30 김포공항 제주 항공권 예약', source: 'text');
+
+    expect(result.kind, LoopKind.reservation);
+    expect(result.state, LoopState.open);
+    expect(result.date, DateTime(2026, 8, 20));
+    expect(result.time, '14:30:00');
+    expect(result.missingFields, isEmpty);
+    expect(result.checkpoints.map((item) => item.offset), ['T-2h']);
+    expect(result.actions.map((item) => item.type), contains('reservation'));
+  });
 }

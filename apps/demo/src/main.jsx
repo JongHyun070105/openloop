@@ -21,6 +21,18 @@ const scenarios = [
     title: '성수 저녁 약속', when: '이번 주 토요일 · 시간 미정', place: '성수', confidence: 42,
     note: '날짜와 장소는 확실하지만 시간만 확인이 필요해요.', choices: ['18:00', '19:00', '20:00'], actions: ['Open Loop로 저장'],
   },
+  {
+    id: 'purchase', label: '구매·반품 기한', eyebrow: 'PURCHASE',
+    source: ['[쿠팡] 주문 완료 안내', '무선 노이즈캔슬링 헤드폰', '반품/교환 가능 기한: 8월 25일까지'],
+    title: '헤드폰 구매', when: '8월 25일 · 반품 기한', place: '쿠팡', confidence: 98,
+    note: '주문 품목과 반품 기한 D-1 알림을 추출했어요.', actions: ['구매 내역 조회', 'D-1 반품 알림'],
+  },
+  {
+    id: 'reservation', label: '항공·숙박 예약', eyebrow: 'RESERVATION',
+    source: ['[대한항공] 항공권 예약 안내', '김포 → 제주 8월 20일 14:30', '예약번호 KE1234 · 탑승구 12'],
+    title: '제주 항공편 예약', when: '8월 20일 · 14:30', place: '김포공항 국내선', confidence: 99,
+    note: '탑승 시간과 출발 2시간 전 체크인 알림을 준비했어요.', actions: ['캘린더 등록', 'T-2h 체크인 알림', '공항 길찾기'],
+  },
 ];
 
 function App() {

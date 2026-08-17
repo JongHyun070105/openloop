@@ -1,4 +1,4 @@
-enum LoopKind { appointment, deadline, place, coupon }
+enum LoopKind { appointment, deadline, place, coupon, purchase, reservation }
 
 enum LoopState { open, needsInput, closed }
 
@@ -99,7 +99,9 @@ class OpenLoop {
   bool get isDraft => persistence != LoopPersistence.persisted;
 
   DateTime? get startsAt {
-    if (kind != LoopKind.appointment || date == null || time == null) {
+    if ((kind != LoopKind.appointment && kind != LoopKind.reservation) ||
+        date == null ||
+        time == null) {
       return null;
     }
     final parts = time!.split(':');
@@ -113,22 +115,31 @@ class OpenLoop {
   }
 
   DateTime? get checkpointAnchor => switch (kind) {
-    LoopKind.appointment => startsAt,
+    LoopKind.appointment || LoopKind.reservation =>
+      startsAt ??
+          (date != null
+              ? _dateTimeAt(date!, time, fallbackHour: 10)
+              : null),
     LoopKind.deadline when date != null => _dateTimeAt(
       date!,
       time,
       fallbackHour: 10,
     ),
-    LoopKind.coupon when expiresOn != null => DateTime(
-      expiresOn!.year,
-      expiresOn!.month,
-      expiresOn!.day,
-      10,
-    ),
+    LoopKind.coupon || LoopKind.purchase
+        when (expiresOn ?? date) != null =>
+      DateTime(
+        (expiresOn ?? date)!.year,
+        (expiresOn ?? date)!.month,
+        (expiresOn ?? date)!.day,
+        10,
+      ),
     _ => null,
   };
 
-  DateTime? get primaryDate => kind == LoopKind.coupon ? expiresOn : date;
+  DateTime? get primaryDate =>
+      (kind == LoopKind.coupon || kind == LoopKind.purchase)
+          ? (expiresOn ?? date)
+          : date;
 
   static DateTime _dateTimeAt(
     DateTime date,

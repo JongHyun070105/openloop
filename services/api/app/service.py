@@ -46,6 +46,10 @@ def _checkpoint_templates(event: StructuredEvent) -> list[tuple[str, str]]:
         return [("D-1", f"{event.title} 전날 확인")]
     if event.type == Intent.COUPON:
         return [("D-1", f"{event.title} 기한 전날 확인")]
+    if event.type == Intent.PURCHASE:
+        return [("D-1", f"{event.title} 반품·보증 기한 전날 확인")]
+    if event.type == Intent.RESERVATION:
+        return [("T-2h", f"{event.title} 예약·체크인 2시간 전 확인")]
     if event.type == Intent.APPOINTMENT:
         return [("T-1h", f"{event.title} 출발·준비 확인")]
     return []
@@ -116,11 +120,16 @@ def _checkpoint_anchor(event: StructuredEvent) -> datetime | None:
     while the visible fact remains a date-only deadline/expiry.
     """
 
-    if event.type == Intent.APPOINTMENT:
-        return _event_at(event)
-    if event.type not in (Intent.DEADLINE, Intent.COUPON):
+    if event.type in (Intent.APPOINTMENT, Intent.RESERVATION):
+        if explicit := _event_at(event):
+            return explicit
+        if event.date:
+            timezone = ZoneInfo(os.getenv("OPENLOOP_TIMEZONE", "Asia/Seoul"))
+            return datetime.combine(event.date, time(hour=10), tzinfo=timezone)
         return None
-    target_date = event.date if event.type == Intent.DEADLINE else event.expires_on
+    if event.type not in (Intent.DEADLINE, Intent.COUPON, Intent.PURCHASE):
+        return None
+    target_date = event.expires_on or event.date if event.type in (Intent.COUPON, Intent.PURCHASE) else event.date
     if target_date is None:
         return None
     timezone = ZoneInfo(os.getenv("OPENLOOP_TIMEZONE", "Asia/Seoul"))
@@ -199,6 +208,19 @@ def _default_graph(
             actions.append(LoopAction(id=_id(), type="place", title=event.place.name))
         if _checkpoint_anchor(event):
             actions.append(LoopAction(id=_id(), type="reminder", title="기한 알림 자동 예약"))
+    elif event.type == Intent.PURCHASE:
+        actions.append(LoopAction(id=_id(), type="purchase", title=f"{event.title} 구매·배송 조회"))
+        if event.place:
+            actions.append(LoopAction(id=_id(), type="place", title=event.place.name))
+        if _checkpoint_anchor(event):
+            actions.append(LoopAction(id=_id(), type="reminder", title="반품·보증 알림 자동 예약"))
+    elif event.type == Intent.RESERVATION:
+        actions.append(LoopAction(id=_id(), type="reservation", title=f"{event.title} 예약 확인"))
+        actions.append(LoopAction(id=_id(), type="calendar", title=f"{event.title} 캘린더 등록"))
+        if event.place:
+            actions.append(LoopAction(id=_id(), type="place", title=event.place.name))
+        if _checkpoint_anchor(event):
+            actions.append(LoopAction(id=_id(), type="reminder", title="예약 당일 알림 자동 예약"))
     elif event.type == Intent.PLACE and event.place:
         actions.append(LoopAction(id=_id(), type="place", title=f"{event.place.name} 지도 열기"))
     checkpoints = [

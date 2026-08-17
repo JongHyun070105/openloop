@@ -33,7 +33,9 @@ _WEEKDAYS = {
 }
 _DEADLINE_TERMS = ("마감", "제출", "접수", "신청 기한", "데드라인")
 _COUPON_TERMS = ("쿠폰", "할인", "혜택", "바우처", "기프티콘", "프로모션")
-_APPOINTMENT_TERMS = ("회의", "미팅", "약속", "예약", "만나", "만남", "방문")
+_PURCHASE_TERMS = ("구매", "주문", "결제", "배송", "반품", "영수증", "쇼핑", "주문번호", "송장")
+_RESERVATION_TERMS = ("예약", "체크인", "항공권", "호텔", "숙소", "티켓", "탑승", "진료", "예매")
+_APPOINTMENT_TERMS = ("회의", "미팅", "약속", "만나", "만남", "방문")
 _KST = ZoneInfo("Asia/Seoul")
 
 
@@ -131,9 +133,13 @@ def _event_title(text: str, intent: Intent) -> str:
         return "마감 일정"
     if intent == Intent.COUPON:
         return _reference_title(text, fallback="쿠폰")
+    if intent == Intent.PURCHASE:
+        return _reference_title(text, fallback="구매 내역")
+    if intent == Intent.RESERVATION:
+        return _reference_title(text, fallback="예약")
     if intent == Intent.PLACE:
         return _reference_title(text, fallback="저장한 장소")
-    for keyword in ("회의", "미팅", "약속", "예약"):
+    for keyword in ("회의", "미팅", "약속"):
         if keyword in text:
             return keyword
     return "새 일정"
@@ -156,6 +162,10 @@ def _classify_intent(text: str) -> Intent:
         return Intent.DEADLINE
     if any(term in text for term in _COUPON_TERMS):
         return Intent.COUPON
+    if any(term in text for term in _PURCHASE_TERMS):
+        return Intent.PURCHASE
+    if any(term in text for term in _RESERVATION_TERMS):
+        return Intent.RESERVATION
     if any(term in text for term in _APPOINTMENT_TERMS):
         return Intent.APPOINTMENT
     if _extract_time(text) is not None and re.search(
@@ -199,6 +209,8 @@ def _summary(
         Intent.DEADLINE: "마감",
         Intent.PLACE: "장소 저장",
         Intent.COUPON: "쿠폰",
+        Intent.PURCHASE: "구매",
+        Intent.RESERVATION: "예약",
     }[intent]
     facts = [title, kind]
     if event_date:
@@ -239,9 +251,9 @@ def analyze_demo(request: AnalyzeRequest, reference_date: date | None = None) ->
     text = request.text
     intent = _classify_intent(text)
     extracted_date = _extract_date(text, reference_date or datetime.now(_KST).date())
-    event_date = extracted_date if intent != Intent.COUPON and intent != Intent.PLACE else None
-    expires_on = extracted_date if intent == Intent.COUPON else None
-    event_time = _extract_time(text) if intent in (Intent.APPOINTMENT, Intent.DEADLINE) else None
+    event_date = extracted_date if intent not in (Intent.COUPON, Intent.PLACE) else None
+    expires_on = extracted_date if intent in (Intent.COUPON, Intent.PURCHASE) else None
+    event_time = _extract_time(text) if intent in (Intent.APPOINTMENT, Intent.DEADLINE, Intent.RESERVATION) else None
     place_name = _extract_place(text)
     title = _event_title(text, intent)
     if intent == Intent.PLACE:
@@ -252,6 +264,12 @@ def analyze_demo(request: AnalyzeRequest, reference_date: date | None = None) ->
         missing_fields = [
             field
             for field, value in (("date", event_date), ("start_time", event_time), ("place", place_name))
+            if value is None
+        ]
+    elif intent == Intent.RESERVATION:
+        missing_fields = [
+            field
+            for field, value in (("date", event_date), ("start_time", event_time))
             if value is None
         ]
     elif intent == Intent.DEADLINE and event_date is None:
