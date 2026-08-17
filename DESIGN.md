@@ -69,7 +69,7 @@
 ## Components
 
 - Existing components to reuse: facts, loop cards, information banners, action/checkpoint rows
-- New/changed components: single-image preview, retryable analysis failure, adaptive destructive confirmation, compact labeled review-title field, typed-time field with picker alternative, confidence-aware field state
+- New/changed components: single-image preview, retryable analysis failure, adaptive destructive confirmation, compact labeled review-title field, typed-time field with picker alternative, confidence-aware field state, plain-language action/checkpoint explanations, relative checkpoint timestamps
 - Variants and states: loading, success, one-field ambiguity, provider failure, offline, disabled, closed
 - Token/component ownership: `apps/mobile/lib/design_system.dart` owns visual tokens; platform helpers own adaptive/native presentation
 
@@ -79,7 +79,7 @@
 - Destructive confirmation uses a Cupertino destructive/cancel alert on iOS and the platform Material confirmation on Android.
 - Date editing uses the platform picker. A missing or tentative time also accepts direct keyboard entry (`16:30`, `오후 4시 30분`) while retaining the picker as an alternative.
 - Calendar creation opens the operating system calendar composer.
-- Notification permission is requested only at the moment the user enables a reminder.
+- After the first app frame, the operating system notification permission is requested once. When granted, the app automatically schedules future local checkpoint alerts for active Loops.
 - A denied permission offers a link to the operating system app settings; the app does not recreate settings screens.
 
 ## Confidence behavior
@@ -97,8 +97,9 @@ Capture -> nonpersisted Analysis Draft -> focused review -> approval -> Open Loo
 
 - Leaving Review before approval creates no server Loop.
 - Appointment approval saves the Loop, starts the system calendar composer, and returns the app to Home without waiting for the external composer to dismiss.
-- Default Appointment checkpoints: `T-24h`, `T-2h`, `T-1h`, `T+1d`.
-- Default Deadline checkpoints: `D-7`, `D-3`, `D-1`.
+- Checkpoints are not a to-do list: actions are the user's direct work (calendar, place, checklist), while checkpoints are timed prompts that help with that work.
+- Default Appointment checkpoints start from `T-24h`, `T-2h`, `T-1h`, `T+1d`; Deadline checkpoints start from `D-7`, `D-3`, `D-1`.
+- Only checkpoints that are still in the future are generated. If an event is too close for the normal cadence, the nearest useful preparation time replaces stale entries (for example `T-30m` or `T-5m`).
 
 ## Accessibility
 
@@ -122,6 +123,7 @@ Capture -> nonpersisted Analysis Draft -> focused review -> approval -> Open Loo
 - Empty: explain native share and offer one-image/text capture
 - Error: `이미지를 분석하지 못했어요` with Retry and Use text actions
 - Success: structured result and one primary Add action; calendar handoff never leaves the app in a loading state
+- Detail: checkpoint times read as `오늘 17:00`, `내일 09:00`, or `8월 20일 (목) 19:00`, never raw ISO timestamps
 - Disabled: explain the missing prerequisite next to the disabled action
 - Offline/slow network: never synthesize a successful image result; preserve the image temporarily and allow retry
 

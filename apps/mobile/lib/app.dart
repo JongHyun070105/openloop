@@ -34,6 +34,9 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
 
   Future<void> _initialize() async {
     await widget.controller.initialize();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(widget.controller.enableAutomaticReminders());
+    });
     final queuedShare = _queuedShare;
     _queuedShare = null;
     if (queuedShare != null) _presentSharedCapture(queuedShare);
@@ -1329,6 +1332,11 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
+            const _InfoBanner(
+              text:
+                  '실행 항목은 캘린더 추가, 장소 확인처럼 직접 끝낼 일입니다. 알림은 일정 시점에 맞춰 앱이 자동으로 예약합니다.',
+            ),
+            const SizedBox(height: 8),
             ...loop.actions.map(
               (item) => CheckboxListTile(
                 value: item.completed,
@@ -1338,7 +1346,11 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                     Expanded(child: Text(item.title)),
                     const SizedBox(width: 8),
                     Text(
-                      item.completed ? '완료' : '대기',
+                      item.completed
+                          ? '완료'
+                          : item.type == 'reminder'
+                          ? '자동'
+                          : '대기',
                       style: TextStyle(
                         color: item.completed
                             ? OLColors.cobalt
@@ -1348,6 +1360,10 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                       ),
                     ),
                   ],
+                ),
+                subtitle: Text(
+                  actionDescription(item),
+                  style: const TextStyle(fontSize: 12),
                 ),
                 onChanged: loop.state == LoopState.closed
                     ? null
@@ -1367,6 +1383,11 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             const Text(
               '체크포인트',
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            const _InfoBanner(
+              text:
+                  '체크포인트는 일정 전후에 확인을 돕는 알림 시점입니다. 이미 지난 시점은 만들지 않고, 임박한 일정에는 더 가까운 준비 시점을 안내합니다.',
             ),
             const SizedBox(height: 8),
             ...loop.checkpoints.map(
@@ -1392,7 +1413,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 subtitle: item.dueAt == null
                     ? null
                     : Text(
-                        item.dueAt!.toLocal().toString(),
+                        '${checkpointTimeText(item.dueAt!)} · ${item.completed ? '확인 완료' : '자동 알림 예정'}',
                         style: const TextStyle(fontSize: 12),
                       ),
                 onChanged: loop.state == LoopState.closed
@@ -1421,6 +1442,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 label: const Text('장소·날씨 보기'),
               ),
             OutlinedButton.icon(
+              key: const Key('calendar-add-button'),
               onPressed: () {
                 if (loop.startsAt == null) {
                   setState(() => notice = '날짜와 시간을 먼저 확인한 뒤 캘린더에 추가해 주세요.');
@@ -1436,24 +1458,17 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             ),
             OutlinedButton.icon(
               onPressed: () async {
-                final ok = await widget.controller.deviceActions
-                    .scheduleReminder(loop);
-                if (ok) {
-                  await widget.controller.completeActionByType(
-                    loop,
-                    'reminder',
-                  );
-                }
+                final ok = await widget.controller.syncLocalReminders();
                 if (mounted) {
                   setState(
                     () => notice = ok
-                        ? '로컬 알림을 예약했습니다.'
-                        : '알림 권한이 꺼져 있습니다. Loop는 그대로 저장됩니다.',
+                        ? '앞으로 남은 체크포인트 알림을 다시 예약했습니다.'
+                        : '예정된 체크포인트가 없거나 알림 권한이 꺼져 있습니다.',
                   );
                 }
               },
               icon: const Icon(Icons.notifications_active_outlined),
-              label: const Text('알림 예약'),
+              label: const Text('알림 다시 예약'),
             ),
             const SizedBox(height: 10),
             FilledButton.icon(
@@ -1939,6 +1954,29 @@ class _PrivacyNote extends StatelessWidget {
 
 String dateText(DateTime? date) =>
     date == null ? '날짜 미정' : '${date.month}월 ${date.day}일';
+String checkpointTimeText(DateTime dateTime, {DateTime? now}) {
+  final local = dateTime.toLocal();
+  final reference = (now ?? DateTime.now()).toLocal();
+  final date = DateTime(local.year, local.month, local.day);
+  final today = DateTime(reference.year, reference.month, reference.day);
+  final dayDifference = date.difference(today).inDays;
+  final time =
+      '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  if (dayDifference == 0) return '오늘 $time';
+  if (dayDifference == 1) return '내일 $time';
+  if (dayDifference == 2) return '모레 $time';
+  const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+  return '${local.month}월 ${local.day}일 (${weekdays[local.weekday - 1]}) $time';
+}
+
+String actionDescription(LoopAction action) => switch (action.type) {
+  'calendar' => '기기 캘린더에 이 일정을 남깁니다.',
+  'reminder' => '허용한 앱 알림으로 체크포인트를 자동 예약합니다.',
+  'place' => '장소와 날씨 정보를 확인합니다.',
+  'checklist' => '마감 전에 빠뜨릴 제출 항목을 확인합니다.',
+  _ => '이 일정을 실제로 마무리하기 위한 항목입니다.',
+};
+
 String stateText(LoopState state) => switch (state) {
   LoopState.open => 'OPEN',
   LoopState.needsInput => '확인 필요',

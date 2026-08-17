@@ -308,10 +308,13 @@ void main() {
   test(
     'local deadline mirrors the deadline checklist and review cadence',
     () async {
-      final result = await LocalAnalyzeService().analyze(
-        text: 'AI 공모전 제출 마감 2026-08-22 23:00. 제출물: 작품 파일, 포트폴리오',
-        source: 'text',
-      );
+      final result =
+          await LocalAnalyzeService(
+            clock: () => DateTime(2026, 8, 1, 9),
+          ).analyze(
+            text: 'AI 공모전 제출 마감 2026-08-22 23:00. 제출물: 작품 파일, 포트폴리오',
+            source: 'text',
+          );
 
       expect(result.actions, isNotEmpty);
       expect(
@@ -332,10 +335,9 @@ void main() {
   test(
     'local appointment creates event-driven before and after checkpoints',
     () async {
-      final result = await LocalAnalyzeService().analyze(
-        text: '2026-08-22 19:00 성수에서 회의',
-        source: 'text',
-      );
+      final result = await LocalAnalyzeService(
+        clock: () => DateTime(2026, 8, 1, 9),
+      ).analyze(text: '2026-08-22 19:00 성수에서 회의', source: 'text');
 
       expect(result.state, LoopState.open);
       expect(result.checkpoints.map((item) => item.offset), [

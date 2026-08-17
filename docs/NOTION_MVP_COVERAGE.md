@@ -14,8 +14,8 @@ brief's later roadmap so a planned skill is not mistaken for a missing button.
 | Missing/low-confidence verification | Required values below `0.65` or absent enter `needs_input`; the provider's focused question is preserved | `services/api/app/analyzer.py`, `apps/mobile/lib/models/open_loop.dart` |
 | Native review completion | Review facts are editable, Appointment approval opens the system calendar composer, and delete confirmation is Cupertino/Material adaptive | `apps/mobile/lib/app.dart` |
 | Action graph | Calendar, reminder, place, checklist, and checkpoints are persisted and independently completable | `services/api/app/service.py` |
-| Deadline closeout | Explicit checklist plus D-7 / D-3 / D-1 checkpoints | `services/api/app/service.py` |
-| Appointment follow-up | T-24h / T-2h / T-1h / T+1d checkpoints | `services/api/app/service.py` |
+| Deadline closeout | Explicit checklist plus future-only D-7 / D-3 / D-1 or near-term checkpoints | `services/api/app/service.py`, `apps/mobile/lib/services/checkpoint_planner.dart` |
+| Appointment follow-up | Future-only T-24h / T-2h / T-1h / T+1d or near-term checkpoints | `services/api/app/service.py`, `apps/mobile/lib/services/checkpoint_planner.dart` |
 | Privacy and Close & Forget | PII redaction before text inference, no raw image persistence, and completion-time retention deadlines | `services/api/app/privacy.py`, `apps/mobile/lib/app_controller.dart` |
 | AI quality gate | Versioned 100-case synthetic set and opt-in adapter/API runner with five 95% accuracy gates | `services/api/evals/`, `docs/AI_EVALUATION.md` |
 

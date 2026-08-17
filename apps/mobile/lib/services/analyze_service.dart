@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../models/open_loop.dart';
+import 'checkpoint_planner.dart';
 import 'installation_identity.dart';
 
 abstract interface class AnalyzeService {
@@ -250,13 +251,18 @@ MediaType imageMediaType(String imagePath) {
 }
 
 class LocalAnalyzeService implements AnalyzeService {
+  LocalAnalyzeService({DateTime Function()? clock})
+    : _clock = clock ?? DateTime.now;
+
+  final DateTime Function() _clock;
+
   @override
   Future<OpenLoop> analyze({
     required String text,
     required String source,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 450));
-    final now = DateTime.now();
+    final now = _clock();
     final isDeadline =
         text.contains('마감') || text.contains('제출') || text.contains('공모전');
     final date = _explicitDate(text, now);
@@ -271,6 +277,7 @@ class LocalAnalyzeService implements AnalyzeService {
       time: startTime,
       deadline: isDeadline,
       title: title,
+      now: now,
     );
     final missingFields = <String>[
       if (date == null) 'date',
@@ -339,11 +346,11 @@ class LocalAnalyzeService implements AnalyzeService {
             'title': '마감 체크리스트',
             'completed': false,
           },
-        if (date != null || startTime != null)
+        if (date != null && startTime != null)
           {
             'id': 'action-reminder',
             'type': 'reminder',
-            'title': '알림 설정',
+            'title': '알림 자동 예약',
             'completed': false,
           },
       ],
@@ -385,9 +392,10 @@ List<Map<String, dynamic>> _localCheckpoints({
   required String? time,
   required bool deadline,
   required String title,
+  required DateTime now,
 }) {
-  if (date == null) return const [];
-  final parts = time?.split(':') ?? const <String>[];
+  if (date == null || time == null) return const [];
+  final parts = time.split(':');
   final eventAt = DateTime(
     date.year,
     date.month,
@@ -395,60 +403,20 @@ List<Map<String, dynamic>> _localCheckpoints({
     parts.isEmpty ? 9 : int.tryParse(parts.first) ?? 9,
     parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
   );
-  final templates = deadline
-      ? <({String id, String offset, String title, Duration delta})>[
-          (
-            id: 'd7',
-            offset: 'D-7',
-            title: '$title D-7 준비 확인',
-            delta: const Duration(days: -7),
-          ),
-          (
-            id: 'd3',
-            offset: 'D-3',
-            title: '$title D-3 제출물 점검',
-            delta: const Duration(days: -3),
-          ),
-          (
-            id: 'd1',
-            offset: 'D-1',
-            title: '$title D-1 최종 확인',
-            delta: const Duration(days: -1),
-          ),
-        ]
-      : <({String id, String offset, String title, Duration delta})>[
-          (
-            id: 't24h',
-            offset: 'T-24h',
-            title: '$title 하루 전 확인',
-            delta: const Duration(hours: -24),
-          ),
-          (
-            id: 't2h',
-            offset: 'T-2h',
-            title: '$title 출발·준비 확인',
-            delta: const Duration(hours: -2),
-          ),
-          (
-            id: 't1h',
-            offset: 'T-1h',
-            title: '$title 한 시간 전 준비 확인',
-            delta: const Duration(hours: -1),
-          ),
-          (
-            id: 't1d',
-            offset: 'T+1d',
-            title: '$title 후속 확인',
-            delta: const Duration(days: 1),
-          ),
-        ];
+  final planned = planCheckpoints(
+    kind: deadline ? LoopKind.deadline : LoopKind.appointment,
+    title: title,
+    eventAt: eventAt,
+    now: now,
+  );
   return [
-    for (final item in templates)
+    for (final item in planned)
       {
-        'id': 'checkpoint-${item.id}',
+        'id':
+            'checkpoint-${item.offset.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
         'offset': item.offset,
         'title': item.title,
-        'due_at': eventAt.add(item.delta).toUtc().toIso8601String(),
+        'due_at': item.dueAt.toUtc().toIso8601String(),
         'completed': false,
       },
   ];

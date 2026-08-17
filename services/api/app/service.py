@@ -1,6 +1,6 @@
 import os
 import re
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -24,19 +24,23 @@ def _id() -> str:
     return str(uuid4())
 
 
-def _checkpoint_templates(event: StructuredEvent) -> list[tuple[str, str]]:
-    """Return the product's default event-driven follow-up cadence.
-
-    Deadlines get the review cadence called out in the product spec. Appointments
-    get the practical before/during/after checks. A model-supplied checkpoint
-    reminder remains authoritative so an explicit user request is never lost.
-    """
-
-    explicit = [
+def _explicit_checkpoint_offsets(event: StructuredEvent) -> list[str]:
+    return [
         _canonical_checkpoint_offset(event, reminder.offset)
         for reminder in event.reminders
         if reminder.type == "checkpoint"
     ]
+
+
+def _checkpoint_templates(event: StructuredEvent) -> list[tuple[str, str]]:
+    """Return the product's default event-driven follow-up cadence.
+
+    A model-supplied checkpoint reminder remains authoritative. The caller
+    filters these templates against the moment a Loop is actually created, so a
+    same-day plan never inherits an already missed "day before" reminder.
+    """
+
+    explicit = _explicit_checkpoint_offsets(event)
     if explicit:
         return [(offset, f"{event.title} {offset} 확인") for offset in explicit]
     if event.type == Intent.DEADLINE:
@@ -100,12 +104,65 @@ def _offset_to_duration(offset: str) -> timedelta | None:
     }[unit.lower()]
 
 
-def _default_graph(event: StructuredEvent) -> tuple[list[LoopAction], list[ChecklistItem], list[Checkpoint]]:
+def _event_at(event: StructuredEvent) -> datetime | None:
+    if not event.date or not event.start_time:
+        return None
+    timezone = ZoneInfo(os.getenv("OPENLOOP_TIMEZONE", "Asia/Seoul"))
+    return datetime.combine(event.date, event.start_time, tzinfo=timezone)
+
+
+def _checkpoint_candidates(
+    event: StructuredEvent, reference_at: datetime
+) -> list[tuple[str, str, datetime]]:
+    """Build only future, useful checkpoint prompts for this exact event time."""
+
+    event_at = _event_at(event)
+    if event_at is None:
+        return []
+    now = reference_at.astimezone(UTC)
+    candidates = [
+        (offset, title, due_at)
+        for offset, title in _checkpoint_templates(event)
+        if (due_at := _checkpoint_due_at(event, offset)) is not None and due_at > now
+    ]
+    # A provider-requested offset is intentional; do not replace it with a
+    # product default when it has already passed.
+    if _explicit_checkpoint_offsets(event):
+        return candidates
+
+    has_upcoming_preparation = any(due_at < event_at for _, _, due_at in candidates)
+    if not has_upcoming_preparation and event_at > now:
+        short_leads = (
+            [
+                ("T-3h", f"{event.title} 마감 3시간 전 점검"),
+                ("T-1h", f"{event.title} 마감 한 시간 전 확인"),
+                ("T-30m", f"{event.title} 마감 30분 전 확인"),
+                ("T-5m", f"{event.title} 마감 직전 확인"),
+            ]
+            if event.type == Intent.DEADLINE
+            else [
+                ("T-30m", f"{event.title} 출발 30분 전 확인"),
+                ("T-15m", f"{event.title} 출발 15분 전 확인"),
+                ("T-5m", f"{event.title} 출발 직전 확인"),
+            ]
+        )
+        for offset, title in short_leads:
+            due_at = _checkpoint_due_at(event, offset)
+            if due_at is not None and due_at > now:
+                candidates.append((offset, title, due_at))
+                break
+    return sorted(candidates, key=lambda item: item[2])
+
+
+def _default_graph(
+    event: StructuredEvent, *, reference_at: datetime | None = None
+) -> tuple[list[LoopAction], list[ChecklistItem], list[Checkpoint]]:
+    now = reference_at or datetime.now(UTC)
     actions = [LoopAction(id=_id(), type="calendar", title=f"{event.title} 일정 추가")]
     if event.place:
         actions.append(LoopAction(id=_id(), type="place", title=event.place.name))
-    if event.reminders or event.date or event.start_time:
-        actions.append(LoopAction(id=_id(), type="reminder", title="알림 설정"))
+    if event.date and event.start_time:
+        actions.append(LoopAction(id=_id(), type="reminder", title="알림 자동 예약"))
     checklist: list[ChecklistItem] = []
     if event.type == Intent.DEADLINE:
         checklist = (
@@ -125,21 +182,18 @@ def _default_graph(event: StructuredEvent) -> tuple[list[LoopAction], list[Check
             id=_id(),
             offset=offset,
             title=title,
-            due_at=_checkpoint_due_at(event, offset),
+            due_at=due_at,
         )
-        for offset, title in _checkpoint_templates(event)
+        for offset, title, due_at in _checkpoint_candidates(event, now)
     ]
     return actions, checklist, checkpoints
 
 
 def _checkpoint_due_at(event: StructuredEvent, offset: str) -> datetime | None:
-    if not event.date:
-        return None
     delta = _offset_to_duration(offset)
-    if delta is None:
+    event_at = _event_at(event)
+    if delta is None or event_at is None:
         return None
-    timezone = ZoneInfo(os.getenv("OPENLOOP_TIMEZONE", "Asia/Seoul"))
-    event_at = datetime.combine(event.date, event.start_time or time(9), tzinfo=timezone)
     return (event_at + delta).astimezone(UTC)
 
 
@@ -151,7 +205,10 @@ def _refresh_graph(loop: OpenLoop) -> None:
     IDs, so DynamoDB checkpoint rows and a user's completion state remain stable.
     """
 
-    actions, checklist, checkpoints = _default_graph(loop.event)
+    actions, checklist, checkpoints = _default_graph(
+        loop.event,
+        reference_at=datetime.now(UTC),
+    )
     actions_by_type = {item.type: item for item in loop.actions}
     loop.actions = [
         actions_by_type.get(item.type, item)
@@ -195,7 +252,15 @@ class LoopService:
 
     def create(self, request: CreateLoopRequest, owner_id: str = "dev-local") -> OpenLoop:
         now = datetime.now(UTC)
-        generated_actions, generated_checklist, generated_checkpoints = _default_graph(request.event)
+        generated_actions, generated_checklist, generated_checkpoints = _default_graph(
+            request.event,
+            reference_at=now,
+        )
+        requested_checkpoints = [
+            checkpoint
+            for checkpoint in request.checkpoints
+            if checkpoint.due_at is not None and checkpoint.due_at > now
+        ]
         loop = OpenLoop(
             id=_id(),
             owner_id=owner_id,
@@ -204,7 +269,7 @@ class LoopService:
             suggested_question=request.suggested_question,
             actions=request.actions or generated_actions,
             checklist=request.checklist or generated_checklist,
-            checkpoints=request.checkpoints or generated_checkpoints,
+            checkpoints=requested_checkpoints or generated_checkpoints,
             retention=request.retention,
             created_at=now,
             updated_at=now,

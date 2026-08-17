@@ -26,6 +26,9 @@ void main() {
   testWidgets('captures, analyzes, saves, details, and closes a deadline', (
     tester,
   ) async {
+    final future = DateTime.now().add(const Duration(days: 14));
+    final date =
+        '${future.year}-${future.month.toString().padLeft(2, '0')}-${future.day.toString().padLeft(2, '0')}';
     await tester.pumpWidget(OpenLoopApp(controller: controller));
     await tester.pumpAndSettle();
     expect(find.text('아직 Open Loop가 없습니다.'), findsOneWidget);
@@ -37,7 +40,7 @@ void main() {
     expect(find.text('사진·스크린샷'), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('capture-text')),
-      'AI 공모전 제출 마감 8월 22일 23시',
+      'AI 공모전 제출 마감 $date 23시',
     );
     await tester.tap(find.byKey(const Key('analyze-button')));
     await tester.pump();
@@ -47,9 +50,12 @@ void main() {
     expect(find.text('DEADLINE'), findsOneWidget);
     expect(find.text('원격 AI를 설정하지 않아 로컬 규칙 분석을 사용했습니다.'), findsOneWidget);
     expect(find.text('AI 요약'), findsOneWidget);
-    for (var attempt = 0;
-        attempt < 4 && find.byKey(const Key('save-loop-button')).evaluate().isEmpty;
-        attempt++) {
+    for (
+      var attempt = 0;
+      attempt < 4 &&
+          find.byKey(const Key('save-loop-button')).evaluate().isEmpty;
+      attempt++
+    ) {
       await tester.dragFrom(const Offset(200, 550), const Offset(0, -400));
       await tester.pumpAndSettle();
     }
@@ -65,8 +71,10 @@ void main() {
     await tester.scrollUntilVisible(find.text('체크포인트'), 180);
     expect(find.text('체크포인트'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('캘린더에 추가'), 180);
-    await tester.tap(find.text('캘린더에 추가'));
+    final calendarButton = find.byKey(const Key('calendar-add-button'));
+    await tester.ensureVisible(calendarButton);
+    await tester.pumpAndSettle();
+    await tester.tap(calendarButton);
     await tester.pumpAndSettle();
     expect(
       controller.loops.single.actions
@@ -76,11 +84,54 @@ void main() {
       isTrue,
     );
 
-    await tester.scrollUntilVisible(find.text('공모전 마감 D-7 준비 확인'), 180);
-    await tester.tap(find.text('공모전 마감 D-7 준비 확인'));
+    final checkpoint = find.text('공모전 마감 D-7 준비 확인');
+    await tester.ensureVisible(checkpoint);
+    await tester.pumpAndSettle();
+    await tester.tap(checkpoint);
     await tester.pumpAndSettle();
     expect(controller.loops.single.checkpoints.first.completed, isTrue);
   });
+
+  testWidgets(
+    'first app frame asks for notification permission and syncs future loops',
+    (tester) async {
+      final deviceActions = _RecordingDeviceActions();
+      final future = DateTime.now().add(const Duration(days: 2));
+      repository.loops = [
+        OpenLoop(
+          id: 'notification-loop',
+          kind: LoopKind.appointment,
+          state: LoopState.open,
+          title: '회의',
+          source: 'text',
+          createdAt: DateTime.now(),
+          date: DateTime(future.year, future.month, future.day),
+          time: '19:00:00',
+          checkpoints: [
+            LoopCheckpoint(
+              id: 'checkpoint',
+              offset: 'T-1h',
+              title: '회의 한 시간 전 준비 확인',
+              dueAt: DateTime(future.year, future.month, future.day, 18),
+            ),
+          ],
+          confidence: const {},
+        ),
+      ];
+      controller = AppController(
+        repository: repository,
+        deviceActions: deviceActions,
+        defaultBaseUrl: '',
+      );
+
+      await tester.pumpWidget(OpenLoopApp(controller: controller));
+      await tester.pumpAndSettle();
+
+      expect(deviceActions.notificationPermissionCalls, 1);
+      expect(deviceActions.reminderSyncCalls, 1);
+      expect(deviceActions.lastSyncedLoopIds, ['notification-loop']);
+    },
+  );
 
   testWidgets('settings persist base URL and retention choice', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1100));
@@ -103,14 +154,15 @@ void main() {
   });
 
   test('resolves every missing field before showing the review', () async {
+    final future = DateTime.now().add(const Duration(days: 14));
     final loop = OpenLoop(
       id: 'needs-input',
       kind: LoopKind.appointment,
       state: LoopState.needsInput,
       title: '저녁 약속',
       source: 'text',
-      createdAt: DateTime(2026, 8, 16),
-      date: DateTime(2026, 8, 17),
+      createdAt: DateTime.now(),
+      date: DateTime(future.year, future.month, future.day),
       time: '19:00:00',
       missingFields: const ['place', 'participants'],
       confidence: const {},
@@ -214,22 +266,25 @@ void main() {
     expect(controller.loops, isEmpty);
   });
 
-  test('configured text AI failure stays retryable instead of using a local demo', () async {
-    final remoteController = AppController(
-      repository: repository,
-      deviceActions: NoopDeviceActions(),
-      defaultBaseUrl: 'https://api.example',
-      apiFactory: (_) => _FailingLoopApi(),
-    );
-    await remoteController.initialize();
+  test(
+    'configured text AI failure stays retryable instead of using a local demo',
+    () async {
+      final remoteController = AppController(
+        repository: repository,
+        deviceActions: NoopDeviceActions(),
+        defaultBaseUrl: 'https://api.example',
+        apiFactory: (_) => _FailingLoopApi(),
+      );
+      await remoteController.initialize();
 
-    await expectLater(
-      remoteController.analyze(text: '오후 7시 약속', source: 'text'),
-      throwsA(isA<StateError>()),
-    );
-    expect(remoteController.lastAnalysisWasLocal, isFalse);
-    expect(remoteController.loops, isEmpty);
-  });
+      await expectLater(
+        remoteController.analyze(text: '오후 7시 약속', source: 'text'),
+        throwsA(isA<StateError>()),
+      );
+      expect(remoteController.lastAnalysisWasLocal, isFalse);
+      expect(remoteController.loops, isEmpty);
+    },
+  );
 
   testWidgets('uses the server suggested question in the ambiguity UI', (
     tester,
@@ -732,11 +787,30 @@ class _RecordingDeviceActions implements DeviceActions {
 
   final bool calendarResult;
   int calendarCalls = 0;
+  int notificationPermissionCalls = 0;
+  int reminderSyncCalls = 0;
+  List<String> lastSyncedLoopIds = const [];
 
   @override
   Future<bool> addToCalendar(OpenLoop loop) async {
     calendarCalls += 1;
     return calendarResult;
+  }
+
+  @override
+  Future<void> cancelReminders(OpenLoop loop) async {}
+
+  @override
+  Future<bool> requestNotificationPermission() async {
+    notificationPermissionCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<bool> syncReminders(Iterable<OpenLoop> loops) async {
+    reminderSyncCalls += 1;
+    lastSyncedLoopIds = loops.map((loop) => loop.id).toList();
+    return true;
   }
 
   @override
@@ -752,6 +826,15 @@ class _HangingDeviceActions implements DeviceActions {
     calendarCalls += 1;
     return _calendarResult.future;
   }
+
+  @override
+  Future<void> cancelReminders(OpenLoop loop) async {}
+
+  @override
+  Future<bool> requestNotificationPermission() async => true;
+
+  @override
+  Future<bool> syncReminders(Iterable<OpenLoop> loops) async => true;
 
   @override
   Future<bool> scheduleReminder(OpenLoop loop) async => true;

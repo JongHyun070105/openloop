@@ -95,14 +95,14 @@ class OpenLoop {
   bool get isDraft => persistence != LoopPersistence.persisted;
 
   DateTime? get startsAt {
-    if (date == null) return null;
-    final parts = time?.split(':');
+    if (date == null || time == null) return null;
+    final parts = time!.split(':');
     return DateTime(
       date!.year,
       date!.month,
       date!.day,
-      parts == null ? 9 : int.tryParse(parts.first) ?? 9,
-      parts == null || parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
+      int.tryParse(parts.first) ?? 9,
+      parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
     );
   }
 

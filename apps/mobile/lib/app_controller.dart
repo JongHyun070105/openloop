@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'config.dart';
 import 'models/open_loop.dart';
 import 'services/analyze_service.dart';
+import 'services/checkpoint_planner.dart';
 import 'services/device_actions.dart';
 import 'services/external_integrations.dart';
 import 'services/loop_repository.dart';
@@ -108,6 +111,33 @@ class AppController extends ChangeNotifier {
     loops = [loop, ...loops.where((item) => item.id != loop.id)];
     await repository.save(loops);
     notifyListeners();
+    unawaited(_rescheduleLocalReminders());
+  }
+
+  /// Called after the first app frame so the system-owned permission sheet is
+  /// presented once, then all future checkpoints are kept in sync locally.
+  Future<bool> enableAutomaticReminders() async {
+    final granted = await deviceActions.requestNotificationPermission();
+    if (!granted) return false;
+    return syncLocalReminders();
+  }
+
+  Future<bool> syncLocalReminders() => deviceActions.syncReminders(loops);
+
+  Future<void> _rescheduleLocalReminders() async {
+    try {
+      await syncLocalReminders();
+    } catch (_) {
+      // A loop remains useful even when the OS notification service is absent.
+    }
+  }
+
+  Future<void> _cancelLocalReminders(OpenLoop loop) async {
+    try {
+      await deviceActions.cancelReminders(loop);
+    } catch (_) {
+      // Closing and deleting must not depend on a platform notification API.
+    }
   }
 
   Future<OpenLoop> resolveAmbiguity(
@@ -271,6 +301,7 @@ class AppController extends ChangeNotifier {
     } else {
       loops = loops.map((item) => item.id == loop.id ? closed : item).toList();
     }
+    await _cancelLocalReminders(loop);
     await repository.save(loops);
     notifyListeners();
   }
@@ -382,6 +413,7 @@ class AppController extends ChangeNotifier {
         // Fall back to local deletion below.
       }
     }
+    await _cancelLocalReminders(loop);
     loops = loops.where((item) => item.id != loop.id).toList();
     await repository.save(loops);
     notifyListeners();
@@ -450,7 +482,9 @@ OpenLoop _refreshLocalGraph(OpenLoop loop) {
 
   ensureAction('calendar', '${loop.title} 일정 추가');
   if (loop.place != null) ensureAction('place', loop.place!);
-  if (loop.date != null || loop.time != null) ensureAction('reminder', '알림 설정');
+  if (loop.startsAt != null) {
+    ensureAction('reminder', '알림 자동 예약');
+  }
   var checklist = loop.checklist;
   if (loop.kind == LoopKind.deadline) {
     ensureAction('checklist', '마감 체크리스트');
@@ -464,66 +498,30 @@ OpenLoop _refreshLocalGraph(OpenLoop loop) {
     checklist = const [];
   }
 
-  final templates = loop.kind == LoopKind.deadline
-      ? <({String offset, String title, Duration delta})>[
-          (
-            offset: 'D-7',
-            title: '${loop.title} D-7 준비 확인',
-            delta: const Duration(days: -7),
-          ),
-          (
-            offset: 'D-3',
-            title: '${loop.title} D-3 제출물 점검',
-            delta: const Duration(days: -3),
-          ),
-          (
-            offset: 'D-1',
-            title: '${loop.title} D-1 최종 확인',
-            delta: const Duration(days: -1),
-          ),
-        ]
-      : <({String offset, String title, Duration delta})>[
-          (
-            offset: 'T-24h',
-            title: '${loop.title} 하루 전 확인',
-            delta: const Duration(hours: -24),
-          ),
-          (
-            offset: 'T-2h',
-            title: '${loop.title} 출발·준비 확인',
-            delta: const Duration(hours: -2),
-          ),
-          (
-            offset: 'T-1h',
-            title: '${loop.title} 한 시간 전 준비 확인',
-            delta: const Duration(hours: -1),
-          ),
-          (
-            offset: 'T+1d',
-            title: '${loop.title} 후속 확인',
-            delta: const Duration(days: 1),
-          ),
-        ];
   final existingByOffset = {
     for (final item in loop.checkpoints) item.offset: item,
   };
-  final eventAt = loop.startsAt;
+  final planned = planCheckpoints(
+    kind: loop.kind,
+    title: loop.title,
+    eventAt: loop.startsAt,
+  );
   final checkpoints = <LoopCheckpoint>[
-    for (final template in templates)
-      if (existingByOffset[template.offset] case final existing?)
+    for (final plan in planned)
+      if (existingByOffset[plan.offset] case final existing?)
         LoopCheckpoint(
           id: existing.id,
-          offset: template.offset,
-          title: template.title,
-          dueAt: eventAt?.add(template.delta),
+          offset: plan.offset,
+          title: plan.title,
+          dueAt: plan.dueAt,
           completed: existing.completed,
         )
       else
         LoopCheckpoint(
-          id: 'local-checkpoint-${template.offset.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
-          offset: template.offset,
-          title: template.title,
-          dueAt: eventAt?.add(template.delta),
+          id: 'local-checkpoint-${plan.offset.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}',
+          offset: plan.offset,
+          title: plan.title,
+          dueAt: plan.dueAt,
         ),
   ];
   return loop.copyWith(

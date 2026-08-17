@@ -9,7 +9,10 @@ typedef CalendarLauncher = Future<bool> Function(Event event);
 
 abstract interface class DeviceActions {
   Future<bool> addToCalendar(OpenLoop loop);
+  Future<bool> requestNotificationPermission();
+  Future<bool> syncReminders(Iterable<OpenLoop> loops);
   Future<bool> scheduleReminder(OpenLoop loop);
+  Future<void> cancelReminders(OpenLoop loop);
 }
 
 class NativeDeviceActions implements DeviceActions {
@@ -61,16 +64,20 @@ class NativeDeviceActions implements DeviceActions {
     await _notifications.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        iOS: DarwinInitializationSettings(),
+        // Request this deliberately after the first app frame rather than as
+        // an incidental side effect of creating a notification plugin.
+        iOS: DarwinInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false,
+        ),
       ),
     );
     _initialized = true;
   }
 
   @override
-  Future<bool> scheduleReminder(OpenLoop loop) async {
-    final eventTime = loop.startsAt;
-    if (eventTime == null) return false;
+  Future<bool> requestNotificationPermission() async {
     try {
       await _initialize();
       final android = _notifications
@@ -88,42 +95,86 @@ class NativeDeviceActions implements DeviceActions {
         sound: true,
       );
       if (androidGranted == false || iosGranted == false) return false;
-
-      var reminderAt = eventTime.subtract(
-        loop.kind == LoopKind.deadline
-            ? const Duration(days: 1)
-            : const Duration(hours: 1),
-      );
-      if (!reminderAt.isAfter(DateTime.now())) {
-        reminderAt = DateTime.now().add(const Duration(seconds: 5));
-      }
-      await _notifications.zonedSchedule(
-        loop.id.hashCode & 0x7fffffff,
-        loop.kind == LoopKind.deadline ? '마감이 다가옵니다' : '곧 일정이 시작됩니다',
-        loop.title,
-        tz.TZDateTime.from(reminderAt, tz.local),
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'openloop_reminders',
-            'OpenLoop reminders',
-            channelDescription: 'OpenLoop 일정과 마감 알림',
-            importance: Importance.high,
-            priority: Priority.high,
-          ),
-          iOS: DarwinNotificationDetails(),
-        ),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      );
       return true;
     } catch (_) {
       return false;
     }
   }
+
+  @override
+  Future<bool> syncReminders(Iterable<OpenLoop> loops) async {
+    try {
+      await _initialize();
+      final now = DateTime.now();
+      var scheduledAny = false;
+      for (final loop in loops) {
+        await cancelReminders(loop);
+        if (loop.state == LoopState.closed) continue;
+        for (final checkpoint in loop.checkpoints) {
+          final dueAt = checkpoint.dueAt?.toLocal();
+          if (checkpoint.completed || dueAt == null || !dueAt.isAfter(now)) {
+            continue;
+          }
+          await _notifications.zonedSchedule(
+            _notificationId(loop.id, checkpoint.id),
+            loop.kind == LoopKind.deadline ? '마감 확인 시간입니다' : '일정 확인 시간입니다',
+            checkpoint.title,
+            // TZDateTime needs an absolute instant. Passing a local DateTime
+            // to an unconfigured tz.local can shift the reminder to UTC.
+            tz.TZDateTime.from(dueAt.toUtc(), tz.UTC),
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                'openloop_reminders',
+                'OpenLoop reminders',
+                channelDescription: 'OpenLoop 일정과 마감 알림',
+                importance: Importance.high,
+                priority: Priority.high,
+              ),
+              iOS: DarwinNotificationDetails(),
+            ),
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          );
+          scheduledAny = true;
+        }
+      }
+      return scheduledAny;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> scheduleReminder(OpenLoop loop) => syncReminders([loop]);
+
+  @override
+  Future<void> cancelReminders(OpenLoop loop) async {
+    await _initialize();
+    for (final checkpoint in loop.checkpoints) {
+      await _notifications.cancel(_notificationId(loop.id, checkpoint.id));
+    }
+  }
+}
+
+int _notificationId(String loopId, String checkpointId) {
+  // Stable FNV-1a hash: Dart's String.hashCode is deliberately not a durable
+  // storage key across app launches, while notification IDs must be.
+  var hash = 0x811c9dc5;
+  for (final codeUnit in '$loopId/$checkpointId'.codeUnits) {
+    hash ^= codeUnit;
+    hash = (hash * 0x01000193) & 0x7fffffff;
+  }
+  return hash;
 }
 
 class NoopDeviceActions implements DeviceActions {
   @override
   Future<bool> addToCalendar(OpenLoop loop) async => true;
   @override
+  Future<bool> requestNotificationPermission() async => true;
+  @override
+  Future<bool> syncReminders(Iterable<OpenLoop> loops) async => true;
+  @override
   Future<bool> scheduleReminder(OpenLoop loop) async => true;
+  @override
+  Future<void> cancelReminders(OpenLoop loop) async {}
 }

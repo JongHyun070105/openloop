@@ -49,7 +49,7 @@ One screenshot / image or text
   opens the native Kakao map when possible and otherwise uses the web URL.
 - Action, checklist, and checkpoint mutations are installation-scoped and
   local-first: a failed remote request preserves the user’s local progress.
-- Default checkpoint cadence is Appointment `T-24h` / `T-2h` / `T-1h` / `T+1d` and Deadline `D-7` / `D-3` / `D-1`.
+- Default checkpoint cadence starts with Appointment `T-24h` / `T-2h` / `T-1h` / `T+1d` and Deadline `D-7` / `D-3` / `D-1`; both API and mobile filter already-passed times and substitute the nearest useful lead time for an imminent event.
 
 ## Delivery status
 

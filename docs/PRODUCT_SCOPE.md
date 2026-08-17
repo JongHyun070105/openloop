@@ -44,10 +44,13 @@ confidence join `missing_fields` and require focused verification.
 - Reminder
 - Open Loop
 - Deadline checklist
-- Deadline checkpoints (`D-7`, `D-3`, `D-1`)
-- Appointment checkpoints (`T-24h`, `T-2h`, `T-1h`, `T+1d`)
+- Deadline checkpoints (start with `D-7`, `D-3`, `D-1`; use a nearer useful lead time when those have passed)
+- Appointment checkpoints (start with `T-24h`, `T-2h`, `T-1h`, `T+1d`; never create a past prompt)
 
 ## UX rules
+
+- Actions are direct user work such as calendar, place, and checklist; checkpoints are timed prompts that support those actions.
+- On first app launch, request the system notification permission and automatically schedule future local checkpoint alerts after approval.
 
 - Form entry becomes AI review.
 - One screen asks for one decision.

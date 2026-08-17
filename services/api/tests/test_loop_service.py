@@ -1,17 +1,21 @@
 import tempfile
 import unittest
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 from app.demo_analyzer import analyze_demo
 from app.models import (
     AmbiguityUpdate,
     AnalyzeRequest,
+    Confidence,
     CreateLoopRequest,
+    Intent,
     LoopStatus,
     RetentionPolicy,
+    StructuredEvent,
 )
 from app.repository import LoopRepository
-from app.service import LoopService
+from app.service import LoopService, _default_graph
 
 
 class LoopServiceTests(unittest.TestCase):
@@ -39,11 +43,13 @@ class LoopServiceTests(unittest.TestCase):
         self.assertEqual(resolved.event.missing_fields, [])
         self.assertIsNone(resolved.suggested_question)
         self.assertTrue(resolved.event.summary)
-        self.assertEqual(
-            [checkpoint.offset for checkpoint in resolved.checkpoints],
-            ["T-24h", "T-2h", "T-1h", "T+1d"],
+        self.assertTrue(resolved.checkpoints)
+        self.assertTrue(
+            all(
+                checkpoint.due_at and checkpoint.due_at > resolved.updated_at
+                for checkpoint in resolved.checkpoints
+            )
         )
-        self.assertTrue(all(checkpoint.due_at for checkpoint in resolved.checkpoints))
 
     def test_resolving_place_adds_the_place_action_without_replacing_calendar(self) -> None:
         analysis = analyze_demo(AnalyzeRequest(text="내일 오후 7시 약속"))
@@ -69,9 +75,45 @@ class LoopServiceTests(unittest.TestCase):
         self.assertTrue(created.checklist[0].required)
         self.assertEqual(created.checklist[1].title, "포트폴리오")
         self.assertTrue(created.checklist[1].required)
-        self.assertEqual(len(created.checkpoints), 3)
+        self.assertTrue(created.checkpoints)
+        self.assertTrue(
+            all(checkpoint.due_at and checkpoint.due_at > created.created_at for checkpoint in created.checkpoints)
+        )
         updated = self.service.set_item_completion(created.id, "checklist", created.checklist[0].id, True)
         self.assertTrue(updated.checklist[0].completed)
+
+    def test_same_day_appointment_omits_a_stale_day_before_checkpoint(self) -> None:
+        event = StructuredEvent(
+            type=Intent.APPOINTMENT,
+            title="저녁 약속",
+            date=date(2026, 8, 17),
+            start_time=time(19),
+            place={"name": "성수"},
+            source="text",
+            confidence=Confidence(date=1, time=1, location=1, title=1),
+        )
+        reference = datetime(2026, 8, 17, 2, tzinfo=UTC)  # 11:00 Asia/Seoul
+
+        _, _, checkpoints = _default_graph(event, reference_at=reference)
+
+        self.assertEqual([checkpoint.offset for checkpoint in checkpoints], ["T-2h", "T-1h", "T+1d"])
+        self.assertTrue(all(checkpoint.due_at and checkpoint.due_at > reference for checkpoint in checkpoints))
+
+    def test_nearby_deadline_uses_a_short_lead_time_instead_of_missed_day_cadence(self) -> None:
+        event = StructuredEvent(
+            type=Intent.DEADLINE,
+            title="공모전 마감",
+            date=date(2026, 8, 17),
+            start_time=time(19),
+            source="text",
+            confidence=Confidence(date=1, time=1, location=1, title=1),
+        )
+        reference = datetime(2026, 8, 17, 2, tzinfo=UTC)  # 11:00 Asia/Seoul
+
+        _, _, checkpoints = _default_graph(event, reference_at=reference)
+
+        self.assertEqual([checkpoint.offset for checkpoint in checkpoints], ["T-3h"])
+        self.assertEqual(checkpoints[0].due_at, datetime(2026, 8, 17, 7, tzinfo=UTC))
 
     def test_close_and_forget_immediately_removes_loop_on_next_read(self) -> None:
         analysis = analyze_demo(AnalyzeRequest(text="6시 말고 7시 난포 예약했음"))
