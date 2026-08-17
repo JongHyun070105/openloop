@@ -17,6 +17,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .analyzer import AnalysisAdapter, analysis_adapter_from_env
@@ -73,6 +74,14 @@ def create_app(
         title="OpenLoop API",
         version="0.2.0",
         description="Turn unstructured context into actionable, confidence-aware loops.",
+    )
+    cors_origins = [origin.strip() for origin in os.getenv("OPENLOOP_CORS_ORIGINS", "*").split(",") if origin.strip()]
+    api.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins or ["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     table_name = os.getenv("OPENLOOP_TABLE_NAME")
     if database_path is None and table_name:

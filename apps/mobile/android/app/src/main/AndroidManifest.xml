@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
-        android:label="openloop_mobile"
+        android:label="OpenLoop"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data android:name="com.posthog.posthog.AUTO_INIT" android:value="false" />

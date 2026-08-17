@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Openloop Mobile</string>
+	<string>OpenLoop</string>
 	<key>com.posthog.posthog.AUTO_INIT</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
