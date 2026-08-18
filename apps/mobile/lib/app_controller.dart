@@ -12,6 +12,18 @@ import 'services/loop_repository.dart';
 
 typedef LoopApiFactory = LoopApi Function(String baseUrl);
 
+class InAppNotification {
+  const InAppNotification({
+    required this.title,
+    required this.body,
+    this.subtitle,
+  });
+
+  final String title;
+  final String body;
+  final String? subtitle;
+}
+
 class AppController extends ChangeNotifier {
   AppController({
     required this.repository,
@@ -38,6 +50,15 @@ class AppController extends ChangeNotifier {
   bool lastAnalysisWasLocal = false;
   RemoteCapabilities? capabilities;
   bool capabilitiesLoading = false;
+  InAppNotification? activeNotification;
+  Timer? _notificationTimer;
+
+  void dismissNotification() {
+    _notificationTimer?.cancel();
+    _notificationTimer = null;
+    activeNotification = null;
+    notifyListeners();
+  }
 
   Future<void> initialize() async {
     final loaded = await repository.load();
@@ -151,6 +172,19 @@ class AppController extends ChangeNotifier {
     String body = '오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!',
     String subtitle = '쿠폰 유효기간 알림 (오후 7:27)',
   }) async {
+    _notificationTimer?.cancel();
+    activeNotification = InAppNotification(
+      title: title,
+      body: body,
+      subtitle: subtitle,
+    );
+    notifyListeners();
+    _notificationTimer = Timer(const Duration(seconds: 5), () {
+      if (activeNotification?.title == title) {
+        activeNotification = null;
+        notifyListeners();
+      }
+    });
     await deviceActions.requestNotificationPermission();
     await deviceActions.showNotification(
       title: title,

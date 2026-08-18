@@ -753,6 +753,43 @@ void main() {
       expect(closed.deleteAt!.difference(closed.completedAt!).inDays, 7);
     },
   );
+
+  testWidgets(
+    'triggers test notification and displays in-app banner',
+    (tester) async {
+      final repository = MemoryLoopRepository();
+      final deviceActions = _RecordingDeviceActions();
+      final controller = AppController(
+        repository: repository,
+        deviceActions: deviceActions,
+      );
+
+      await tester.pumpWidget(OpenLoopApp(controller: controller));
+      await tester.pumpAndSettle();
+
+      expect(find.text('쿠폰 유효기간 알림'), findsNothing);
+
+      await controller.triggerTestNotification(
+        title: 'BHC 뿌링클+콜라1.25L',
+        body: '오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!',
+        subtitle: '쿠폰 유효기간 알림',
+      );
+      await tester.pump();
+
+      expect(find.text('BHC 뿌링클+콜라1.25L'), findsWidgets);
+      expect(find.text('쿠폰 유효기간 알림'), findsOneWidget);
+      expect(
+        find.text('오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!'),
+        findsOneWidget,
+      );
+
+      // Dismiss banner
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pump();
+
+      expect(find.text('쿠폰 유효기간 알림'), findsNothing);
+    },
+  );
 }
 
 OpenLoop _remoteDraft() => OpenLoop(

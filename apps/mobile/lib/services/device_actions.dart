@@ -96,13 +96,26 @@ class NativeDeviceActions implements DeviceActions {
           .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin
           >();
+      final macos = _notifications
+          .resolvePlatformSpecificImplementation<
+            MacOSFlutterLocalNotificationsPlugin
+          >();
       final androidGranted = await android?.requestNotificationsPermission();
       final iosGranted = await ios?.requestPermissions(
         alert: true,
         badge: true,
         sound: true,
       );
-      if (androidGranted == false || iosGranted == false) return false;
+      final macosGranted = await macos?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (androidGranted == false ||
+          iosGranted == false ||
+          macosGranted == false) {
+        return false;
+      }
       return true;
     } catch (_) {
       return false;
@@ -134,8 +147,6 @@ class NativeDeviceActions implements DeviceActions {
               LoopKind.place => '저장한 장소입니다',
             },
             checkpoint.title,
-            // TZDateTime needs an absolute instant. Passing a local DateTime
-            // to an unconfigured tz.local can shift the reminder to UTC.
             tz.TZDateTime.from(dueAt.toUtc(), tz.UTC),
             const NotificationDetails(
               android: AndroidNotificationDetails(
@@ -151,6 +162,7 @@ class NativeDeviceActions implements DeviceActions {
                 presentSound: true,
                 presentBanner: true,
                 presentList: true,
+                interruptionLevel: InterruptionLevel.timeSensitive,
               ),
             ),
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
@@ -175,7 +187,7 @@ class NativeDeviceActions implements DeviceActions {
   }) async {
     await _initialize();
     await _notifications.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      DateTime.now().millisecondsSinceEpoch % 100000,
       title,
       body,
       NotificationDetails(
@@ -193,6 +205,7 @@ class NativeDeviceActions implements DeviceActions {
           presentSound: true,
           presentBanner: true,
           presentList: true,
+          interruptionLevel: InterruptionLevel.timeSensitive,
         ),
       ),
     );

@@ -123,6 +123,36 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
       Locale('en', 'US'),
     ],
     locale: const Locale('ko', 'KR'),
+    builder: (context, child) => Stack(
+      children: [
+        if (child != null) child,
+        AnimatedBuilder(
+          animation: widget.controller,
+          builder: (context, _) {
+            final notification = widget.controller.activeNotification;
+            if (notification == null) return const SizedBox.shrink();
+            return SafeArea(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: _InAppNotificationBanner(
+                      notification: notification,
+                      onDismiss: widget.controller.dismissNotification,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    ),
     home: AnimatedBuilder(
       animation: widget.controller,
       builder: (_, __) => widget.controller.ready
@@ -130,6 +160,121 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
           : const Scaffold(body: Center(child: CircularProgressIndicator())),
     ),
   );
+}
+
+class _InAppNotificationBanner extends StatelessWidget {
+  const _InAppNotificationBanner({
+    required this.notification,
+    required this.onDismiss,
+  });
+
+  final InAppNotification notification;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B).withValues(alpha: .96),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .25),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withValues(alpha: .15),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: OLColors.cobalt,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.notifications_active,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        notification.title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Text(
+                      '지금',
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                if (notification.subtitle != null &&
+                    notification.subtitle!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    notification.subtitle!,
+                    style: const TextStyle(
+                      color: Color(0xFF60A5FA),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 3),
+                Text(
+                  notification.body,
+                  style: const TextStyle(
+                    color: Color(0xFFE2E8F0),
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: onDismiss,
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Color(0xFF94A3B8),
+              size: 18,
+            ),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class HomeScreen extends StatefulWidget {
