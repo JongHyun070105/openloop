@@ -28,7 +28,7 @@ merely because the same meaning is also used in the title. For deadlines, extrac
 and preserve only explicitly requested reminder offsets. Classify a real meeting, booking, or visit with a required
 date/time as appointment. Classify a submission or due date as deadline: its date matters, but absent time is not a
 missing field. Classify a restaurant, cafe, store, venue, or place the user wants to keep as place: never request a
-date or time for it. Classify a coupon, voucher, discount, or benefit as coupon: use expires_on only when an expiry
+date or time for it. Classify a coupon, gifticon, voucher, exchange voucher (교환권, 모바일상품권, 기프티콘, 교환 유효기간), discount, or benefit as coupon: use expires_on only when an expiry
 date is visible, never put an expiry in date, and never request a time. Classify a shopping order, receipt, or delivery as purchase: its vendor/store place, item title, and return/warranty/delivery expiry in expires_on or date matter, never request a time. Classify a flight, hotel check-in, ticket, or medical/service booking as reservation: extract date/time and venue place. For place, coupon, and purchase captures, a confident
 title is enough to return open. For a complete new event, status must be open; never return closed.
 Dates must be YYYY-MM-DD and times must be local Korean time in HH:MM:SS without a timezone suffix. Resolve Korean
@@ -283,6 +283,23 @@ def _normalize_new_loop_result(
     normalized_expiry = _resolve_contextual_date(
         event.expires_on, source_text, reference_date
     )
+    text_check = f"{event.title} {event.purpose or ''} {source_text or ''}"
+    is_coupon_voucher = any(
+        kw in text_check
+        for kw in [
+            "교환 유효기간",
+            "유효기간",
+            "기프티콘",
+            "교환권",
+            "모바일상품권",
+            "바우처",
+            "모바일쿠폰",
+            "깊티",
+        ]
+    )
+    if is_coupon_voucher and event.type == Intent.APPOINTMENT:
+        event = event.model_copy(update={"type": Intent.COUPON})
+
     if event.type == Intent.COUPON:
         normalized_expiry = normalized_expiry or normalized_date
         normalized_date = None

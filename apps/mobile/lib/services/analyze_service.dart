@@ -699,7 +699,23 @@ LoopKind _localKind(String text, DateTime now) {
   if (['마감', '제출', '공모전', '접수', '신청 기한', '데드라인'].any(text.contains)) {
     return LoopKind.deadline;
   }
-  if (['쿠폰', '할인', '혜택', '바우처', '기프티콘', '프로모션'].any(text.contains)) {
+  if ([
+    '쿠폰',
+    '할인',
+    '혜택',
+    '바우처',
+    '기프티콘',
+    '기프티쇼',
+    '교환',
+    '교환권',
+    '유효기간',
+    '모바일상품권',
+    '상품권',
+    '모바일쿠폰',
+    '선물하기',
+    '프로모션',
+    '깊티',
+  ].any(text.contains)) {
     return LoopKind.coupon;
   }
   if (['구매', '주문', '결제', '배송', '반품', '영수증', '쇼핑', '주문번호', '송장'].any(text.contains)) {

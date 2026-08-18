@@ -571,6 +571,173 @@ String? normalizeTimeInput(String raw) {
 String _editableTime(String? value) =>
     value == null ? '' : value.split(':').take(2).join(':');
 
+Future<DateTime?> showAdaptiveDatePicker(
+  BuildContext context, {
+  required DateTime initialDate,
+  DateTime? firstDate,
+  DateTime? lastDate,
+}) async {
+  final isIOS = !kIsWeb && Platform.isIOS;
+  if (isIOS) {
+    DateTime picked = initialDate;
+    final min = firstDate ?? DateTime.now().subtract(const Duration(days: 365));
+    final max = lastDate ?? DateTime.now().add(const Duration(days: 3650));
+    final confirmed = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => Container(
+        height: 280,
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.separator,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(color: CupertinoColors.systemGrey),
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '완료',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: OLColors.cobalt,
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: initialDate,
+                  minimumDate: min,
+                  maximumDate: max,
+                  onDateTimeChanged: (dt) => picked = dt,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return (confirmed == true) ? picked : null;
+  } else {
+    return showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate ?? DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: lastDate ?? DateTime.now().add(const Duration(days: 3650)),
+    );
+  }
+}
+
+Future<TimeOfDay?> showAdaptiveTimePicker(
+  BuildContext context, {
+  required int initialHour,
+  required int initialMinute,
+}) async {
+  final isIOS = !kIsWeb && Platform.isIOS;
+  if (isIOS) {
+    DateTime picked = DateTime(2000, 1, 1, initialHour, initialMinute);
+    final confirmed = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => Container(
+        height: 280,
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.separator,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(color: CupertinoColors.systemGrey),
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '완료',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: OLColors.cobalt,
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.time,
+                  initialDateTime:
+                      DateTime(2000, 1, 1, initialHour, initialMinute),
+                  use24hFormat: false,
+                  onDateTimeChanged: (dt) => picked = dt,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return (confirmed == true)
+        ? TimeOfDay(hour: picked.hour, minute: picked.minute)
+        : null;
+  } else {
+    return showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: initialHour, minute: initialMinute),
+    );
+  }
+}
+
 TimeOfDay _timeOfDayOrDefault(String value, TimeOfDay fallback) {
   final normalized = normalizeTimeInput(value);
   if (normalized == null) return fallback;
@@ -664,12 +831,14 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
   };
 
   Future<void> _pickAmbiguityTime() async {
-    final selected = await showTimePicker(
-      context: context,
-      initialTime: _timeOfDayOrDefault(
-        timeController.text,
-        const TimeOfDay(hour: 19, minute: 0),
-      ),
+    final initial = _timeOfDayOrDefault(
+      timeController.text,
+      const TimeOfDay(hour: 19, minute: 0),
+    );
+    final selected = await showAdaptiveTimePicker(
+      context,
+      initialHour: initial.hour,
+      initialMinute: initial.minute,
     );
     if (selected != null) {
       setState(() {
@@ -708,11 +877,9 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
     'date' || 'expires_on' => InkWell(
       key: Key(field == 'expires_on' ? 'expiry-picker' : 'date-picker'),
       onTap: () async {
-        final selected = await showDatePicker(
-          context: context,
+        final selected = await showAdaptiveDatePicker(
+          context,
           initialDate: selectedDate ?? DateTime.now(),
-          firstDate: DateTime.now().subtract(const Duration(days: 365)),
-          lastDate: DateTime.now().add(const Duration(days: 3650)),
         );
         if (selected != null) setState(() => selectedDate = selected);
       },
@@ -865,18 +1032,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Future<void> _pickDate() async {
     if (!draft.isDraft) return;
     final initial = draft.primaryDate ?? DateTime.now();
-    final isIOS = !kIsWeb && Platform.isIOS;
-    DateTime? selected;
-    if (isIOS) {
-      selected = await _showCupertinoDatePicker(initial);
-    } else {
-      selected = await showDatePicker(
-        context: context,
-        initialDate: initial,
-        firstDate: DateTime.now().subtract(const Duration(days: 365)),
-        lastDate: DateTime.now().add(const Duration(days: 3650)),
-      );
-    }
+    final selected = await showAdaptiveDatePicker(context, initialDate: initial);
     if (selected != null) {
       _edit(
         (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
@@ -887,173 +1043,22 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
-  Future<DateTime?> _showCupertinoDatePicker(DateTime initial) async {
-    DateTime picked = initial;
-    final confirmed = await showCupertinoModalPopup<bool>(
-      context: context,
-      builder: (context) => Container(
-        height: 280,
-        color: CupertinoColors.systemBackground.resolveFrom(context),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: CupertinoColors.separator,
-                      width: 0.5,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      child: const Text(
-                        '취소',
-                        style: TextStyle(color: CupertinoColors.systemGrey),
-                      ),
-                      onPressed: () => Navigator.pop(context, false),
-                    ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      child: const Text(
-                        '완료',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: OLColors.cobalt,
-                        ),
-                      ),
-                      onPressed: () => Navigator.pop(context, true),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.date,
-                  initialDateTime: initial,
-                  minimumDate:
-                      DateTime.now().subtract(const Duration(days: 365)),
-                  maximumDate: DateTime.now().add(const Duration(days: 3650)),
-                  onDateTimeChanged: (dt) => picked = dt,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    return (confirmed == true) ? picked : null;
-  }
-
   Future<void> _pickTime() async {
     if (!draft.isDraft) return;
     final parts = draft.time?.split(':');
     final hour = parts == null ? 9 : int.tryParse(parts.first) ?? 9;
     final minute =
         parts == null || parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0;
-    final isIOS = !kIsWeb && Platform.isIOS;
-    if (isIOS) {
-      final selected = await _showCupertinoTimePicker(hour, minute);
-      if (selected != null) {
-        timeController.text =
-            '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
-        _updateTime(timeController.text);
-      }
-    } else {
-      final selected = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay(hour: hour, minute: minute),
-      );
-      if (selected != null) {
-        timeController.text =
-            '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
-        _updateTime(timeController.text);
-      }
-    }
-  }
-
-  Future<TimeOfDay?> _showCupertinoTimePicker(
-    int initialHour,
-    int initialMinute,
-  ) async {
-    DateTime picked = DateTime(2000, 1, 1, initialHour, initialMinute);
-    final confirmed = await showCupertinoModalPopup<bool>(
-      context: context,
-      builder: (context) => Container(
-        height: 280,
-        color: CupertinoColors.systemBackground.resolveFrom(context),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: CupertinoColors.separator,
-                      width: 0.5,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      child: const Text(
-                        '취소',
-                        style: TextStyle(color: CupertinoColors.systemGrey),
-                      ),
-                      onPressed: () => Navigator.pop(context, false),
-                    ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      child: const Text(
-                        '완료',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: OLColors.cobalt,
-                        ),
-                      ),
-                      onPressed: () => Navigator.pop(context, true),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: CupertinoDatePicker(
-                  mode: CupertinoDatePickerMode.time,
-                  initialDateTime:
-                      DateTime(2000, 1, 1, initialHour, initialMinute),
-                  use24hFormat: false,
-                  onDateTimeChanged: (dt) => picked = dt,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final selected = await showAdaptiveTimePicker(
+      context,
+      initialHour: hour,
+      initialMinute: minute,
     );
-    return (confirmed == true)
-        ? TimeOfDay(hour: picked.hour, minute: picked.minute)
-        : null;
+    if (selected != null) {
+      timeController.text =
+          '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
+      _updateTime(timeController.text);
+    }
   }
 
   bool get _hasInvalidTimeInput =>
