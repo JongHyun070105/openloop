@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -852,12 +853,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   Future<void> _pickDate() async {
     if (!draft.isDraft) return;
-    final selected = await showDatePicker(
-      context: context,
-      initialDate: draft.primaryDate ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
-    );
+    final initial = draft.primaryDate ?? DateTime.now();
+    final isIOS = !kIsWeb && Platform.isIOS;
+    DateTime? selected;
+    if (isIOS) {
+      selected = await _showCupertinoDatePicker(initial);
+    } else {
+      selected = await showDatePicker(
+        context: context,
+        initialDate: initial,
+        firstDate: DateTime.now().subtract(const Duration(days: 365)),
+        lastDate: DateTime.now().add(const Duration(days: 3650)),
+      );
+    }
     if (selected != null) {
       _edit(
         (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
@@ -868,23 +876,113 @@ class _ReviewScreenState extends State<ReviewScreen> {
     }
   }
 
+  Future<DateTime?> _showCupertinoDatePicker(DateTime initial) async {
+    DateTime picked = initial;
+    final confirmed = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => Container(
+        height: 300,
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  child: const Text('취소'),
+                  onPressed: () => Navigator.pop(context, false),
+                ),
+                CupertinoButton(
+                  child: const Text('확인'),
+                  onPressed: () => Navigator.pop(context, true),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: initial,
+                minimumDate:
+                    DateTime.now().subtract(const Duration(days: 365)),
+                maximumDate: DateTime.now().add(const Duration(days: 3650)),
+                onDateTimeChanged: (dt) => picked = dt,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return (confirmed == true) ? picked : null;
+  }
+
   Future<void> _pickTime() async {
     if (!draft.isDraft) return;
     final parts = draft.time?.split(':');
-    final selected = await showTimePicker(
+    final hour = parts == null ? 9 : int.tryParse(parts.first) ?? 9;
+    final minute =
+        parts == null || parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0;
+    final isIOS = !kIsWeb && Platform.isIOS;
+    if (isIOS) {
+      final selected = await _showCupertinoTimePicker(hour, minute);
+      if (selected != null) {
+        timeController.text =
+            '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
+        _updateTime(timeController.text);
+      }
+    } else {
+      final selected = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(hour: hour, minute: minute),
+      );
+      if (selected != null) {
+        timeController.text =
+            '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
+        _updateTime(timeController.text);
+      }
+    }
+  }
+
+  Future<TimeOfDay?> _showCupertinoTimePicker(
+    int initialHour,
+    int initialMinute,
+  ) async {
+    DateTime picked = DateTime(2000, 1, 1, initialHour, initialMinute);
+    final confirmed = await showCupertinoModalPopup<bool>(
       context: context,
-      initialTime: TimeOfDay(
-        hour: parts == null ? 9 : int.tryParse(parts.first) ?? 9,
-        minute: parts == null || parts.length < 2
-            ? 0
-            : int.tryParse(parts[1]) ?? 0,
+      builder: (context) => Container(
+        height: 300,
+        color: CupertinoColors.systemBackground.resolveFrom(context),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                CupertinoButton(
+                  child: const Text('취소'),
+                  onPressed: () => Navigator.pop(context, false),
+                ),
+                CupertinoButton(
+                  child: const Text('확인'),
+                  onPressed: () => Navigator.pop(context, true),
+                ),
+              ],
+            ),
+            Expanded(
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.time,
+                initialDateTime:
+                    DateTime(2000, 1, 1, initialHour, initialMinute),
+                use24hFormat: true,
+                onDateTimeChanged: (dt) => picked = dt,
+              ),
+            ),
+          ],
+        ),
       ),
     );
-    if (selected != null) {
-      timeController.text =
-          '${selected.hour.toString().padLeft(2, '0')}:${selected.minute.toString().padLeft(2, '0')}';
-      _updateTime(timeController.text);
-    }
+    return (confirmed == true)
+        ? TimeOfDay(hour: picked.hour, minute: picked.minute)
+        : null;
   }
 
   bool get _hasInvalidTimeInput =>
@@ -916,7 +1014,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
       final persisted = await controller.approveDraft(draft);
       if (!mounted) return;
       setState(() => draft = persisted);
-      if (persisted.kind == LoopKind.appointment) {
+      // 약속·예약이면 캘린더에 자동 추가
+      if (persisted.kind == LoopKind.appointment ||
+          persisted.kind == LoopKind.reservation) {
         _launchCalendarHandoff(controller, persisted);
       }
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
@@ -999,14 +1099,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
           const SizedBox(height: 16),
           _SummaryCard(summary: draft.summary!),
         ],
-        const SizedBox(height: 22),
+        const SizedBox(height: 16),
         if (draft.kind != LoopKind.place)
           _EditableReviewFact(
             key: const Key('review-date-field'),
-            icon: (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
+            icon: (draft.kind == LoopKind.coupon ||
+                    draft.kind == LoopKind.purchase)
                 ? Icons.timer_outlined
                 : Icons.calendar_today_outlined,
-            label: (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
+            label: (draft.kind == LoopKind.coupon ||
+                    draft.kind == LoopKind.purchase)
                 ? '기한 ${dateText(draft.expiresOn ?? draft.date)}'
                 : dateText(draft.date),
             enabled: draft.isDraft,
@@ -1015,48 +1117,93 @@ class _ReviewScreenState extends State<ReviewScreen> {
         if (draft.kind == LoopKind.appointment ||
             draft.kind == LoopKind.reservation ||
             draft.time != null)
-          TextField(
-            key: const Key('review-time-field'),
-            controller: timeController,
-            enabled: draft.isDraft,
-            keyboardType: TextInputType.datetime,
-            textInputAction: TextInputAction.done,
-            decoration: InputDecoration(
-              labelText: draft.kind == LoopKind.deadline
-                  ? '마감 시간 (선택)'
-                  : (draft.kind == LoopKind.reservation ? '예약 시간' : '시간'),
-              hintText: draft.kind == LoopKind.deadline ? '시간 없음' : '시간 미정',
-              prefixIcon: const Icon(Icons.schedule_outlined),
-              suffixIcon: IconButton(
-                tooltip: '시간 선택',
-                onPressed: draft.isDraft ? _pickTime : null,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          _ReviewFieldCard(
+            icon: Icons.schedule_outlined,
+            label: draft.kind == LoopKind.deadline
+                ? '마감 시간 (선택)'
+                : (draft.kind == LoopKind.reservation ? '예약 시간' : '시간'),
+            child: GestureDetector(
+              onTap: draft.isDraft ? _pickTime : null,
+              child: AbsorbPointer(
+                absorbing: true,
+                child: TextField(
+                  key: const Key('review-time-field'),
+                  controller: timeController,
+                  enabled: draft.isDraft,
+                  keyboardType: TextInputType.datetime,
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(
+                    color: OLColors.navy,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                    hintText: draft.kind == LoopKind.deadline
+                        ? '시간 없음'
+                        : '시간 미정',
+                    hintStyle: const TextStyle(
+                      color: OLColors.muted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    errorText: _timeInputError,
+                    suffixIcon: draft.isDraft
+                        ? const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: OLColors.muted,
+                          )
+                        : null,
+                    suffixIconConstraints: const BoxConstraints(
+                      minHeight: 24,
+                      minWidth: 24,
+                    ),
+                  ),
+                  onChanged: _updateTime,
+                ),
               ),
-              errorText: _timeInputError,
             ),
-            onChanged: _updateTime,
           ),
         if (draft.kind == LoopKind.appointment ||
             draft.kind == LoopKind.reservation ||
             draft.kind == LoopKind.place ||
             draft.kind == LoopKind.purchase ||
             draft.place != null)
-          TextField(
-            key: const Key('review-place-field'),
-            controller: placeController,
-            enabled: draft.isDraft,
-            decoration: InputDecoration(
-              labelText: draft.kind == LoopKind.place
-                  ? '저장할 장소'
-                  : (draft.kind == LoopKind.purchase
-                      ? '구매처/판매처'
-                      : (draft.kind == LoopKind.reservation ? '예약 장소' : '장소')),
-              prefixIcon: const Icon(Icons.place_outlined),
-              hintText: draft.kind == LoopKind.place
-                  ? '장소명'
-                  : (draft.kind == LoopKind.purchase ? '예: 쿠팡, 네이버쇼핑' : '장소 미정'),
+          _ReviewFieldCard(
+            icon: Icons.place_outlined,
+            label: draft.kind == LoopKind.place
+                ? '저장할 장소'
+                : (draft.kind == LoopKind.purchase
+                    ? '구매처/판매처'
+                    : (draft.kind == LoopKind.reservation
+                        ? '예약 장소'
+                        : '장소')),
+            child: TextField(
+              key: const Key('review-place-field'),
+              controller: placeController,
+              enabled: draft.isDraft,
+              style: const TextStyle(
+                color: OLColors.navy,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+                hintText: draft.kind == LoopKind.place
+                    ? '장소명'
+                    : (draft.kind == LoopKind.purchase
+                        ? '예: 쿠팡, 네이버쇼핑'
+                        : '장소 미정'),
+                hintStyle: const TextStyle(
+                  color: OLColors.muted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              onChanged: (value) => _edit('place', value.trim()),
             ),
-            onChanged: (value) => _edit('place', value.trim()),
           ),
         if (draft.participants.isNotEmpty)
           _Fact(
@@ -1905,6 +2052,54 @@ class _EmptyLoops extends StatelessWidget {
   );
 }
 
+class _ReviewFieldCard extends StatelessWidget {
+  const _ReviewFieldCard({
+    required this.icon,
+    required this.label,
+    required this.child,
+  });
+  final IconData icon;
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 12),
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: OLColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: OLColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: OLColors.cobalt, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: OLColors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                child,
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _Fact extends StatelessWidget {
   const _Fact({required this.icon, required this.label});
   final IconData icon;
@@ -2064,12 +2259,12 @@ IconData loopKindIcon(LoopKind kind) => switch (kind) {
 };
 
 String reviewPrimaryActionText(OpenLoop loop) => switch (loop.kind) {
-  LoopKind.appointment => loop.isDraft ? '저장하고 캘린더 열기' : '캘린더 다시 열기',
-  LoopKind.deadline => '마감 저장',
-  LoopKind.place => '장소 저장',
-  LoopKind.coupon => '쿠폰 저장',
-  LoopKind.purchase => '구매 내역 저장',
-  LoopKind.reservation => loop.isDraft ? '저장하고 캘린더 열기' : '캘린더 다시 열기',
+  LoopKind.appointment => '저장하기',
+  LoopKind.deadline => '저장하기',
+  LoopKind.place => '저장하기',
+  LoopKind.coupon => '저장하기',
+  LoopKind.purchase => '저장하기',
+  LoopKind.reservation => '저장하기',
 };
 
 String loopCardMeta(OpenLoop loop) => switch (loop.kind) {

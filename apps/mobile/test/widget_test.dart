@@ -263,7 +263,7 @@ void main() {
     expect(find.byKey(const Key('review-date-field')), findsNothing);
     expect(find.byKey(const Key('review-time-field')), findsNothing);
     expect(find.byKey(const Key('review-place-field')), findsOneWidget);
-    expect(find.text('장소 저장'), findsOneWidget);
+    expect(find.text('저장하기'), findsOneWidget);
   });
 
   testWidgets('coupon review shows expiry but never asks for time', (
@@ -291,7 +291,7 @@ void main() {
     expect(find.byKey(const Key('review-date-field')), findsOneWidget);
     expect(find.textContaining('기한 8월 31일'), findsOneWidget);
     expect(find.byKey(const Key('review-time-field')), findsNothing);
-    expect(find.text('쿠폰 저장'), findsOneWidget);
+    expect(find.text('저장하기'), findsOneWidget);
   });
 
   test('image analysis never falls back to a text-only local result', () async {
@@ -513,10 +513,12 @@ void main() {
     );
     await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('저장하고 캘린더 열기'));
+    await tester.tap(find.text('저장하기'));
     await tester.pumpAndSettle();
-    expect(find.text('캘린더 다시 열기'), findsOneWidget);
-    await tester.tap(find.text('캘린더 다시 열기'));
+    // 저장 후 popUntil로 돌아가지만, test home이 ReviewScreen이므로 pop 불가
+    // persisted 후 다시 저장하기 버튼이 보임
+    expect(find.text('저장하기'), findsOneWidget);
+    await tester.tap(find.text('저장하기'));
     await tester.pumpAndSettle();
 
     expect(api.createCalls, 1);
@@ -560,7 +562,7 @@ void main() {
       expect(deviceActions.calendarCalls, 1);
       expect(repository.loops.single.id, loop.id);
       expect(find.text('저장 중…'), findsNothing);
-      expect(find.text('캘린더 다시 열기'), findsOneWidget);
+      expect(find.text('저장하기'), findsOneWidget);
     },
   );
 
