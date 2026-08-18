@@ -904,6 +904,13 @@ class _RecordingDeviceActions implements DeviceActions {
 
   @override
   Future<bool> scheduleReminder(OpenLoop loop) async => true;
+
+  @override
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? subtitle,
+  }) async {}
 }
 
 class _HangingDeviceActions implements DeviceActions {
@@ -927,4 +934,11 @@ class _HangingDeviceActions implements DeviceActions {
 
   @override
   Future<bool> scheduleReminder(OpenLoop loop) async => true;
+
+  @override
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? subtitle,
+  }) async {}
 }

@@ -12,6 +12,11 @@ abstract interface class DeviceActions {
   Future<bool> requestNotificationPermission();
   Future<bool> syncReminders(Iterable<OpenLoop> loops);
   Future<bool> scheduleReminder(OpenLoop loop);
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? subtitle,
+  });
   Future<void> cancelReminders(OpenLoop loop);
 }
 
@@ -64,12 +69,15 @@ class NativeDeviceActions implements DeviceActions {
     await _notifications.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-        // Request this deliberately after the first app frame rather than as
-        // an incidental side effect of creating a notification plugin.
         iOS: DarwinInitializationSettings(
-          requestAlertPermission: false,
-          requestBadgePermission: false,
-          requestSoundPermission: false,
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+          defaultPresentAlert: true,
+          defaultPresentBadge: true,
+          defaultPresentSound: true,
+          defaultPresentBanner: true,
+          defaultPresentList: true,
         ),
       ),
     );
@@ -160,6 +168,37 @@ class NativeDeviceActions implements DeviceActions {
   Future<bool> scheduleReminder(OpenLoop loop) => syncReminders([loop]);
 
   @override
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? subtitle,
+  }) async {
+    await _initialize();
+    await _notifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      NotificationDetails(
+        android: const AndroidNotificationDetails(
+          'openloop_reminders',
+          'OpenLoop reminders',
+          channelDescription: 'OpenLoop 일정과 마감 알림',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(
+          subtitle: subtitle,
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          presentBanner: true,
+          presentList: true,
+        ),
+      ),
+    );
+  }
+
+  @override
   Future<void> cancelReminders(OpenLoop loop) async {
     await _initialize();
     for (final checkpoint in loop.checkpoints) {
@@ -188,6 +227,12 @@ class NoopDeviceActions implements DeviceActions {
   Future<bool> syncReminders(Iterable<OpenLoop> loops) async => true;
   @override
   Future<bool> scheduleReminder(OpenLoop loop) async => true;
+  @override
+  Future<void> showNotification({
+    required String title,
+    required String body,
+    String? subtitle,
+  }) async {}
   @override
   Future<void> cancelReminders(OpenLoop loop) async {}
 }

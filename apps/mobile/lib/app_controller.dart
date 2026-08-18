@@ -146,6 +146,19 @@ class AppController extends ChangeNotifier {
     return syncLocalReminders();
   }
 
+  Future<void> triggerTestNotification({
+    String title = 'BHC 뿌링클+콜라1.25L',
+    String body = '오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!',
+    String subtitle = '쿠폰 유효기간 알림 (오후 7:27)',
+  }) async {
+    await deviceActions.requestNotificationPermission();
+    await deviceActions.showNotification(
+      title: title,
+      body: body,
+      subtitle: subtitle,
+    );
+  }
+
   Future<bool> syncLocalReminders() => deviceActions.syncReminders(loops);
 
   Future<void> _rescheduleLocalReminders() async {

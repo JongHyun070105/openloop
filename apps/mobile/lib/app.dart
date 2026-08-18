@@ -2068,6 +2068,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 10),
           OutlinedButton.icon(
             onPressed: () async {
+              await widget.controller.triggerTestNotification(
+                title: 'BHC 뿌링클+콜라1.25L',
+                body: '오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!',
+                subtitle: '쿠폰 유효기간 알림 (오후 7:27)',
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('🔔 테스트 푸시 알림을 발송했습니다.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.notifications_active_outlined),
+            label: const Text('쿠폰 유효기간 알림 즉시 테스트'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () async {
               final enabled = await AppIntegrations.instance
                   .enablePushNotifications(apiBaseUrl: urlController.text);
               if (!context.mounted) return;
