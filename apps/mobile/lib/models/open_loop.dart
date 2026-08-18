@@ -158,6 +158,7 @@ class OpenLoop {
 
   OpenLoop copyWith({
     String? id,
+    LoopKind? kind,
     LoopPersistence? persistence,
     LoopState? state,
     String? title,
@@ -178,7 +179,7 @@ class OpenLoop {
     DateTime? deleteAt,
   }) => OpenLoop(
     id: id ?? this.id,
-    kind: kind,
+    kind: kind ?? this.kind,
     state: state ?? this.state,
     title: title ?? this.title,
     source: source,

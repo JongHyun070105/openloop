@@ -137,7 +137,13 @@ class NativeDeviceActions implements DeviceActions {
                 importance: Importance.high,
                 priority: Priority.high,
               ),
-              iOS: DarwinNotificationDetails(),
+              iOS: DarwinNotificationDetails(
+                presentAlert: true,
+                presentBadge: true,
+                presentSound: true,
+                presentBanner: true,
+                presentList: true,
+              ),
             ),
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           );

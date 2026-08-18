@@ -40,7 +40,31 @@ class AppController extends ChangeNotifier {
   bool capabilitiesLoading = false;
 
   Future<void> initialize() async {
-    loops = await repository.load();
+    final loaded = await repository.load();
+    loops = loaded.map((loop) {
+      final textCheck = '${loop.title} ${loop.purpose ?? ''}';
+      if ((loop.kind == LoopKind.deadline ||
+              loop.kind == LoopKind.appointment) &&
+          [
+            '뿌링클',
+            '기프티콘',
+            '기프티쇼',
+            '교환권',
+            '모바일상품권',
+            '상품권',
+            '모바일쿠폰',
+            '깊티',
+            '쿠폰',
+          ].any(textCheck.contains)) {
+        return loop.copyWith(
+          kind: LoopKind.coupon,
+          time: null,
+          expiresOn: loop.expiresOn ?? loop.date,
+          date: null,
+        );
+      }
+      return loop;
+    }).toList();
     baseUrl = (await repository.loadBaseUrl()) ?? _defaultBaseUrl;
     retention = await repository.loadRetention();
     _applyRetention();

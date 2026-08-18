@@ -696,9 +696,6 @@ String? _explicitPlace(String text) {
 }
 
 LoopKind _localKind(String text, DateTime now) {
-  if (['마감', '제출', '공모전', '접수', '신청 기한', '데드라인'].any(text.contains)) {
-    return LoopKind.deadline;
-  }
   if ([
     '쿠폰',
     '할인',
@@ -715,8 +712,12 @@ LoopKind _localKind(String text, DateTime now) {
     '선물하기',
     '프로모션',
     '깊티',
+    '뿌링클',
   ].any(text.contains)) {
     return LoopKind.coupon;
+  }
+  if (['마감', '제출', '공모전', '접수', '신청 기한', '데드라인'].any(text.contains)) {
+    return LoopKind.deadline;
   }
   if (['구매', '주문', '결제', '배송', '반품', '영수증', '쇼핑', '주문번호', '송장'].any(text.contains)) {
     return LoopKind.purchase;

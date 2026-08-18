@@ -791,19 +791,25 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
     super.dispose();
   }
 
-  String get question =>
-      widget.loop.suggestedQuestion?.trim().isNotEmpty == true
-      ? widget.loop.suggestedQuestion!.trim()
-      : switch (field) {
-          'start_time' => '몇 시로 등록할까요?',
-          'date' => '언제인지 알려줄래요?',
-          'expires_on' => '쿠폰 기한을 언제로 정리할까요?',
-          'place' => '어디에서 만날까요?',
-          'title' => '이 일정의 이름은 무엇인가요?',
-          'purpose' => '무엇을 위한 일정인가요?',
-          'participants' => '누구와 함께하나요?',
-          _ => '한 가지만 확인할게요',
-        };
+  String get question {
+    final suggested = widget.loop.suggestedQuestion?.trim();
+    if (suggested != null && suggested.isNotEmpty) {
+      if (field == 'start_time' && suggested.contains('날짜와 시간')) {
+        return suggested.replaceAll('날짜와 시간', '시간');
+      }
+      return suggested;
+    }
+    return switch (field) {
+      'start_time' => '시작 시간을 몇 시로 설정할까요?',
+      'date' => '진행할 날짜를 선택해 주세요',
+      'expires_on' => '쿠폰 유효기간을 선택해 주세요',
+      'place' => '만날 장소를 입력해 주세요',
+      'title' => '일정의 제목을 입력해 주세요',
+      'purpose' => '무엇을 위한 일정인가요?',
+      'participants' => '누구와 함께하나요?',
+      _ => '한 가지만 확인할게요',
+    };
+  }
 
   Object? get value => switch (field) {
     'start_time' => normalizeTimeInput(timeController.text),
@@ -821,15 +827,15 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
       : null;
 
   String get _inputHint => switch (field) {
-    'start_time' => '시간을 직접 입력하거나 선택해 주세요.',
-    'date' || 'expires_on' =>
-      selectedDate == null
-          ? field == 'expires_on'
-                ? '기한을 선택하면 다음으로 넘어가요.'
-                : '날짜를 선택하면 다음으로 넘어가요.'
-          : field == 'expires_on'
-          ? '추출한 기한이 맞으면 바로 다음으로 넘어갈 수 있어요.'
-          : '추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.',
+    'start_time' => '시작 시간을 직접 입력하거나 선택해 주세요.',
+    'date' => selectedDate == null
+        ? '날짜를 선택하면 다음으로 넘어가요.'
+        : '추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.',
+    'expires_on' => selectedDate == null
+        ? '유효기간을 선택하면 다음으로 넘어가요.'
+        : '추출한 유효기간이 맞으면 바로 다음으로 넘어갈 수 있어요.',
+    'place' => '약속 또는 방문할 장소를 입력해 주세요.',
+    'title' => '일정을 기억하기 쉬운 이름으로 입력해 주세요.',
     _ => '이 정보만 확인하면 일정으로 정리할 수 있어요.',
   };
 
@@ -862,8 +868,8 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
           keyboardType: TextInputType.datetime,
           textInputAction: TextInputAction.done,
           decoration: InputDecoration(
-            labelText: '시간',
-            hintText: '예: 16:30 또는 오후 4시',
+            labelText: '시작 시간',
+            hintText: '예: 16:30 또는 오후 4시 30분',
             errorText: _timeInputError,
           ),
           onChanged: (_) => setState(() {}),
@@ -896,9 +902,11 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
         ),
         child: Text(
           selectedDate == null
-              ? (field == 'expires_on' ? '기한 선택' : '날짜 선택')
-              : dateText(selectedDate),
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+              ? (field == 'expires_on' ? '유효기간 선택' : '날짜 선택')
+              : (field == 'expires_on'
+                    ? '유효기간 ${dateText(selectedDate)}'
+                    : '일정 날짜 ${dateText(selectedDate)}'),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
       ),
     ),
@@ -1348,7 +1356,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
         ],
         if (shouldShowConfidence(draft.confidence)) ...[
           const SizedBox(height: 18),
-          _ConfidenceCard(confidence: draft.confidence),
+          _ConfidenceCard(confidence: draft.confidence, kind: draft.kind),
         ],
         const SizedBox(height: 24),
         FilledButton(
@@ -1517,18 +1525,27 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             loop.state == LoopState.closed
                 ? Icons.check_circle
                 : loopKindIcon(loop.kind),
-            size: 50,
+            size: 44,
             color: loop.state == LoopState.closed
                 ? OLColors.iconMuted
                 : OLColors.cobalt,
           ),
-          const SizedBox(height: 18),
-          Text(
-            loop.title,
-            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
-            textAlign: TextAlign.center,
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              loop.title,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: OLColors.navy,
+                height: 1.3,
+                letterSpacing: -0.3,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 20),
           if (loop.summary?.trim().isNotEmpty == true) ...[
             _SummaryCard(summary: loop.summary!),
             const SizedBox(height: 18),
@@ -1542,7 +1559,9 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             ),
           if (loop.kind == LoopKind.appointment ||
               loop.kind == LoopKind.reservation ||
-              loop.time != null)
+              (loop.time != null &&
+                  loop.kind != LoopKind.coupon &&
+                  loop.kind != LoopKind.place))
             _Fact(
               icon: Icons.schedule_outlined,
               label: loop.time?.substring(0, 5) ?? '시간 미정',
@@ -1552,20 +1571,27 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               icon: Icons.timer_outlined,
               label: (loop.expiresOn ?? loop.date) == null
                   ? '기한 정보 없음'
-                  : '기한 ${dateText(loop.expiresOn ?? loop.date)}',
+                  : '유효기간 ${dateText(loop.expiresOn ?? loop.date)}까지',
             ),
           if (loop.place != null)
-            _Fact(icon: Icons.place_outlined, label: loop.place!),
+            _Fact(
+              icon: loop.kind == LoopKind.coupon
+                  ? Icons.storefront_outlined
+                  : Icons.place_outlined,
+              label: loop.kind == LoopKind.coupon
+                  ? '사용/교환처: ${loop.place}'
+                  : loop.place!,
+            ),
           if (loop.participants.isNotEmpty)
             _Fact(
               icon: Icons.group_outlined,
               label: loop.participants.join(', '),
             ),
-          if (loop.purpose != null)
+          if (loop.purpose != null && loop.kind != LoopKind.coupon)
             _Fact(icon: Icons.subject_outlined, label: loop.purpose!),
           if (shouldShowConfidence(loop.confidence)) ...[
             const SizedBox(height: 14),
-            _ConfidenceCard(confidence: loop.confidence),
+            _ConfidenceCard(confidence: loop.confidence, kind: loop.kind),
           ],
           if (weather?.available == true) ...[
             const SizedBox(height: OLSpacing.md),
@@ -1616,115 +1642,163 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               ),
             ),
           ],
-          if (loop.checklist.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            const Text(
-              '체크리스트',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            ...loop.checklist.map(
-              (item) => CheckboxListTile(
-                value: item.completed,
-                contentPadding: EdgeInsets.zero,
-                title: Row(
-                  children: [
-                    Expanded(child: Text(item.title)),
-                    const SizedBox(width: 8),
-                    Text(
-                      item.isRequired ? '필수' : '선택',
-                      style: TextStyle(
-                        color: item.isRequired
-                            ? OLColors.cobalt
-                            : OLColors.muted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+          if (loop.kind == LoopKind.coupon) ...[
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: OLColors.cobaltSoft,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: OLColors.cobalt.withValues(alpha: .2),
                 ),
-                onChanged: loop.state == LoopState.closed
-                    ? null
-                    : (value) async {
-                        await widget.controller.updateChecklist(
-                          loop,
-                          item,
-                          value ?? false,
-                        );
-                        if (mounted) setState(() {});
-                      },
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.notifications_active_outlined,
+                    color: OLColors.cobalt,
+                    size: 24,
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '유효기간 알림 자동 예약됨',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: OLColors.navy,
+                            fontSize: 14,
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Text(
+                          '기한을 놓치지 않도록 만료 전에 푸시 알림으로 알려드립니다.',
+                          style: TextStyle(
+                            color: OLColors.muted,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-          if (loop.actions.isNotEmpty) ...[
-            const SizedBox(height: 22),
-            const Text(
-              '실행 항목',
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            const _InfoBanner(
-              text:
-                  '실행 항목은 캘린더 추가, 지도 열기, 쿠폰 사용처럼 직접 끝낼 일입니다. 자동 알림은 따로 체크할 필요가 없습니다.',
-            ),
-            const SizedBox(height: 8),
-            ...loop.actions.map(
-              (item) => item.type == 'reminder'
-                  ? ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(
-                        Icons.notifications_active_outlined,
-                        color: OLColors.cobalt,
-                      ),
-                      title: Text(item.title),
-                      subtitle: Text(
-                        actionDescription(item),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      trailing: const Text(
-                        '자동',
+          ] else ...[
+            if (loop.checklist.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              const Text(
+                '체크리스트',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              ...loop.checklist.map(
+                (item) => CheckboxListTile(
+                  value: item.completed,
+                  contentPadding: EdgeInsets.zero,
+                  title: Row(
+                    children: [
+                      Expanded(child: Text(item.title)),
+                      const SizedBox(width: 8),
+                      Text(
+                        item.isRequired ? '필수' : '선택',
                         style: TextStyle(
-                          color: OLColors.cobalt,
+                          color: item.isRequired
+                              ? OLColors.cobalt
+                              : OLColors.muted,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    )
-                  : CheckboxListTile(
-                      value: item.completed,
-                      contentPadding: EdgeInsets.zero,
-                      title: Row(
-                        children: [
-                          Expanded(child: Text(item.title)),
-                          const SizedBox(width: 8),
-                          Text(
-                            item.completed ? '완료' : '대기',
-                            style: TextStyle(
-                              color: item.completed
-                                  ? OLColors.cobalt
-                                  : OLColors.muted,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
+                    ],
+                  ),
+                  onChanged: loop.state == LoopState.closed
+                      ? null
+                      : (value) async {
+                          await widget.controller.updateChecklist(
+                            loop,
+                            item,
+                            value ?? false,
+                          );
+                          if (mounted) setState(() {});
+                        },
+                ),
+              ),
+            ],
+            if (loop.actions.isNotEmpty) ...[
+              const SizedBox(height: 22),
+              const Text(
+                '실행 항목',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              const _InfoBanner(
+                text:
+                    '실행 항목은 캘린더 추가, 지도 열기처럼 직접 끝낼 일입니다. 자동 알림은 따로 체크할 필요가 없습니다.',
+              ),
+              const SizedBox(height: 8),
+              ...loop.actions.map(
+                (item) => item.type == 'reminder'
+                    ? ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(
+                          Icons.notifications_active_outlined,
+                          color: OLColors.cobalt,
+                        ),
+                        title: Text(item.title),
+                        subtitle: Text(
+                          actionDescription(item),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: const Text(
+                          '자동',
+                          style: TextStyle(
+                            color: OLColors.cobalt,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
-                        ],
+                        ),
+                      )
+                    : CheckboxListTile(
+                        value: item.completed,
+                        contentPadding: EdgeInsets.zero,
+                        title: Row(
+                          children: [
+                            Expanded(child: Text(item.title)),
+                            const SizedBox(width: 8),
+                            Text(
+                              item.completed ? '완료' : '대기',
+                              style: TextStyle(
+                                color: item.completed
+                                    ? OLColors.cobalt
+                                    : OLColors.muted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: Text(
+                          actionDescription(item),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        onChanged: loop.state == LoopState.closed
+                            ? null
+                            : (value) async {
+                                await widget.controller.updateAction(
+                                  loop,
+                                  item,
+                                  value ?? false,
+                                );
+                                if (mounted) setState(() {});
+                              },
                       ),
-                      subtitle: Text(
-                        actionDescription(item),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      onChanged: loop.state == LoopState.closed
-                          ? null
-                          : (value) async {
-                              await widget.controller.updateAction(
-                                loop,
-                                item,
-                                value ?? false,
-                              );
-                              if (mounted) setState(() {});
-                            },
-                    ),
-            ),
+              ),
+            ],
           ],
           if (loop.checkpoints.isNotEmpty) ...[
             const SizedBox(height: 22),
@@ -2281,21 +2355,42 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _ConfidenceCard extends StatelessWidget {
-  const _ConfidenceCard({required this.confidence});
+  const _ConfidenceCard({required this.confidence, this.kind});
   final Map<String, double> confidence;
+  final LoopKind? kind;
 
   @override
   Widget build(BuildContext context) {
-    const labels = {
-      'date': '날짜',
+    final labels = <String, String>{
+      'date': kind == LoopKind.coupon
+          ? '유효기간'
+          : (kind == LoopKind.purchase ? '기한' : '날짜'),
       'time': '시간',
-      'location': '장소',
+      'location': kind == LoopKind.coupon
+          ? '사용처'
+          : (kind == LoopKind.purchase ? '구매처' : '장소'),
       'title': '제목',
     };
-    const order = {'date': 0, 'time': 1, 'location': 2, 'title': 3};
+    final order = {'date': 0, 'time': 1, 'location': 2, 'title': 3};
     final entries =
         confidence.entries
-            .where((entry) => labels.containsKey(entry.key))
+            .where((entry) {
+              if (!labels.containsKey(entry.key)) return false;
+              // 쿠폰, 장소, 구매는 시간 확신도를 표시하지 않음
+              if (entry.key == 'time' &&
+                  (kind == LoopKind.coupon ||
+                      kind == LoopKind.place ||
+                      kind == LoopKind.purchase)) {
+                return false;
+              }
+              // 장소 정보가 없거나 불필요한 쿠폰인 경우 location 확신도 생략
+              if (entry.key == 'location' &&
+                  kind == LoopKind.coupon &&
+                  entry.value <= 0) {
+                return false;
+              }
+              return true;
+            })
             .toList()
           ..sort(
             (left, right) => order[left.key]!.compareTo(order[right.key]!),
