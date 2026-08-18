@@ -289,7 +289,7 @@ void main() {
 
     expect(find.text('쿠폰'), findsOneWidget);
     expect(find.byKey(const Key('review-date-field')), findsOneWidget);
-    expect(find.textContaining('기한 8월 31일'), findsOneWidget);
+    expect(find.text('8월 31일'), findsOneWidget);
     expect(find.byKey(const Key('review-time-field')), findsNothing);
     expect(find.text('저장하기'), findsOneWidget);
   });

@@ -279,8 +279,14 @@ class AppController extends ChangeNotifier {
       ),
       _ => loop.copyWith(state: state, missingFields: remaining),
     };
+    final bool isTemplateSummary = loop.summary == null ||
+        (loop.summary!.contains('로 정리했습니다') ||
+            loop.summary!.contains('확인이 필요합니다'));
+    final summary = isTemplateSummary
+        ? _summaryForLoop(updated)
+        : loop.summary;
     return _refreshLocalGraph(
-      updated.copyWith(summary: _summaryForLoop(updated)),
+      updated.copyWith(summary: summary),
     );
   }
 

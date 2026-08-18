@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
@@ -109,6 +110,16 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
     title: 'OpenLoop',
     debugShowCheckedModeBanner: false,
     theme: openLoopTheme(),
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    supportedLocales: const [
+      Locale('ko', 'KR'),
+      Locale('en', 'US'),
+    ],
+    locale: const Locale('ko', 'KR'),
     home: AnimatedBuilder(
       animation: widget.controller,
       builder: (_, __) => widget.controller.ready
@@ -881,34 +892,64 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final confirmed = await showCupertinoModalPopup<bool>(
       context: context,
       builder: (context) => Container(
-        height: 300,
+        height: 280,
         color: CupertinoColors.systemBackground.resolveFrom(context),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                CupertinoButton(
-                  child: const Text('취소'),
-                  onPressed: () => Navigator.pop(context, false),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.separator,
+                      width: 0.5,
+                    ),
+                  ),
                 ),
-                CupertinoButton(
-                  child: const Text('확인'),
-                  onPressed: () => Navigator.pop(context, true),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(color: CupertinoColors.systemGrey),
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '완료',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: OLColors.cobalt,
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            Expanded(
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.date,
-                initialDateTime: initial,
-                minimumDate:
-                    DateTime.now().subtract(const Duration(days: 365)),
-                maximumDate: DateTime.now().add(const Duration(days: 3650)),
-                onDateTimeChanged: (dt) => picked = dt,
               ),
-            ),
-          ],
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.date,
+                  initialDateTime: initial,
+                  minimumDate:
+                      DateTime.now().subtract(const Duration(days: 365)),
+                  maximumDate: DateTime.now().add(const Duration(days: 3650)),
+                  onDateTimeChanged: (dt) => picked = dt,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -950,33 +991,63 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final confirmed = await showCupertinoModalPopup<bool>(
       context: context,
       builder: (context) => Container(
-        height: 300,
+        height: 280,
         color: CupertinoColors.systemBackground.resolveFrom(context),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                CupertinoButton(
-                  child: const Text('취소'),
-                  onPressed: () => Navigator.pop(context, false),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: CupertinoColors.separator,
+                      width: 0.5,
+                    ),
+                  ),
                 ),
-                CupertinoButton(
-                  child: const Text('확인'),
-                  onPressed: () => Navigator.pop(context, true),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(color: CupertinoColors.systemGrey),
+                      ),
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: const Text(
+                        '완료',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: OLColors.cobalt,
+                        ),
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            Expanded(
-              child: CupertinoDatePicker(
-                mode: CupertinoDatePickerMode.time,
-                initialDateTime:
-                    DateTime(2000, 1, 1, initialHour, initialMinute),
-                use24hFormat: true,
-                onDateTimeChanged: (dt) => picked = dt,
               ),
-            ),
-          ],
+              Expanded(
+                child: CupertinoDatePicker(
+                  mode: CupertinoDatePickerMode.time,
+                  initialDateTime:
+                      DateTime(2000, 1, 1, initialHour, initialMinute),
+                  use24hFormat: false,
+                  onDateTimeChanged: (dt) => picked = dt,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1043,27 +1114,11 @@ class _ReviewScreenState extends State<ReviewScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 13, 16, 12),
-          decoration: BoxDecoration(
-            color: OLColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: OLColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '제목',
-                style: TextStyle(
-                  color: OLColors.muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              if (draft.isDraft)
-                TextField(
+        _ReviewFieldCard(
+          icon: Icons.title_rounded,
+          label: '제목',
+          child: draft.isDraft
+              ? TextField(
                   key: const Key('review-title-field'),
                   controller: titleController,
                   maxLines: 2,
@@ -1071,37 +1126,35 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   textInputAction: TextInputAction.done,
                   style: const TextStyle(
                     color: OLColors.navy,
-                    fontSize: 22,
-                    height: 1.25,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
                   ),
                   decoration: const InputDecoration(
                     border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
                     contentPadding: EdgeInsets.zero,
                     isDense: true,
                   ),
                   onChanged: (value) => _edit('title', value.trim()),
                 )
-              else
-                Text(
+              : Text(
                   draft.title,
                   style: const TextStyle(
                     color: OLColors.navy,
-                    fontSize: 22,
-                    height: 1.25,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-            ],
-          ),
         ),
         if (draft.summary?.trim().isNotEmpty == true) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           _SummaryCard(summary: draft.summary!),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: 4),
         if (draft.kind != LoopKind.place)
-          _EditableReviewFact(
+          _ReviewFieldCard(
             key: const Key('review-date-field'),
             icon: (draft.kind == LoopKind.coupon ||
                     draft.kind == LoopKind.purchase)
@@ -1109,10 +1162,25 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 : Icons.calendar_today_outlined,
             label: (draft.kind == LoopKind.coupon ||
                     draft.kind == LoopKind.purchase)
-                ? '기한 ${dateText(draft.expiresOn ?? draft.date)}'
-                : dateText(draft.date),
-            enabled: draft.isDraft,
-            onTap: _pickDate,
+                ? '기한'
+                : '날짜',
+            trailing: draft.isDraft
+                ? const Icon(
+                    Icons.chevron_right_rounded,
+                    color: OLColors.muted,
+                  )
+                : null,
+            onTap: draft.isDraft ? _pickDate : null,
+            child: Text(
+              (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
+                  ? dateText(draft.expiresOn ?? draft.date)
+                  : dateText(draft.date),
+              style: const TextStyle(
+                color: OLColors.navy,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         if (draft.kind == LoopKind.appointment ||
             draft.kind == LoopKind.reservation ||
@@ -1122,46 +1190,41 @@ class _ReviewScreenState extends State<ReviewScreen> {
             label: draft.kind == LoopKind.deadline
                 ? '마감 시간 (선택)'
                 : (draft.kind == LoopKind.reservation ? '예약 시간' : '시간'),
-            child: GestureDetector(
-              onTap: draft.isDraft ? _pickTime : null,
-              child: AbsorbPointer(
-                absorbing: true,
-                child: TextField(
-                  key: const Key('review-time-field'),
-                  controller: timeController,
-                  enabled: draft.isDraft,
-                  keyboardType: TextInputType.datetime,
-                  textInputAction: TextInputAction.done,
-                  style: const TextStyle(
-                    color: OLColors.navy,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    hintText: draft.kind == LoopKind.deadline
-                        ? '시간 없음'
-                        : '시간 미정',
-                    hintStyle: const TextStyle(
-                      color: OLColors.muted,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    errorText: _timeInputError,
-                    suffixIcon: draft.isDraft
-                        ? const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: OLColors.muted,
-                          )
-                        : null,
-                    suffixIconConstraints: const BoxConstraints(
-                      minHeight: 24,
-                      minWidth: 24,
-                    ),
-                  ),
-                  onChanged: _updateTime,
+            trailing: draft.isDraft
+                ? const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: OLColors.muted,
+                  )
+                : null,
+            onTap: draft.isDraft ? _pickTime : null,
+            child: AbsorbPointer(
+              absorbing: true,
+              child: TextField(
+                key: const Key('review-time-field'),
+                controller: timeController,
+                enabled: draft.isDraft,
+                style: const TextStyle(
+                  color: OLColors.navy,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
                 ),
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                  hintText: draft.kind == LoopKind.deadline
+                      ? '시간 없음'
+                      : '시간 미정',
+                  hintStyle: const TextStyle(
+                    color: OLColors.muted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  errorText: _timeInputError,
+                ),
+                onChanged: _updateTime,
               ),
             ),
           ),
@@ -1190,6 +1253,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
               ),
               decoration: InputDecoration(
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
                 hintText: draft.kind == LoopKind.place
@@ -1210,8 +1276,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
             icon: Icons.group_outlined,
             label: draft.participants.join(', '),
           ),
-        if (draft.purpose != null)
-          _Fact(icon: Icons.subject_outlined, label: draft.purpose!),
         if (draft.resolutionNote != null) ...[
           const SizedBox(height: 18),
           _InfoBanner(text: draft.resolutionNote!),
@@ -1259,28 +1323,7 @@ Future<void> _finishCalendarHandoff(
   }
 }
 
-class _EditableReviewFact extends StatelessWidget {
-  const _EditableReviewFact({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.enabled,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final bool enabled;
-  final VoidCallback onTap;
 
-  @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: Icon(icon, color: OLColors.cobalt),
-    title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-    trailing: enabled ? const Icon(Icons.chevron_right) : null,
-    onTap: enabled ? onTap : null,
-  );
-}
 
 class LoopDetailScreen extends StatefulWidget {
   const LoopDetailScreen({
@@ -2054,47 +2097,57 @@ class _EmptyLoops extends StatelessWidget {
 
 class _ReviewFieldCard extends StatelessWidget {
   const _ReviewFieldCard({
+    super.key,
     required this.icon,
     required this.label,
     required this.child,
+    this.trailing,
+    this.onTap,
   });
   final IconData icon;
   final String label;
   final Widget child;
+  final Widget? trailing;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 12),
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: BoxDecoration(
-        color: OLColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: OLColors.border),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: OLColors.cobalt, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: OLColors.muted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+    padding: const EdgeInsets.only(top: 10),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        decoration: BoxDecoration(
+          color: OLColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: OLColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: OLColors.cobalt, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: OLColors.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                child,
-              ],
+                  const SizedBox(height: 3),
+                  child,
+                ],
+              ),
             ),
-          ),
-        ],
+            if (trailing != null) trailing!,
+          ],
+        ),
       ),
     ),
   );
