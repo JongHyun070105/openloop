@@ -515,8 +515,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('저장하기'));
     await tester.pumpAndSettle();
-    // 저장 후 popUntil로 돌아가지만, test home이 ReviewScreen이므로 pop 불가
-    // persisted 후 다시 저장하기 버튼이 보임
+    // 스낵바가 닫힌 후 재탭
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
     expect(find.text('저장하기'), findsOneWidget);
     await tester.tap(find.text('저장하기'));
     await tester.pumpAndSettle();

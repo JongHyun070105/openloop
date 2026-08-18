@@ -14,6 +14,8 @@ import 'models/open_loop.dart';
 import 'services/external_integrations.dart';
 import 'services/shared_capture.dart';
 
+final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
 class OpenLoopApp extends StatefulWidget {
   const OpenLoopApp({super.key, required this.controller});
   final AppController controller;
@@ -107,6 +109,7 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   @override
   Widget build(BuildContext context) => MaterialApp(
     navigatorKey: navigatorKey,
+    scaffoldMessengerKey: scaffoldMessengerKey,
     title: 'OpenLoop',
     debugShowCheckedModeBanner: false,
     theme: openLoopTheme(),
@@ -1090,12 +1093,70 @@ class _ReviewScreenState extends State<ReviewScreen> {
       final persisted = await controller.approveDraft(draft);
       if (!mounted) return;
       setState(() => draft = persisted);
-      // 약속·예약이면 캘린더에 자동 추가
-      if (persisted.kind == LoopKind.appointment ||
-          persisted.kind == LoopKind.reservation) {
+
+      final bool isCalendarEvent = persisted.kind == LoopKind.appointment ||
+          persisted.kind == LoopKind.reservation ||
+          (persisted.date != null && persisted.time != null);
+
+      // 약속·예약 등 날짜/시간이 있는 경우 캘린더에 추가
+      if (isCalendarEvent) {
         _launchCalendarHandoff(controller, persisted);
       }
+
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+
+      final String message = isCalendarEvent
+          ? '‘${persisted.title}’ 일정이 캘린더에 추가되었습니다.'
+          : '‘${persisted.title}’ 저장이 완료되었습니다.';
+
+      final messenger =
+          scaffoldMessengerKey.currentState ??
+          (mounted ? ScaffoldMessenger.maybeOf(context) : null);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                isCalendarEvent
+                    ? Icons.event_available_rounded
+                    : Icons.check_circle_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: OLColors.navy,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      final messenger =
+          scaffoldMessengerKey.currentState ??
+          (mounted ? ScaffoldMessenger.maybeOf(context) : null);
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text('저장 중 문제가 발생했습니다: $e'),
+          backgroundColor: OLColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => submitting = false);
     }

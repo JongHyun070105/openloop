@@ -224,10 +224,14 @@ class AppController extends ChangeNotifier {
   Future<OpenLoop> _persistDraft(OpenLoop draft) async {
     if (draft.persistence == LoopPersistence.remoteDraft &&
         baseUrl.trim().isNotEmpty) {
-      return _api.createLoop(
-        draft: draft,
-        retention: _retentionApiValue(retention),
-      );
+      try {
+        return await _api.createLoop(
+          draft: draft,
+          retention: _retentionApiValue(retention),
+        );
+      } catch (_) {
+        // 원격 서버 등록 실패 시에도 로컬에 즉시 영구 저장하여 데이터 손실 방지
+      }
     }
     return _refreshLocalGraph(
       draft.copyWith(persistence: LoopPersistence.persisted),

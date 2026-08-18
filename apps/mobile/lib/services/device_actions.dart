@@ -36,7 +36,7 @@ class NativeDeviceActions implements DeviceActions {
       final launched = _calendarLauncher(
         Event(
           title: loop.title,
-          description: loop.purpose ?? loop.resolutionNote,
+          description: loop.summary ?? loop.purpose ?? loop.resolutionNote,
           location: loop.place,
           startDate: start,
           endDate: start.add(

@@ -379,14 +379,18 @@ class OpenLoop {
       'date': date == null
           ? null
           : '${date!.year.toString().padLeft(4, '0')}-${date!.month.toString().padLeft(2, '0')}-${date!.day.toString().padLeft(2, '0')}',
-      'start_time': time,
+      'start_time': (time == null || time!.trim().isEmpty)
+          ? null
+          : (time!.split(':').length == 2 ? '$time:00' : time),
       'expires_on': expiresOn == null
           ? null
           : '${expiresOn!.year.toString().padLeft(4, '0')}-${expiresOn!.month.toString().padLeft(2, '0')}-${expiresOn!.day.toString().padLeft(2, '0')}',
-      'place': place == null ? null : {'name': place},
+      'place': (place == null || place!.trim().isEmpty)
+          ? null
+          : {'name': place!.trim()},
       'participants': participants,
-      'purpose': purpose,
-      'summary': summary,
+      'purpose': (purpose == null || purpose!.trim().isEmpty) ? null : purpose,
+      'summary': (summary == null || summary!.trim().isEmpty) ? null : summary,
       'reminders': reminderOffsets
           .map((offset) => {'type': 'default', 'offset': offset})
           .toList(),
@@ -395,10 +399,10 @@ class OpenLoop {
           .toList(),
       'source': source,
       'confidence': {
-        'date': confidence['date'] ?? 0.0,
-        'time': confidence['time'] ?? 0.0,
-        'location': confidence['location'] ?? 0.0,
-        'title': confidence['title'] ?? 0.0,
+        'date': (confidence['date'] ?? 0.0).clamp(0.0, 1.0),
+        'time': (confidence['time'] ?? 0.0).clamp(0.0, 1.0),
+        'location': (confidence['location'] ?? 0.0).clamp(0.0, 1.0),
+        'title': (confidence['title'] ?? 0.0).clamp(0.0, 1.0),
       },
       'missing_fields': missingFields,
       'resolution_note': resolutionNote,
