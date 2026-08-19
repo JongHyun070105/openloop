@@ -823,23 +823,46 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
     super.dispose();
   }
 
+  String get _displayTitle {
+    final t = widget.loop.title.trim();
+    if (t.isEmpty || t == '새 Open Loop') return '일정';
+    return t;
+  }
+
   String get question {
     final suggested = widget.loop.suggestedQuestion?.trim();
     if (suggested != null && suggested.isNotEmpty) {
+      final isPlaceQ = suggested.contains('장소') || suggested.contains('어디');
+
+      if (field == 'place' && isPlaceQ) {
+        return suggested;
+      }
+      if (field == 'date' &&
+          suggested.contains('날짜') &&
+          !suggested.contains('시간')) {
+        return suggested;
+      }
+      if (field == 'start_time' &&
+          suggested.contains('시간') &&
+          !suggested.contains('날짜')) {
+        return suggested;
+      }
       if (field == 'start_time' && suggested.contains('날짜와 시간')) {
         return suggested.replaceAll('날짜와 시간', '시간');
       }
-      return suggested;
+      if (field == 'date' && suggested.contains('날짜와 시간')) {
+        return suggested.replaceAll('날짜와 시간', '날짜');
+      }
     }
     return switch (field) {
-      'start_time' => '시작 시간을 몇 시로 설정할까요?',
-      'date' => '진행할 날짜를 선택해 주세요',
-      'expires_on' => '쿠폰 유효기간을 선택해 주세요',
-      'place' => '만날 장소를 입력해 주세요',
-      'title' => '일정의 제목을 입력해 주세요',
-      'purpose' => '무엇을 위한 일정인가요?',
-      'participants' => '누구와 함께하나요?',
-      _ => '한 가지만 확인할게요',
+      'place' => '$_displayTitle 장소는 어디인가요?',
+      'date' => '$_displayTitle 날짜를 언제로 정할까요?',
+      'start_time' => '$_displayTitle 시작 시간을 몇 시로 정할까요?',
+      'expires_on' => '$_displayTitle 유효기간이 언제까지인가요?',
+      'title' => '일정 제목을 무엇으로 정할까요?',
+      'purpose' => '$_displayTitle의 목적이나 내용은 무엇인가요?',
+      'participants' => '$_displayTitle에 누구와 함께하나요?',
+      _ => '$_displayTitle 세부 정보를 확인해 주세요',
     };
   }
 
@@ -859,7 +882,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
       : null;
 
   String get _inputHint => switch (field) {
-    'start_time' => '시작 시간을 직접 입력하거나 선택해 주세요.',
+    'start_time' => '시작 시간을 직접 입력하거나 [시간 선택]을 눌러주세요.',
     'date' => selectedDate == null
         ? '날짜를 선택하면 다음으로 넘어가요.'
         : '추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.',
@@ -868,6 +891,8 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
         : '추출한 유효기간이 맞으면 바로 다음으로 넘어갈 수 있어요.',
     'place' => '약속 또는 방문할 장소를 입력해 주세요.',
     'title' => '일정을 기억하기 쉬운 이름으로 입력해 주세요.',
+    'purpose' => '일정의 상세 내용이나 메모를 입력해 주세요.',
+    'participants' => '함께하는 사람들의 이름을 쉼표로 구분해 입력해 주세요.',
     _ => '이 정보만 확인하면 일정으로 정리할 수 있어요.',
   };
 
@@ -957,7 +982,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('한 가지만 확인할게요')),
+    appBar: AppBar(title: const Text('추가 정보 확인')),
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(22),
