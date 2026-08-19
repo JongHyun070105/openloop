@@ -1380,10 +1380,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
           const SizedBox(height: 18),
           _InfoBanner(text: draft.resolutionNote!),
         ],
-        if (shouldShowConfidence(draft.confidence)) ...[
-          const SizedBox(height: 18),
-          _ConfidenceCard(confidence: draft.confidence, kind: draft.kind),
-        ],
         const SizedBox(height: 24),
         FilledButton(
           key: const Key('save-loop-button'),
@@ -1556,8 +1552,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
         children: [
           Center(
             child: Container(
-              width: 52,
-              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
               decoration: BoxDecoration(
                 color: loop.state == LoopState.closed
                     ? (isDark
@@ -1566,26 +1561,44 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                     : (isDark
                           ? const Color(0xFF1E293B)
                           : const Color(0xFFEEF5FF)),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
               ),
-              child: Icon(
-                loop.state == LoopState.closed
-                    ? Icons.check_circle_rounded
-                    : loopKindIcon(loop.kind),
-                size: 26,
-                color: loop.state == LoopState.closed
-                    ? OLColors.iconMuted
-                    : OLColors.cobalt,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    loop.state == LoopState.closed
+                        ? Icons.check_circle_outline_rounded
+                        : loopKindIcon(loop.kind),
+                    size: 14,
+                    color: loop.state == LoopState.closed
+                        ? OLColors.iconMuted
+                        : OLColors.cobalt,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    loop.state == LoopState.closed
+                        ? '완료된 Loop'
+                        : loopKindLabel(loop.kind),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: loop.state == LoopState.closed
+                          ? OLColors.iconMuted
+                          : OLColors.cobalt,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Text(
               loop.title,
               style: TextStyle(
-                fontSize: 23,
+                fontSize: 24,
                 fontWeight: FontWeight.w800,
                 color: isDark ? Colors.white : const Color(0xFF0F172A),
                 height: 1.3,
@@ -1627,10 +1640,6 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                     icon: Icons.calendar_today_rounded,
                     label: '날짜',
                     value: dateText(loop.date),
-                    iconColor: const Color(0xFF2563EB),
-                    iconBg: isDark
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFFEEF5FF),
                   ),
                 if (loop.kind == LoopKind.appointment ||
                     loop.kind == LoopKind.reservation ||
@@ -1641,63 +1650,39 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                     icon: Icons.schedule_rounded,
                     label: '시간',
                     value: loop.time?.substring(0, 5) ?? '시간 미정',
-                    iconColor: const Color(0xFF2563EB),
-                    iconBg: isDark
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFFEEF5FF),
                   ),
                 if (loop.kind == LoopKind.coupon ||
                     loop.kind == LoopKind.purchase)
                   _FactItem(
-                    icon: Icons.timer_rounded,
+                    icon: Icons.timer_outlined,
                     label: '유효기간',
                     value: (loop.expiresOn ?? loop.date) == null
                         ? '기한 정보 없음'
                         : dateText(loop.expiresOn ?? loop.date),
-                    iconColor: const Color(0xFFEA580C),
-                    iconBg: isDark
-                        ? const Color(0xFF381F10)
-                        : const Color(0xFFFFEDD5),
                   ),
                 if (loop.place != null)
                   _FactItem(
                     icon: loop.kind == LoopKind.coupon
-                        ? Icons.storefront_rounded
-                        : Icons.place_rounded,
+                        ? Icons.storefront_outlined
+                        : Icons.place_outlined,
                     label: loop.kind == LoopKind.coupon ? '사용/교환처' : '장소',
                     value: loop.place!,
-                    iconColor: const Color(0xFF059669),
-                    iconBg: isDark
-                        ? const Color(0xFF102E20)
-                        : const Color(0xFFECFDF5),
                   ),
                 if (loop.participants.isNotEmpty)
                   _FactItem(
-                    icon: Icons.group_rounded,
+                    icon: Icons.people_outline_rounded,
                     label: '함께하는 사람',
                     value: loop.participants.join(', '),
-                    iconColor: const Color(0xFF6366F1),
-                    iconBg: isDark
-                        ? const Color(0xFF1E1E38)
-                        : const Color(0xFFEEF2FF),
                   ),
                 if (loop.purpose != null && loop.kind != LoopKind.coupon)
                   _FactItem(
-                    icon: Icons.subject_rounded,
+                    icon: Icons.notes_rounded,
                     label: '목적 및 메모',
                     value: loop.purpose!,
-                    iconColor: const Color(0xFF64748B),
-                    iconBg: isDark
-                        ? const Color(0xFF1E293B)
-                        : const Color(0xFFF1F5F9),
                   ),
               ],
             ),
           ),
-          if (shouldShowConfidence(loop.confidence)) ...[
-            const SizedBox(height: 14),
-            _ConfidenceCard(confidence: loop.confidence, kind: loop.kind),
-          ],
           if (weather?.available == true) ...[
             const SizedBox(height: 14),
             Container(
@@ -1847,265 +1832,10 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 ],
               ),
             ),
-          ] else ...[
-            if (loop.checklist.isNotEmpty) ...[
-              const SizedBox(height: 22),
-              Text(
-                '체크리스트',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF161E2E) : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF26334D)
-                        : const Color(0xFFEDF2F7),
-                    width: 1.2,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    for (int i = 0; i < loop.checklist.length; i++) ...[
-                      if (i > 0)
-                        Divider(
-                          height: 1,
-                          color: isDark
-                              ? const Color(0xFF26334D)
-                              : const Color(0xFFEDF2F7),
-                        ),
-                      CheckboxListTile(
-                        value: loop.checklist[i].completed,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 2,
-                        ),
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                loop.checklist[i].title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14.5,
-                                  color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 7,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: loop.checklist[i].isRequired
-                                    ? (isDark
-                                          ? const Color(0xFF381F10)
-                                          : const Color(0xFFFFEDD5))
-                                    : (isDark
-                                          ? const Color(0xFF1E293B)
-                                          : const Color(0xFFF1F5F9)),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                loop.checklist[i].isRequired ? '필수' : '선택',
-                                style: TextStyle(
-                                  color: loop.checklist[i].isRequired
-                                      ? const Color(0xFFEA580C)
-                                      : const Color(0xFF64748B),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        onChanged: loop.state == LoopState.closed
-                            ? null
-                            : (value) async {
-                                await widget.controller.updateChecklist(
-                                  loop,
-                                  loop.checklist[i],
-                                  value ?? false,
-                                );
-                                if (mounted) setState(() {});
-                              },
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-            if (loop.actions.isNotEmpty) ...[
-              const SizedBox(height: 22),
-              Text(
-                '실행 항목',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF161E2E) : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF26334D)
-                        : const Color(0xFFEDF2F7),
-                    width: 1.2,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    for (int i = 0; i < loop.actions.length; i++) ...[
-                      if (i > 0)
-                        Divider(
-                          height: 1,
-                          color: isDark
-                              ? const Color(0xFF26334D)
-                              : const Color(0xFFEDF2F7),
-                        ),
-                      loop.actions[i].type == 'reminder'
-                          ? ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 4,
-                              ),
-                              leading: const Icon(
-                                Icons.notifications_active_outlined,
-                                color: OLColors.cobalt,
-                              ),
-                              title: Text(
-                                loop.actions[i].title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                  color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
-                                ),
-                              ),
-                              subtitle: Text(
-                                actionDescription(loop.actions[i]),
-                                style: TextStyle(
-                                  color: isDark
-                                      ? const Color(0xFF94A3B8)
-                                      : const Color(0xFF64748B),
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                              trailing: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? const Color(0xFF1E293B)
-                                      : const Color(0xFFEEF5FF),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  '자동',
-                                  style: TextStyle(
-                                    color: Color(0xFF2563EB),
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : CheckboxListTile(
-                              value: loop.actions[i].completed,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 2,
-                              ),
-                              title: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      loop.actions[i].title,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                        color: isDark
-                                            ? Colors.white
-                                            : const Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: loop.actions[i].completed
-                                          ? (isDark
-                                                ? const Color(0xFF102E20)
-                                                : const Color(0xFFECFDF5))
-                                          : (isDark
-                                                ? const Color(0xFF1E293B)
-                                                : const Color(0xFFF1F5F9)),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      loop.actions[i].completed ? '완료' : '대기',
-                                      style: TextStyle(
-                                        color: loop.actions[i].completed
-                                            ? const Color(0xFF059669)
-                                            : const Color(0xFF64748B),
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              subtitle: Text(
-                                actionDescription(loop.actions[i]),
-                                style: TextStyle(
-                                  color: isDark
-                                      ? const Color(0xFF94A3B8)
-                                      : const Color(0xFF64748B),
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                              onChanged: loop.state == LoopState.closed
-                                  ? null
-                                  : (value) async {
-                                      await widget.controller.updateAction(
-                                        loop,
-                                        loop.actions[i],
-                                        value ?? false,
-                                      );
-                                      if (mounted) setState(() {});
-                                    },
-                            ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ],
-          if (loop.checkpoints.isNotEmpty) ...[
+          ] else if (loop.checklist.isNotEmpty) ...[
             const SizedBox(height: 22),
             Text(
-              '알림 시점',
+              '체크리스트',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -2126,7 +1856,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               ),
               child: Column(
                 children: [
-                  for (int i = 0; i < loop.checkpoints.length; i++) ...[
+                  for (int i = 0; i < loop.checklist.length; i++) ...[
                     if (i > 0)
                       Divider(
                         height: 1,
@@ -2135,7 +1865,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                             : const Color(0xFFEDF2F7),
                       ),
                     CheckboxListTile(
-                      value: loop.checkpoints[i].completed,
+                      value: loop.checklist[i].completed,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 2,
@@ -2144,10 +1874,10 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              loop.checkpoints[i].title,
+                              loop.checklist[i].title,
                               style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14.5,
                                 color: isDark
                                     ? Colors.white
                                     : const Color(0xFF0F172A),
@@ -2157,51 +1887,38 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                           const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
+                              horizontal: 7,
+                              vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: loop.checkpoints[i].completed
+                              color: loop.checklist[i].isRequired
                                   ? (isDark
-                                        ? const Color(0xFF102E20)
-                                        : const Color(0xFFECFDF5))
+                                        ? const Color(0xFF381F10)
+                                        : const Color(0xFFFFEDD5))
                                   : (isDark
                                         ? const Color(0xFF1E293B)
-                                        : const Color(0xFFEEF5FF)),
+                                        : const Color(0xFFF1F5F9)),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
-                              loop.checkpoints[i].completed
-                                  ? '완료'
-                                  : loop.checkpoints[i].offset,
+                              loop.checklist[i].isRequired ? '필수' : '선택',
                               style: TextStyle(
-                                color: loop.checkpoints[i].completed
-                                    ? const Color(0xFF059669)
-                                    : const Color(0xFF2563EB),
-                                fontSize: 11.5,
+                                color: loop.checklist[i].isRequired
+                                    ? const Color(0xFFEA580C)
+                                    : const Color(0xFF64748B),
+                                fontSize: 11,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      subtitle: loop.checkpoints[i].dueAt == null
-                          ? null
-                          : Text(
-                              '${checkpointTimeText(loop.checkpoints[i].dueAt!)} · ${loop.checkpoints[i].completed ? '확인 완료' : '자동 알림 예정'}',
-                              style: TextStyle(
-                                color: isDark
-                                    ? const Color(0xFF94A3B8)
-                                    : const Color(0xFF64748B),
-                                fontSize: 12.5,
-                              ),
-                            ),
                       onChanged: loop.state == LoopState.closed
                           ? null
                           : (value) async {
-                              await widget.controller.updateCheckpoint(
+                              await widget.controller.updateChecklist(
                                 loop,
-                                loop.checkpoints[i],
+                                loop.checklist[i],
                                 value ?? false,
                               );
                               if (mounted) setState(() {});
@@ -2870,14 +2587,10 @@ class _FactItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.value,
-    this.iconColor,
-    this.iconBg,
   });
   final IconData icon;
   final String label;
   final String value;
-  final Color? iconColor;
-  final Color? iconBg;
 
   @override
   Widget build(BuildContext context) {
@@ -2890,15 +2603,14 @@ class _FactItem extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: iconBg ??
-                  (isDark
-                      ? const Color(0xFF1E293B)
-                      : const Color(0xFFEEF5FF)),
+              color: isDark
+                  ? const Color(0xFF1E293B)
+                  : const Color(0xFFEEF5FF),
               borderRadius: BorderRadius.circular(11),
             ),
             child: Icon(
               icon,
-              color: iconColor ?? OLColors.cobalt,
+              color: OLColors.cobalt,
               size: 19,
             ),
           ),
@@ -3060,86 +2772,6 @@ class _SummaryCard extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConfidenceCard extends StatelessWidget {
-  const _ConfidenceCard({required this.confidence, this.kind});
-  final Map<String, double> confidence;
-  final LoopKind? kind;
-
-  @override
-  Widget build(BuildContext context) {
-    final labels = <String, String>{
-      'date': kind == LoopKind.coupon
-          ? '유효기간'
-          : (kind == LoopKind.purchase ? '기한' : '날짜'),
-      'time': '시간',
-      'location': kind == LoopKind.coupon
-          ? '사용처'
-          : (kind == LoopKind.purchase ? '구매처' : '장소'),
-      'title': '제목',
-    };
-    final order = {'date': 0, 'time': 1, 'location': 2, 'title': 3};
-    final entries =
-        confidence.entries
-            .where((entry) {
-              if (!labels.containsKey(entry.key)) return false;
-              // 쿠폰, 장소, 구매는 시간 확신도를 표시하지 않음
-              if (entry.key == 'time' &&
-                  (kind == LoopKind.coupon ||
-                      kind == LoopKind.place ||
-                      kind == LoopKind.purchase)) {
-                return false;
-              }
-              // 장소 정보가 없거나 불필요한 쿠폰인 경우 location 확신도 생략
-              if (entry.key == 'location' &&
-                  kind == LoopKind.coupon &&
-                  entry.value <= 0) {
-                return false;
-              }
-              return true;
-            })
-            .toList()
-          ..sort(
-            (left, right) => order[left.key]!.compareTo(order[right.key]!),
-          );
-    if (entries.isEmpty) return const SizedBox.shrink();
-    return OLCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.verified_outlined, color: OLColors.cobalt, size: 19),
-              SizedBox(width: 8),
-              Text('AI 확신도', style: TextStyle(fontWeight: FontWeight.w800)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final entry in entries)
-                Chip(
-                  label: Text(
-                    '${labels[entry.key]} ${(entry.value * 100).round()}%',
-                  ),
-                  side: BorderSide(
-                    color: entry.value >= .8
-                        ? OLColors.cobalt.withValues(alpha: .25)
-                        : OLColors.warning.withValues(alpha: .35),
-                  ),
-                  backgroundColor: entry.value >= .8
-                      ? OLColors.cobaltSoft
-                      : OLColors.warning.withValues(alpha: .08),
-                ),
-            ],
           ),
         ],
       ),

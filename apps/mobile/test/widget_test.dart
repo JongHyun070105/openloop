@@ -63,21 +63,16 @@ void main() {
     await tester.tap(find.byKey(const Key('save-loop-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('공모전 마감'), findsOneWidget);
-    await tester.tap(find.text('공모전 마감'));
+    expect(find.byType(LoopCard), findsOneWidget);
+    await tester.tap(find.byType(LoopCard));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('실행 항목'), 180);
-    expect(find.text('실행 항목'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('알림 시점'), 180);
-    expect(find.text('알림 시점'), findsOneWidget);
-    expect(find.byKey(const Key('calendar-add-button')), findsNothing);
 
-    final checkpoint = find.text('공모전 마감 전날 확인');
-    await tester.ensureVisible(checkpoint);
+    final item = find.text('제출물 확인');
+    await tester.ensureVisible(item);
     await tester.pumpAndSettle();
-    await tester.tap(checkpoint);
+    await tester.tap(item);
     await tester.pumpAndSettle();
-    expect(controller.loops.single.checkpoints.first.completed, isTrue);
+    expect(controller.loops.single.checklist.first.completed, isTrue);
   });
 
   testWidgets(
