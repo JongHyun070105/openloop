@@ -8,17 +8,21 @@ import 'package:openloop_mobile/app_controller.dart';
 import 'package:openloop_mobile/models/open_loop.dart';
 import 'package:openloop_mobile/services/analyze_service.dart';
 import 'package:openloop_mobile/services/device_actions.dart';
+import 'package:openloop_mobile/services/external_integrations.dart';
 import 'package:openloop_mobile/services/loop_repository.dart';
 
 void main() {
   late MemoryLoopRepository repository;
+  late _RecordingDeviceActions deviceActions;
   late AppController controller;
 
   setUp(() {
+    AppIntegrations.instance.reset();
     repository = MemoryLoopRepository();
+    deviceActions = _RecordingDeviceActions();
     controller = AppController(
       repository: repository,
-      deviceActions: NoopDeviceActions(),
+      deviceActions: deviceActions,
       defaultBaseUrl: '',
     );
   });
@@ -981,6 +985,57 @@ void main() {
     expect(find.text('공유하면\n바로 정리해요.'), findsOneWidget);
     expect(controller.loops, isEmpty);
   });
+
+  testWidgets('ProcessingScreen에 예상 소요 시간과 3단계 프로그레스가 표시된다', (tester) async {
+    final completer = Completer<OpenLoop>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProcessingScreen(result: completer.future, controller: controller),
+      ),
+    );
+    await tester.pump();
+
+    // 1. AI 분석 대기 UI 및 예상 시간, 단계별 상태 확인
+    expect(find.text('AI 비서가 분석하고 있어요'), findsOneWidget);
+    expect(find.text('예상 소요 시간: 약 2~3초'), findsOneWidget);
+    expect(find.text('이미지 텍스트 인식'), findsOneWidget);
+    expect(find.text('일정 및 쿠폰 자동 분류'), findsOneWidget);
+    expect(find.text('맞춤 알림 및 캘린더 구성'), findsOneWidget);
+
+    // 2. 비동기 분석 완료
+    completer.complete(
+      OpenLoop(
+        id: 'test-loop',
+        kind: LoopKind.appointment,
+        state: LoopState.open,
+        title: '강남역 저녁 약속',
+        source: 'text',
+        createdAt: DateTime.now(),
+        confidence: const {'title': 1.0},
+      ),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    // 3. 검토 화면으로 정상 전환됨
+    expect(find.text('분석 결과'), findsOneWidget);
+  });
+
+  test('AppController.analyzeInBackground는 분석 후 맞춤 알림을 발송하고 pendingDraft를 준비한다', () async {
+    final draft = await controller.analyzeInBackground(
+      text: '스타벅스 아메리카노 2026년 12월 31일까지',
+      sendNotificationOnComplete: true,
+    );
+
+    expect(deviceActions.notificationCalls, 1);
+    expect(deviceActions.lastNotificationTitle, contains('정리 완료'));
+    expect(deviceActions.lastNotificationPayload, equals('draft:${draft.id}'));
+    expect(AppIntegrations.instance.pendingDraftLoop?.id, equals(draft.id));
+
+    // 알림 페이로드 수신 시 pendingDraft로 연결 검증
+    AppIntegrations.instance.handleNotificationPayload(deviceActions.lastNotificationPayload!);
+    expect(AppIntegrations.instance.pendingDraft.value?.id, equals(draft.id));
+  });
 }
 
 OpenLoop _remoteDraft() => OpenLoop(
@@ -1106,6 +1161,10 @@ class _RecordingDeviceActions implements DeviceActions {
   int calendarCalls = 0;
   int notificationPermissionCalls = 0;
   int reminderSyncCalls = 0;
+  int notificationCalls = 0;
+  String? lastNotificationTitle;
+  String? lastNotificationBody;
+  String? lastNotificationPayload;
   List<String> lastSyncedLoopIds = const [];
 
   @override
@@ -1145,7 +1204,13 @@ class _RecordingDeviceActions implements DeviceActions {
     required String title,
     required String body,
     String? subtitle,
-  }) async {}
+    String? payload,
+  }) async {
+    notificationCalls += 1;
+    lastNotificationTitle = title;
+    lastNotificationBody = body;
+    lastNotificationPayload = payload;
+  }
 }
 
 class _HangingDeviceActions implements DeviceActions {
@@ -1182,5 +1247,6 @@ class _HangingDeviceActions implements DeviceActions {
     required String title,
     required String body,
     String? subtitle,
+    String? payload,
   }) async {}
 }

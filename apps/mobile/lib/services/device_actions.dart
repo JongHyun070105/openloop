@@ -5,6 +5,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/open_loop.dart';
+import 'external_integrations.dart';
 
 typedef CalendarLauncher = Future<bool> Function(Event event);
 
@@ -19,6 +20,7 @@ abstract interface class DeviceActions {
     required String title,
     required String body,
     String? subtitle,
+    String? payload,
   });
   Future<void> cancelReminders(OpenLoop loop);
 }
@@ -83,6 +85,12 @@ class NativeDeviceActions implements DeviceActions {
           defaultPresentList: true,
         ),
       ),
+      onDidReceiveNotificationResponse: (response) {
+        final payload = response.payload;
+        if (payload != null && payload.isNotEmpty) {
+          AppIntegrations.instance.handleNotificationPayload(payload);
+        }
+      },
     );
     _initialized = true;
   }
@@ -234,6 +242,7 @@ class NativeDeviceActions implements DeviceActions {
     required String title,
     required String body,
     String? subtitle,
+    String? payload,
   }) async {
     await _initialize();
     await _notifications.show(
@@ -258,6 +267,7 @@ class NativeDeviceActions implements DeviceActions {
           interruptionLevel: InterruptionLevel.timeSensitive,
         ),
       ),
+      payload: payload,
     );
   }
 
@@ -300,6 +310,7 @@ class NoopDeviceActions implements DeviceActions {
     required String title,
     required String body,
     String? subtitle,
+    String? payload,
   }) async {}
   @override
   Future<void> cancelReminders(OpenLoop loop) async {}

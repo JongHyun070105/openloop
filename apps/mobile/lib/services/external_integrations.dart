@@ -10,6 +10,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/open_loop.dart';
 import 'installation_identity.dart';
 
 class PlaceResult {
@@ -235,6 +236,25 @@ class AppIntegrations {
   static final instance = AppIntegrations._();
 
   final pendingLoopId = ValueNotifier<String?>(null);
+  OpenLoop? pendingDraftLoop;
+  final pendingDraft = ValueNotifier<OpenLoop?>(null);
+
+  void handleNotificationPayload(String payload) {
+    if (payload.startsWith('loop:')) {
+      pendingLoopId.value = payload.substring(5);
+    } else if (payload.startsWith('draft:')) {
+      if (pendingDraftLoop != null) {
+        pendingDraft.value = pendingDraftLoop;
+      }
+    }
+  }
+
+  void reset() {
+    pendingLoopId.value = null;
+    pendingDraft.value = null;
+    pendingDraftLoop = null;
+  }
+
   bool _posthogReady = false;
   bool _firebaseReady = false;
   bool _tokenRefreshSubscribed = false;

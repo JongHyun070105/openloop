@@ -138,6 +138,52 @@ class AppController extends ChangeNotifier {
     }
   }
 
+  OpenLoop? pendingReviewedDraft;
+
+  Future<OpenLoop> analyzeInBackground({
+    String? text,
+    String? imagePath,
+    String source = 'text',
+    bool sendNotificationOnComplete = true,
+  }) async {
+    final loop = imagePath != null
+        ? await analyzeImage(
+            imagePath: imagePath,
+            companionText: text,
+            source: source,
+          )
+        : await analyze(text: text ?? '', source: source);
+
+    pendingReviewedDraft = loop;
+    AppIntegrations.instance.pendingDraftLoop = loop;
+
+    if (sendNotificationOnComplete) {
+      final isNeedsInput = loop.state == LoopState.needsInput &&
+          loop.effectiveMissingFields.isNotEmpty;
+      final title = isNeedsInput
+          ? '❓ [${loop.title}] 추가 확인이 필요해요'
+          : '🎯 [${loop.title}] 정리 완료';
+      final body = isNeedsInput
+          ? '시간이나 날짜 정보를 확인해 주시면 바로 정리해 드릴게요.'
+          : '탭하여 세부 내용과 알림 일정을 확인하세요.';
+      final subtitle = switch (loop.kind) {
+        LoopKind.coupon => '쿠폰 자동 분석 완료',
+        LoopKind.appointment => '약속 일정 분석 완료',
+        LoopKind.reservation => '예약 일정 분석 완료',
+        LoopKind.place => '장소 정보 분석 완료',
+        LoopKind.deadline => '마감 기한 분석 완료',
+        LoopKind.purchase => '구매/보증 분석 완료',
+      };
+      await deviceActions.showNotification(
+        title: title,
+        body: body,
+        subtitle: subtitle,
+        payload: 'draft:${loop.id}',
+      );
+    }
+    return loop;
+  }
+
   Future<void> saveLoop(OpenLoop loop) async {
     if (loop.isDraft) {
       throw StateError('분석 초안은 승인 전 저장할 수 없습니다.');

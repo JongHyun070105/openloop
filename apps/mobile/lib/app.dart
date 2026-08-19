@@ -35,6 +35,7 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
     unawaited(_initialize());
     _listenForShares();
     AppIntegrations.instance.pendingLoopId.addListener(_openPushLoop);
+    AppIntegrations.instance.pendingDraft.addListener(_openPushDraft);
   }
 
   Future<void> _initialize() async {
@@ -48,16 +49,38 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   }
 
   void _openPushLoop() {
+    if (!mounted) return;
     final id = AppIntegrations.instance.pendingLoopId.value;
     if (id == null || !widget.controller.ready) return;
     if (!widget.controller.loops.any((loop) => loop.id == id)) return;
-    navigatorKey.currentState?.push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            LoopDetailScreen(controller: widget.controller, loopId: id),
-      ),
-    );
     AppIntegrations.instance.pendingLoopId.value = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      navigatorKey.currentState?.push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              LoopDetailScreen(controller: widget.controller, loopId: id),
+        ),
+      );
+    });
+  }
+
+  void _openPushDraft() {
+    if (!mounted) return;
+    final draft = AppIntegrations.instance.pendingDraft.value;
+    if (draft == null || !widget.controller.ready) return;
+    AppIntegrations.instance.pendingDraft.value = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final hasMissing = draft.effectiveMissingFields.isNotEmpty;
+      navigatorKey.currentState?.push(
+        MaterialPageRoute<void>(
+          builder: (_) => (draft.state == LoopState.needsInput && hasMissing)
+              ? AmbiguityScreen(controller: widget.controller, loop: draft)
+              : ReviewScreen(controller: widget.controller, loop: draft),
+        ),
+      );
+    });
   }
 
   Future<void> _listenForShares() async {
@@ -66,7 +89,10 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
         _openSharedMedia,
         onError: (_) {},
       );
-      _openSharedMedia(await ReceiveSharingIntent.instance.getInitialMedia());
+      final initial = await ReceiveSharingIntent.instance
+          .getInitialMedia()
+          .timeout(const Duration(milliseconds: 200), onTimeout: () => const []);
+      _openSharedMedia(initial);
     } catch (_) {
       // Sharing is unavailable on web and some test hosts; normal capture remains usable.
     }
@@ -104,6 +130,7 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   void dispose() {
     shareSubscription?.cancel();
     AppIntegrations.instance.pendingLoopId.removeListener(_openPushLoop);
+    AppIntegrations.instance.pendingDraft.removeListener(_openPushDraft);
     super.dispose();
   }
 
@@ -474,13 +501,12 @@ class _CaptureScreenState extends State<CaptureScreen> {
       error = null;
       analysisStarted = true;
     });
-    final result = image == null
-        ? widget.controller.analyze(text: text, source: source)
-        : widget.controller.analyzeImage(
-            imagePath: image!.path,
-            companionText: text,
-            source: source,
-          );
+    final result = widget.controller.analyzeInBackground(
+      imagePath: image?.path,
+      text: text.isEmpty ? null : text,
+      source: source,
+      sendNotificationOnComplete: true,
+    );
     try {
       final failure = await Navigator.push<String>(
         context,
@@ -601,17 +627,50 @@ class ProcessingScreen extends StatefulWidget {
   State<ProcessingScreen> createState() => _ProcessingScreenState();
 }
 
-class _ProcessingScreenState extends State<ProcessingScreen> {
+class _ProcessingScreenState extends State<ProcessingScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
+  int _currentStep = 1;
+  Timer? _stepTimer1;
+  Timer? _stepTimer2;
+
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.95, end: 1.08).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _stepTimer1 = Timer(const Duration(milliseconds: 700), () {
+      if (mounted) setState(() => _currentStep = 2);
+    });
+    _stepTimer2 = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _currentStep = 3);
+    });
+
     _complete();
+  }
+
+  @override
+  void dispose() {
+    _stepTimer1?.cancel();
+    _stepTimer2?.cancel();
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _complete() async {
     try {
       final loop = await widget.result;
       if (!mounted) return;
+      _stepTimer1?.cancel();
+      _stepTimer2?.cancel();
+      _pulseController.stop();
       final hasMissing = loop.effectiveMissingFields.isNotEmpty;
       await Navigator.pushReplacement(
         context,
@@ -623,23 +682,291 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
       );
     } catch (_) {
       if (!mounted) return;
+      _stepTimer1?.cancel();
+      _stepTimer2?.cancel();
+      _pulseController.stop();
       Navigator.pop(context, '일정을 분석하지 못했습니다. 네트워크 연결을 확인하고 다시 시도해 주세요.');
     }
   }
 
-  @override
-  Widget build(BuildContext context) => const Scaffold(
-    body: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+  Widget _buildStepItem({
+    required int stepNumber,
+    required String title,
+    required String subtitle,
+    required bool isCompleted,
+    required bool isActive,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 20),
-          Text('최종 합의와 빠진 정보를 찾는 중…'),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isCompleted
+                  ? const Color(0xFF10B981)
+                  : (isActive
+                      ? OLColors.cobalt
+                      : (isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFE2E8F0))),
+            ),
+            child: Center(
+              child: isCompleted
+                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                  : (isActive
+                      ? const SizedBox(
+                          width: 13,
+                          height: 13,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          '$stepNumber',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                          ),
+                        )),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: (isActive || isCompleted)
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                    color: isCompleted
+                        ? (isDark
+                              ? const Color(0xFFE2E8F0)
+                              : const Color(0xFF334155))
+                        : (isActive
+                              ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                              : (isDark
+                                    ? const Color(0xFF64748B)
+                                    : const Color(0xFF94A3B8))),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
-    ),
-  );
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          tooltip: '닫기',
+          onPressed: () {
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            }
+          },
+        ),
+        title: const Text('AI 자동 분석'),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+          child: Column(
+            children: [
+              const Spacer(),
+              ScaleTransition(
+                scale: _pulseAnimation,
+                child: Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    color: OLColors.cobalt.withValues(
+                      alpha: isDark ? 0.2 : 0.1,
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: OLColors.cobalt.withValues(alpha: 0.15),
+                        blurRadius: 20,
+                        spreadRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 38,
+                      color: OLColors.cobalt,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'AI 비서가 분석하고 있어요',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  letterSpacing: -0.3,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E293B)
+                      : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 13,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '예상 소요 시간: 약 2~3초',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 36),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF161E2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF26334D)
+                        : const Color(0xFFEDF2F7),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: isDark ? 0.2 : 0.03,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _buildStepItem(
+                      stepNumber: 1,
+                      title: '이미지 텍스트 인식',
+                      subtitle: '날짜, 시간, 장소, 키워드 추출',
+                      isCompleted: _currentStep > 1,
+                      isActive: _currentStep == 1,
+                      isDark: isDark,
+                    ),
+                    _buildStepItem(
+                      stepNumber: 2,
+                      title: '일정 및 쿠폰 자동 분류',
+                      subtitle: '약속, 쿠폰, 예약, 마감 등 분류',
+                      isCompleted: _currentStep > 2,
+                      isActive: _currentStep == 2,
+                      isDark: isDark,
+                    ),
+                    _buildStepItem(
+                      stepNumber: 3,
+                      title: '맞춤 알림 및 캘린더 구성',
+                      subtitle: '적시 알림 체크포인트 자동 생성',
+                      isCompleted: false,
+                      isActive: _currentStep >= 3,
+                      isDark: isDark,
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E293B).withValues(alpha: 0.6)
+                      : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.lightbulb_outline_rounded,
+                      size: 18,
+                      color: OLColors.cobalt,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '화면을 벗어나도 백그라운드에서 분석이 완료되면 푸시 알림으로 알려드려요.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class AmbiguityScreen extends StatefulWidget {
