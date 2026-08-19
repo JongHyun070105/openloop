@@ -1702,8 +1702,82 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
         .where((item) => item.id == widget.loopId)
         .firstOrNull;
     if (loop == null) {
-      return const Scaffold(
-        body: Center(child: Text('보관 기간에 따라 삭제된 Loop입니다.')),
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && Navigator.canPop(context)) {
+          Navigator.pop(context);
+        }
+      });
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Loop 상세'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              if (Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
+            },
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.delete_sweep_outlined,
+                  size: 52,
+                  color: isDark
+                      ? const Color(0xFF64748B)
+                      : const Color(0xFF94A3B8),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '삭제되었거나 존재하지 않는 Loop입니다.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? const Color(0xFFE2E8F0)
+                        : const Color(0xFF334155),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '보관 기간 만료 또는 삭제되어 더 이상 볼 수 없습니다.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                  label: const Text('홈으로 돌아가기'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
     final relatedLoops = widget.controller.loops
@@ -1756,9 +1830,10 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 context,
               );
               if (confirm != true) return;
+              if (context.mounted && Navigator.canPop(context)) {
+                Navigator.pop(context);
+              }
               await widget.controller.deleteLoop(loop);
-              if (!context.mounted) return;
-              Navigator.pop(context);
             },
             icon: const Icon(Icons.delete_outline),
           ),
@@ -2159,6 +2234,15 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             _InfoBanner(text: notice!),
           ],
           const SizedBox(height: 24),
+          if (loop.place != null) ...[
+            OutlinedButton.icon(
+              key: const Key('directions-button'),
+              onPressed: () => _openPlaceContext(loop),
+              icon: const Icon(Icons.directions_rounded),
+              label: const Text('장소 길찾기'),
+            ),
+            const SizedBox(height: 10),
+          ],
           if (loop.state == LoopState.closed) ...[
             OutlinedButton.icon(
               key: const Key('reopen-loop-button'),
@@ -2174,14 +2258,6 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               label: const Text('Loop 다시 열기'),
             ),
           ] else ...[
-            if (loop.place != null)
-              OutlinedButton.icon(
-                key: const Key('directions-button'),
-                onPressed: () => _openPlaceContext(loop),
-                icon: const Icon(Icons.directions_rounded),
-                label: const Text('장소 길찾기'),
-              ),
-            const SizedBox(height: 10),
             FilledButton.icon(
               key: const Key('close-loop-button'),
               onPressed: () async {

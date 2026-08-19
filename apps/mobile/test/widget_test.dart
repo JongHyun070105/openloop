@@ -943,6 +943,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('BHC 뿌링클+콜라1.25L'), findsOneWidget);
   });
+
+  testWidgets('종료된 Loop 상세 화면에서 삭제 시 멈춤 없이 안전하게 홈으로 복귀한다', (tester) async {
+    final closedLoop = OpenLoop(
+      id: 'closed-test-1',
+      kind: LoopKind.appointment,
+      state: LoopState.closed,
+      title: '종로5가 약속',
+      place: '종로5가역 12번 출구',
+      source: 'text',
+      createdAt: DateTime.now(),
+      confidence: const {'title': 1.0},
+    );
+
+    repository.loops = [closedLoop];
+    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpAndSettle();
+
+    // 1. 종료 탭으로 이동 후 상세 화면 진입
+    await tester.tap(find.byKey(const Key('filter-chip-closed')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('종로5가 약속'));
+    await tester.pumpAndSettle();
+
+    // 종료된 루프에서도 장소 길찾기 버튼이 표시됨
+    expect(find.byKey(const Key('directions-button')), findsOneWidget);
+
+    // 2. 삭제 버튼 탭
+    await tester.tap(find.byTooltip('삭제'));
+    await tester.pumpAndSettle();
+
+    // 3. 삭제 확인 다이얼로그 확인 버튼 탭
+    await tester.tap(find.text('삭제').last);
+    await tester.pumpAndSettle();
+
+    // 4. 상세 화면이 멈추지 않고 홈 화면으로 복귀함
+    expect(find.text('공유하면\n바로 정리해요.'), findsOneWidget);
+    expect(controller.loops, isEmpty);
+  });
 }
 
 OpenLoop _remoteDraft() => OpenLoop(
