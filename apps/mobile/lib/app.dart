@@ -117,6 +117,8 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
       theme: openLoopTheme(),
       darkTheme: openLoopDarkTheme(),
       themeMode: widget.controller.themeMode,
+      themeAnimationDuration: const Duration(milliseconds: 250),
+      themeAnimationCurve: Curves.easeInOutCubic,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -2084,8 +2086,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             borderRadius: BorderRadius.circular(14),
           ),
           child: CupertinoSlidingSegmentedControl<ThemeMode>(
-            groupValue:
-                themeMode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
+            groupValue: widget.controller.themeMode == ThemeMode.dark
+                ? ThemeMode.dark
+                : ThemeMode.light,
             backgroundColor: Colors.transparent,
             thumbColor: Theme.of(context).brightness == Brightness.dark
                 ? const Color(0xFF334155)
@@ -2146,8 +2149,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             },
             onValueChanged: (newMode) {
-              if (newMode == null) return;
-              setState(() => themeMode = newMode);
+              if (newMode == null || newMode == widget.controller.themeMode) {
+                return;
+              }
               widget.controller.updateThemeMode(newMode);
             },
           ),

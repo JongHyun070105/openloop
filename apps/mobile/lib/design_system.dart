@@ -26,7 +26,10 @@ abstract final class OLSpacing {
   static const xl = 36.0;
 }
 
-ThemeData openLoopTheme() => ThemeData(
+ThemeData openLoopTheme() => _lightTheme;
+ThemeData openLoopDarkTheme() => _darkTheme;
+
+final ThemeData _lightTheme = ThemeData(
   brightness: Brightness.light,
   scaffoldBackgroundColor: OLColors.background,
   colorScheme: ColorScheme.fromSeed(
@@ -107,7 +110,7 @@ ThemeData openLoopTheme() => ThemeData(
   useMaterial3: true,
 );
 
-ThemeData openLoopDarkTheme() => ThemeData(
+final ThemeData _darkTheme = ThemeData(
   brightness: Brightness.dark,
   scaffoldBackgroundColor: OLColors.darkBackground,
   colorScheme: ColorScheme.fromSeed(

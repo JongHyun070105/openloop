@@ -42,9 +42,10 @@ class AppController extends ChangeNotifier {
   bool capabilitiesLoading = false;
 
   Future<void> updateThemeMode(ThemeMode mode) async {
+    if (themeMode == mode) return;
     themeMode = mode;
-    await repository.saveThemeMode(mode);
     notifyListeners();
+    await repository.saveThemeMode(mode);
   }
 
   Future<void> initialize() async {
