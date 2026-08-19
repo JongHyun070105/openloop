@@ -147,10 +147,10 @@ class HomeScreen extends StatefulWidget {
 enum HomeFilter {
   all('전체'),
   urgent('임박'),
+  closed('종료'),
   coupon('쿠폰'),
   schedule('일정'),
-  place('장소'),
-  closed('종료');
+  place('장소');
 
   const HomeFilter(this.label);
   final String label;
