@@ -557,10 +557,11 @@ class _ProcessingScreenState extends State<ProcessingScreen> {
     try {
       final loop = await widget.result;
       if (!mounted) return;
+      final hasMissing = loop.effectiveMissingFields.isNotEmpty;
       await Navigator.pushReplacement(
         context,
         MaterialPageRoute<void>(
-          builder: (_) => loop.state == LoopState.needsInput
+          builder: (_) => (loop.state == LoopState.needsInput && hasMissing)
               ? AmbiguityScreen(controller: widget.controller, loop: loop)
               : ReviewScreen(controller: widget.controller, loop: loop),
         ),
@@ -817,7 +818,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
   late final TextEditingController textController;
   late final TextEditingController timeController;
 
-  String get field => widget.loop.missingFields.firstOrNull ?? 'start_time';
+  String get field => widget.loop.effectiveMissingFields.firstOrNull ?? 'title';
 
   List<String> get _participants => textController.text
       .split(RegExp(r'[,\n]'))
@@ -828,6 +829,22 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.loop.effectiveMissingFields.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => ReviewScreen(
+                controller: widget.controller,
+                loop: widget.loop.copyWith(state: LoopState.open),
+              ),
+            ),
+          );
+        }
+      });
+      return;
+    }
     selectedDate = field == 'expires_on'
         ? widget.loop.expiresOn
         : widget.loop.date;
@@ -1062,7 +1079,8 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
                           context,
                           MaterialPageRoute<void>(
                             builder: (_) =>
-                                resolved.state == LoopState.needsInput
+                                (resolved.state == LoopState.needsInput &&
+                                        resolved.effectiveMissingFields.isNotEmpty)
                                 ? AmbiguityScreen(
                                     controller: widget.controller,
                                     loop: resolved,

@@ -192,7 +192,7 @@ class AppController extends ChangeNotifier {
     required String field,
     required Object value,
   }) async {
-    final remaining = loop.missingFields
+    final remaining = loop.effectiveMissingFields
         .where((candidate) => candidate != field)
         .toList();
     var resolved = _applyAmbiguityLocally(
@@ -227,7 +227,7 @@ class AppController extends ChangeNotifier {
     if (!draft.isDraft) {
       throw StateError('저장된 Loop는 초안 편집 경로를 사용할 수 없습니다.');
     }
-    final remaining = draft.missingFields.toSet();
+    final remaining = draft.effectiveMissingFields.toSet();
     final isEmpty = switch (value) {
       String text => text.trim().isEmpty,
       List<Object?> values => values.isEmpty,
@@ -708,14 +708,14 @@ String _summaryForLoop(OpenLoop loop) {
     );
   }
   if (loop.place != null) facts.add(loop.place!);
-  if (loop.missingFields.isEmpty) return '${facts.join(' · ')}로 정리했습니다.';
+  if (loop.effectiveMissingFields.isEmpty) return '${facts.join(' · ')}로 정리했습니다.';
   const labels = {
     'date': '날짜',
     'start_time': '시간',
     'expires_on': '쿠폰 기한',
     'place': '장소',
   };
-  final unresolved = loop.missingFields
+  final unresolved = loop.effectiveMissingFields
       .map((field) => labels[field] ?? field)
       .join(', ');
   return '${facts.join(' · ')}. $unresolved 확인이 필요합니다.';

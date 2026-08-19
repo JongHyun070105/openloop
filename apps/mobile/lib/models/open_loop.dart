@@ -96,6 +96,38 @@ class OpenLoop {
   final Map<String, double> confidence;
   final LoopPersistence persistence;
 
+  /// 종류에 따라 불필요한 질문을 자동 제거한 missingFields.
+  /// 쿠폰·구매·장소는 시간 정보가 불필요하므로 start_time을 항상 제거합니다.
+  List<String> get effectiveMissingFields {
+    final allText = '$title ${purpose ?? ''} ${summary ?? ''}';
+    final isCoupon = kind == LoopKind.coupon ||
+        const [
+          '쿠폰',
+          '할인',
+          '혜택',
+          '바우처',
+          '기프티콘',
+          '기프티쇼',
+          '교환',
+          '교환권',
+          '유효기간',
+          '모바일상품권',
+          '상품권',
+          '모바일쿠폰',
+          '선물하기',
+          '프로모션',
+          '깊티',
+          '뿌링클',
+          'e쿠폰',
+          '금액권',
+          '바코드',
+        ].any(allText.contains);
+    if (isCoupon || kind == LoopKind.purchase || kind == LoopKind.place) {
+      return missingFields.where((f) => f != 'start_time' && f != 'time').toList();
+    }
+    return missingFields;
+  }
+
   bool get isDraft => persistence != LoopPersistence.persisted;
 
   DateTime? get startsAt {
@@ -118,43 +150,24 @@ class OpenLoop {
     LoopKind.appointment || LoopKind.reservation =>
       startsAt ??
           (date != null
-              ? _dateTimeAt(date!, time, fallbackHour: 10)
+              ? DateTime(date!.year, date!.month, date!.day, 9)
               : null),
-    LoopKind.deadline when date != null => _dateTimeAt(
-      date!,
-      time,
-      fallbackHour: 10,
-    ),
-    LoopKind.coupon || LoopKind.purchase
-        when (expiresOn ?? date) != null =>
-      DateTime(
-        (expiresOn ?? date)!.year,
-        (expiresOn ?? date)!.month,
-        (expiresOn ?? date)!.day,
-        10,
-      ),
-    _ => null,
+    LoopKind.deadline =>
+      startsAt ??
+          (date != null
+              ? DateTime(date!.year, date!.month, date!.day, 18)
+              : null),
+    LoopKind.place => null,
+    LoopKind.coupon || LoopKind.purchase =>
+      expiresOn != null
+          ? DateTime(expiresOn!.year, expiresOn!.month, expiresOn!.day, 12)
+          : null,
   };
 
   DateTime? get primaryDate =>
       (kind == LoopKind.coupon || kind == LoopKind.purchase)
           ? (expiresOn ?? date)
           : date;
-
-  static DateTime _dateTimeAt(
-    DateTime date,
-    String? time, {
-    required int fallbackHour,
-  }) {
-    final parts = time?.split(':') ?? const <String>[];
-    return DateTime(
-      date.year,
-      date.month,
-      date.day,
-      int.tryParse(parts.isEmpty ? '' : parts.first) ?? fallbackHour,
-      parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0,
-    );
-  }
 
   OpenLoop copyWith({
     String? id,
@@ -210,58 +223,104 @@ class OpenLoop {
     LoopPersistence persistence = LoopPersistence.remoteDraft,
   }) {
     final event = json['event'] as Map<String, dynamic>? ?? const {};
+    final rawType = event['type'] as String?;
+    final title = event['title'] as String? ?? '새 Open Loop';
+    final purpose = event['purpose'] as String?;
+    final summary = event['summary'] as String?;
+    final allText = '$title ${purpose ?? ''} ${summary ?? ''}';
+
+    final isCoupon = rawType == 'coupon' ||
+        const [
+          '쿠폰',
+          '할인',
+          '혜택',
+          '바우처',
+          '기프티콘',
+          '기프티쇼',
+          '교환',
+          '교환권',
+          '유효기간',
+          '모바일상품권',
+          '상품권',
+          '모바일쿠폰',
+          '선물하기',
+          '프로모션',
+          '깊티',
+          '뿌링클',
+          'e쿠폰',
+          '금액권',
+          '바코드',
+        ].any(allText.contains);
+    final isPlace = rawType == 'place';
+    final isPurchase = rawType == 'purchase';
+
+    final kind = isCoupon
+        ? LoopKind.coupon
+        : (LoopKind.values.where((k) => k.name == rawType).firstOrNull ??
+            LoopKind.appointment);
+
     final dateText = event['date'] as String?;
+    final parsedDate = dateText == null ? null : DateTime.tryParse(dateText);
+    final parsedExpiry = event['expires_on'] == null
+        ? null
+        : DateTime.tryParse(event['expires_on'] as String);
+
+    final expiresOn = isCoupon ? (parsedExpiry ?? parsedDate) : parsedExpiry;
+    final date = (isCoupon || isPlace) ? null : parsedDate;
+    final time = (isCoupon || isPlace || isPurchase)
+        ? null
+        : event['start_time'] as String?;
+
     final confidenceJson =
         event['confidence'] as Map<String, dynamic>? ?? const {};
     final reminders = event['reminders'] as List<dynamic>? ?? const [];
+
+    final rawMissing = List<String>.from(
+      event['missing_fields'] as List<dynamic>? ?? const [],
+    );
+    final missingFields = rawMissing.where((f) {
+      if (isCoupon || isPurchase || isPlace) {
+        if (f == 'start_time' || f == 'time') return false;
+      }
+      if (isCoupon) {
+        if (f == 'date' || f == 'place') return false;
+      }
+      if (isPlace) {
+        if (f == 'date' || f == 'expires_on') return false;
+      }
+      return true;
+    }).toList();
+
+    final rawStatus = json['status'] as String?;
+    final state = switch (rawStatus) {
+      'closed' => LoopState.closed,
+      'needs_input' => missingFields.isEmpty ? LoopState.open : LoopState.needsInput,
+      _ => LoopState.open,
+    };
+
     return OpenLoop(
       id:
           json['id'] as String? ??
           DateTime.now().microsecondsSinceEpoch.toString(),
-      kind:
-          LoopKind.values
-              .where((kind) => kind.name == event['type'])
-              .firstOrNull ??
-          LoopKind.appointment,
-      state: switch (json['status']) {
-        'closed' => LoopState.closed,
-        'needs_input' => LoopState.needsInput,
-        _ => LoopState.open,
-      },
-      title: event['title'] as String? ?? '새 Open Loop',
+      kind: kind,
+      state: state,
+      title: title,
       source: event['source'] as String? ?? 'text',
       createdAt:
           DateTime.tryParse(json['created_at'] as String? ?? '') ??
           DateTime.now(),
-      date: dateText == null ? null : DateTime.tryParse(dateText),
-      time: event['start_time'] as String?,
-      expiresOn: event['expires_on'] == null
-          ? null
-          : DateTime.tryParse(event['expires_on'] as String),
+      date: date,
+      time: time,
+      expiresOn: expiresOn,
       place: (event['place'] as Map<String, dynamic>?)?['name'] as String?,
-      purpose: event['purpose'] as String?,
-      summary: event['summary'] as String?,
+      purpose: purpose,
+      summary: summary,
       participants: List<String>.from(
         event['participants'] as List<dynamic>? ?? const [],
       ),
       resolutionNote: event['resolution_note'] as String?,
       suggestedQuestion: json['suggested_question'] as String?,
-      missingFields: List<String>.from(
-        event['missing_fields'] as List<dynamic>? ?? const [],
-      ).where((f) {
-        // 쿠폰·구매·장소는 시간 정보가 불필요하므로 start_time 질문을 제거
-        if (f == 'start_time') {
-          final kind = LoopKind.values
-              .where((k) => k.name == event['type'])
-              .firstOrNull ?? LoopKind.appointment;
-          if (kind == LoopKind.coupon ||
-              kind == LoopKind.purchase ||
-              kind == LoopKind.place) {
-            return false;
-          }
-        }
-        return true;
-      }).toList(),
+      missingFields: missingFields,
       reminderOffsets: reminders
           .map((item) => (item as Map<String, dynamic>)['offset'] as String?)
           .whereType<String>()
@@ -297,63 +356,120 @@ class OpenLoop {
     );
   }
 
-  factory OpenLoop.fromJson(Map<String, dynamic> json) => OpenLoop(
-    id: json['id'] as String,
-    kind:
+  factory OpenLoop.fromJson(Map<String, dynamic> json) {
+    final rawKind =
         LoopKind.values
             .where((kind) => kind.name == json['kind'])
             .firstOrNull ??
-        LoopKind.appointment,
-    state: LoopState.values.byName(json['state'] as String),
-    title: json['title'] as String,
-    source: json['source'] as String,
-    createdAt: DateTime.parse(json['createdAt'] as String),
-    date: json['date'] == null ? null : DateTime.parse(json['date'] as String),
-    time: json['time'] as String?,
-    expiresOn: json['expiresOn'] == null
+        LoopKind.appointment;
+    final title = json['title'] as String? ?? '';
+    final purpose = json['purpose'] as String?;
+    final summary = json['summary'] as String?;
+    final allText = '$title ${purpose ?? ''} ${summary ?? ''}';
+
+    final isCoupon = rawKind == LoopKind.coupon ||
+        const [
+          '쿠폰',
+          '할인',
+          '혜택',
+          '바우처',
+          '기프티콘',
+          '기프티쇼',
+          '교환',
+          '교환권',
+          '유효기간',
+          '모바일상품권',
+          '상품권',
+          '모바일쿠폰',
+          '선물하기',
+          '프로모션',
+          '깊티',
+          '뿌링클',
+          'e쿠폰',
+          '금액권',
+          '바코드',
+        ].any(allText.contains);
+    final isPlace = rawKind == LoopKind.place;
+    final isPurchase = rawKind == LoopKind.purchase;
+
+    final kind = isCoupon ? LoopKind.coupon : rawKind;
+
+    final parsedDate = json['date'] == null ? null : DateTime.parse(json['date'] as String);
+    final parsedExpiry = json['expiresOn'] == null
         ? null
-        : DateTime.parse(json['expiresOn'] as String),
-    place: json['place'] as String?,
-    purpose: json['purpose'] as String?,
-    summary: json['summary'] as String?,
-    participants: List<String>.from(
-      json['participants'] as List<dynamic>? ?? const [],
-    ),
-    resolutionNote: json['resolutionNote'] as String?,
-    suggestedQuestion: json['suggestedQuestion'] as String?,
-    missingFields: List<String>.from(
+        : DateTime.parse(json['expiresOn'] as String);
+
+    final expiresOn = isCoupon ? (parsedExpiry ?? parsedDate) : parsedExpiry;
+    final date = (isCoupon || isPlace) ? null : parsedDate;
+    final time = (isCoupon || isPlace || isPurchase)
+        ? null
+        : json['time'] as String?;
+
+    final rawMissing = List<String>.from(
       json['missingFields'] as List<dynamic>? ?? const [],
-    ),
-    reminderOffsets: List<String>.from(
-      json['reminderOffsets'] as List<dynamic>? ?? const [],
-    ),
-    actions: (json['actions'] as List<dynamic>? ?? const [])
-        .map((item) => LoopAction.fromJson(item as Map<String, dynamic>))
-        .toList(),
-    checklist: (json['checklist'] as List<dynamic>? ?? const [])
-        .map((item) => LoopChecklistItem.fromJson(item as Map<String, dynamic>))
-        .toList(),
-    checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
-        .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
-        .toList(),
-    relatedLoopIds: List<String>.from(
-      json['relatedLoopIds'] as List<dynamic>? ?? const [],
-    ),
-    completedAt: json['completedAt'] == null
-        ? null
-        : DateTime.tryParse(json['completedAt'] as String),
-    deleteAt: json['deleteAt'] == null
-        ? null
-        : DateTime.parse(json['deleteAt'] as String),
-    confidence: (json['confidence'] as Map<String, dynamic>).map(
-      (key, value) => MapEntry(key, (value as num).toDouble()),
-    ),
-    persistence:
-        LoopPersistence.values
-            .where((value) => value.name == json['persistence'])
-            .firstOrNull ??
-        LoopPersistence.persisted,
-  );
+    );
+    final missingFields = rawMissing.where((f) {
+      if (isCoupon || isPurchase || isPlace) {
+        if (f == 'start_time' || f == 'time') return false;
+      }
+      return true;
+    }).toList();
+
+    final rawState = LoopState.values.byName(json['state'] as String);
+    final state = (rawState == LoopState.needsInput && missingFields.isEmpty)
+        ? LoopState.open
+        : rawState;
+
+    return OpenLoop(
+      id: json['id'] as String,
+      kind: kind,
+      state: state,
+      title: title,
+      source: json['source'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      date: date,
+      time: time,
+      expiresOn: expiresOn,
+      place: json['place'] as String?,
+      purpose: purpose,
+      summary: summary,
+      participants: List<String>.from(
+        json['participants'] as List<dynamic>? ?? const [],
+      ),
+      resolutionNote: json['resolutionNote'] as String?,
+      suggestedQuestion: json['suggestedQuestion'] as String?,
+      missingFields: missingFields,
+      reminderOffsets: List<String>.from(
+        json['reminderOffsets'] as List<dynamic>? ?? const [],
+      ),
+      actions: (json['actions'] as List<dynamic>? ?? const [])
+          .map((item) => LoopAction.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      checklist: (json['checklist'] as List<dynamic>? ?? const [])
+          .map((item) => LoopChecklistItem.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
+          .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      relatedLoopIds: List<String>.from(
+        json['relatedLoopIds'] as List<dynamic>? ?? const [],
+      ),
+      completedAt: json['completedAt'] == null
+          ? null
+          : DateTime.tryParse(json['completedAt'] as String),
+      deleteAt: json['deleteAt'] == null
+          ? null
+          : DateTime.parse(json['deleteAt'] as String),
+      confidence: (json['confidence'] as Map<String, dynamic>).map(
+        (key, value) => MapEntry(key, (value as num).toDouble()),
+      ),
+      persistence:
+          LoopPersistence.values
+              .where((value) => value.name == json['persistence'])
+              .firstOrNull ??
+          LoopPersistence.persisted,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,

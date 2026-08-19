@@ -287,17 +287,29 @@ def _normalize_new_loop_result(
     is_coupon_voucher = any(
         kw in text_check
         for kw in [
+            "교환",
+            "교환권",
             "교환 유효기간",
             "유효기간",
             "기프티콘",
-            "교환권",
+            "기프티쇼",
             "모바일상품권",
-            "바우처",
+            "상품권",
             "모바일쿠폰",
+            "바우처",
+            "쿠폰",
+            "할인",
+            "혜택",
             "깊티",
+            "뿌링클",
+            "선물하기",
+            "프로모션",
+            "e쿠폰",
+            "금액권",
+            "바코드",
         ]
     )
-    if is_coupon_voucher and event.type == Intent.APPOINTMENT:
+    if is_coupon_voucher and event.type in (Intent.APPOINTMENT, Intent.DEADLINE):
         event = event.model_copy(update={"type": Intent.COUPON})
 
     if event.type == Intent.COUPON:
@@ -307,6 +319,8 @@ def _normalize_new_loop_result(
     elif event.type == Intent.PLACE:
         normalized_date = None
         normalized_expiry = None
+        local_time = None
+    elif event.type == Intent.PURCHASE:
         local_time = None
     normalized_event = event.model_copy(
         update={
