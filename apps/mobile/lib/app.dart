@@ -45,7 +45,9 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
     });
     final queuedShare = _queuedShare;
     _queuedShare = null;
-    if (queuedShare != null) _presentSharedCapture(queuedShare);
+    if (queuedShare != null) {
+      unawaited(_processSharedCaptureInBackground(queuedShare));
+    }
   }
 
   void _openPushLoop() {
@@ -106,24 +108,20 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
       _queuedShare = capture;
       return;
     }
-    _presentSharedCapture(capture);
+    unawaited(_processSharedCaptureInBackground(capture));
   }
 
-  void _presentSharedCapture(SharedCapturePayload capture) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final navigator = navigatorKey.currentState;
-      if (navigator == null) return;
-      navigator.push(
-        MaterialPageRoute<void>(
-          builder: (_) => CaptureScreen(
-            controller: widget.controller,
-            initialText: capture.text,
-            initialImagePath: capture.imagePath,
-            autoAnalyze: true,
-          ),
-        ),
+  Future<void> _processSharedCaptureInBackground(SharedCapturePayload capture) async {
+    try {
+      await widget.controller.analyzeInBackground(
+        text: capture.text,
+        imagePath: capture.imagePath,
+        source: capture.imagePath != null ? 'image' : 'text',
+        sendNotificationOnComplete: true,
       );
-    });
+    } catch (_) {
+      // 에러 발생 시 사용자에게 필요 시 안내
+    }
   }
 
   @override
