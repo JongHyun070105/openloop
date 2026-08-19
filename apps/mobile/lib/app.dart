@@ -144,20 +144,97 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+enum HomeFilter {
+  all('전체'),
+  urgent('임박'),
+  coupon('쿠폰'),
+  schedule('일정'),
+  place('장소'),
+  needsInput('확인 필요'),
+  closed('닫힘');
+
+  const HomeFilter(this.label);
+  final String label;
+}
+
+bool isLoopUrgent(OpenLoop loop, [DateTime? referenceTime]) {
+  if (loop.state == LoopState.closed) return false;
+  final now = referenceTime ?? DateTime.now();
+
+  final targetDate = loop.date ?? loop.expiresOn;
+  if (targetDate != null) {
+    int hour = 23;
+    int minute = 59;
+    if (loop.time != null && loop.time!.trim().isNotEmpty) {
+      final timeParts = loop.time!.split(':');
+      if (timeParts.length >= 2) {
+        hour = int.tryParse(timeParts[0]) ?? 23;
+        minute = int.tryParse(timeParts[1]) ?? 59;
+      }
+    }
+
+    final loopDateTime = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+      hour,
+      minute,
+    );
+    final difference = loopDateTime.difference(now);
+
+    // 지난 일정이거나 3일(72시간) 이내에 도래하는 일정/마감/쿠폰
+    if (difference.inSeconds < 0 || difference.inDays <= 3) {
+      return true;
+    }
+  }
+
+  for (final cp in loop.checkpoints) {
+    if (!cp.completed && cp.dueAt != null) {
+      final diff = cp.dueAt!.difference(now);
+      if (diff.inSeconds < 0 || diff.inDays <= 3) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 class _HomeScreenState extends State<HomeScreen> {
-  LoopState? filter;
+  HomeFilter filter = HomeFilter.all;
+
+  List<OpenLoop> _filterLoops(List<OpenLoop> loops, HomeFilter targetFilter) {
+    return switch (targetFilter) {
+      HomeFilter.all => loops,
+      HomeFilter.urgent => loops.where(isLoopUrgent).toList(),
+      HomeFilter.coupon =>
+        loops.where((l) => l.kind == LoopKind.coupon).toList(),
+      HomeFilter.schedule => loops
+          .where(
+            (l) =>
+                l.kind == LoopKind.appointment ||
+                l.kind == LoopKind.deadline ||
+                l.kind == LoopKind.reservation,
+          )
+          .toList(),
+      HomeFilter.place => loops
+          .where(
+            (l) =>
+                l.kind == LoopKind.place ||
+                (l.place != null && l.place!.trim().isNotEmpty),
+          )
+          .toList(),
+      HomeFilter.needsInput =>
+        loops.where((l) => l.state == LoopState.needsInput).toList(),
+      HomeFilter.closed =>
+        loops.where((l) => l.state == LoopState.closed).toList(),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final allLoops = widget.controller.loops;
-    final loops = filter == null
-        ? allLoops
-        : allLoops.where((loop) => loop.state == filter).toList();
-
-    final openCount = allLoops.where((l) => l.state == LoopState.open).length;
-    final needsInputCount =
-        allLoops.where((l) => l.state == LoopState.needsInput).length;
-    final closedCount =
-        allLoops.where((l) => l.state == LoopState.closed).length;
+    final loops = _filterLoops(allLoops, filter);
 
     return Scaffold(
       body: SafeArea(
@@ -209,36 +286,22 @@ class _HomeScreenState extends State<HomeScreen> {
               clipBehavior: Clip.none,
               child: Row(
                 children: [
-                  _FilterChip(
-                    label: '전체',
-                    selected: filter == null,
-                    count: allLoops.length,
-                    onTap: () => setState(() => filter = null),
-                  ),
-                  _FilterChip(
-                    label: '진행 중',
-                    selected: filter == LoopState.open,
-                    count: openCount,
-                    onTap: () => setState(() => filter = LoopState.open),
-                  ),
-                  _FilterChip(
-                    label: '확인 필요',
-                    selected: filter == LoopState.needsInput,
-                    count: needsInputCount,
-                    onTap: () => setState(() => filter = LoopState.needsInput),
-                  ),
-                  _FilterChip(
-                    label: '닫힘',
-                    selected: filter == LoopState.closed,
-                    count: closedCount,
-                    onTap: () => setState(() => filter = LoopState.closed),
-                  ),
+                  for (final item in HomeFilter.values)
+                    _FilterChip(
+                      label: item.label,
+                      selected: filter == item,
+                      count: _filterLoops(allLoops, item).length,
+                      onTap: () => setState(() => filter = item),
+                    ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
             if (loops.isEmpty)
-              const _EmptyLoops()
+              if (allLoops.isEmpty)
+                const _EmptyLoops()
+              else
+                _EmptyFilterLoops(filter: filter)
             else
               ...loops.map(
                 (loop) => Padding(
@@ -2511,6 +2574,70 @@ class _EmptyLoops extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: isDark ? OLColors.darkMuted : OLColors.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyFilterLoops extends StatelessWidget {
+  const _EmptyFilterLoops({required this.filter});
+  final HomeFilter filter;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final (icon, message) = switch (filter) {
+      HomeFilter.urgent => (
+        Icons.alarm_off_rounded,
+        '임박한 일정이 없습니다.\n여유롭게 하루를 보내세요!',
+      ),
+      HomeFilter.coupon => (
+        Icons.confirmation_number_outlined,
+        '저장된 쿠폰이 없습니다.\n기프티콘 이미지를 공유해 보세요.',
+      ),
+      HomeFilter.schedule => (
+        Icons.calendar_month_outlined,
+        '등록된 일정이 없습니다.',
+      ),
+      HomeFilter.place => (
+        Icons.place_outlined,
+        '저장된 장소가 없습니다.',
+      ),
+      HomeFilter.needsInput => (
+        Icons.check_circle_outline_rounded,
+        '확인이 필요한 항목이 없습니다.',
+      ),
+      HomeFilter.closed => (
+        Icons.inbox_outlined,
+        '닫힌 Loop가 없습니다.',
+      ),
+      HomeFilter.all => (
+        Icons.inbox_outlined,
+        '아직 Open Loop가 없습니다.',
+      ),
+    };
+
+    return OLCard(
+      padding: const EdgeInsets.symmetric(vertical: 42, horizontal: 22),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 40,
+            color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14.5,
+              height: 1.45,
+              fontWeight: FontWeight.w700,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
             ),
           ),
         ],

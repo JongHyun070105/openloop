@@ -801,6 +801,105 @@ void main() {
       );
     },
   );
+
+  testWidgets('filters home loops by category, urgency and status', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final urgentDate = now.add(const Duration(days: 1));
+    final farDate = now.add(const Duration(days: 30));
+
+    final couponLoop = OpenLoop(
+      id: 'coupon-1',
+      kind: LoopKind.coupon,
+      state: LoopState.open,
+      title: '스타벅스 아메리카노 쿠폰',
+      source: 'image',
+      createdAt: now,
+      expiresOn: urgentDate,
+      confidence: const {'date': 1.0, 'title': 1.0},
+    );
+
+    final appointmentLoop = OpenLoop(
+      id: 'appt-1',
+      kind: LoopKind.appointment,
+      state: LoopState.open,
+      title: '팀 회의',
+      source: 'text',
+      createdAt: now,
+      date: farDate,
+      time: '14:00:00',
+      confidence: const {'date': 1.0, 'time': 1.0, 'title': 1.0},
+    );
+
+    final placeLoop = OpenLoop(
+      id: 'place-1',
+      kind: LoopKind.place,
+      state: LoopState.open,
+      title: '맛있는 파스타집',
+      place: '연남동 123-4',
+      source: 'text',
+      createdAt: now,
+      confidence: const {'title': 1.0, 'location': 1.0},
+    );
+
+    final closedLoop = OpenLoop(
+      id: 'closed-1',
+      kind: LoopKind.deadline,
+      state: LoopState.closed,
+      title: '완료된 과제 제출',
+      source: 'text',
+      createdAt: now,
+      confidence: const {'title': 1.0},
+    );
+
+    repository.loops = [couponLoop, appointmentLoop, placeLoop, closedLoop];
+
+    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpAndSettle();
+
+    // 1. 전체 (4개 중 4개)
+    expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
+    expect(find.text('팀 회의'), findsOneWidget);
+    expect(find.text('맛있는 파스타집'), findsOneWidget);
+    expect(find.text('완료된 과제 제출'), findsOneWidget);
+
+    // 2. 임박 탭 (쿠폰이 1일 후 만료이므로 1개)
+    await tester.tap(find.text('임박'));
+    await tester.pumpAndSettle();
+    expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
+    expect(find.text('팀 회의'), findsNothing);
+    expect(find.text('맛있는 파스타집'), findsNothing);
+
+    // 3. 쿠폰 탭 (1개)
+    await tester.tap(find.text('쿠폰'));
+    await tester.pumpAndSettle();
+    expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
+    expect(find.text('팀 회의'), findsNothing);
+
+    // 4. 일정 탭 (1개)
+    await tester.tap(find.text('일정'));
+    await tester.pumpAndSettle();
+    expect(find.text('팀 회의'), findsOneWidget);
+    expect(find.text('스타벅스 아메리카노 쿠폰'), findsNothing);
+
+    // 5. 장소 탭 (1개)
+    await tester.tap(find.text('장소'));
+    await tester.pumpAndSettle();
+    expect(find.text('맛있는 파스타집'), findsOneWidget);
+    expect(find.text('팀 회의'), findsNothing);
+
+    // 6. 닫힘 탭 (1개)
+    await tester.tap(find.text('닫힘'));
+    await tester.pumpAndSettle();
+    expect(find.text('완료된 과제 제출'), findsOneWidget);
+    expect(find.text('맛있는 파스타집'), findsNothing);
+
+    // 7. 확인 필요 탭 (0개 -> 빈 상태 메시지)
+    await tester.tap(find.text('확인 필요'));
+    await tester.pumpAndSettle();
+    expect(find.text('확인이 필요한 항목이 없습니다.'), findsOneWidget);
+  });
 }
 
 OpenLoop _remoteDraft() => OpenLoop(
