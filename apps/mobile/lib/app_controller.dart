@@ -152,9 +152,13 @@ class AppController extends ChangeNotifier {
   /// presented once, then all future checkpoints are kept in sync locally.
   Future<bool> enableAutomaticReminders() async {
     final granted = await deviceActions.requestNotificationPermission();
+    unawaited(deviceActions.requestLocationPermission());
     if (!granted) return false;
     return syncLocalReminders();
   }
+
+  Future<bool> requestLocationPermission() =>
+      deviceActions.requestLocationPermission();
 
   Future<void> triggerTestNotification({
     String title = 'BHC 뿌링클+콜라1.25L',

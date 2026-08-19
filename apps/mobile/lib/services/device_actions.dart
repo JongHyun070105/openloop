@@ -1,5 +1,6 @@
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -10,6 +11,8 @@ typedef CalendarLauncher = Future<bool> Function(Event event);
 abstract interface class DeviceActions {
   Future<bool> addToCalendar(OpenLoop loop);
   Future<bool> requestNotificationPermission();
+  Future<bool> requestLocationPermission();
+  Future<({double latitude, double longitude})?> getCurrentLocation();
   Future<bool> syncReminders(Iterable<OpenLoop> loops);
   Future<bool> scheduleReminder(OpenLoop loop);
   Future<void> showNotification({
@@ -119,6 +122,44 @@ class NativeDeviceActions implements DeviceActions {
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  @override
+  Future<bool> requestLocationPermission() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      return permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<({double latitude, double longitude})?> getCurrentLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return null;
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return null;
+      }
+      if (permission == LocationPermission.deniedForever) return null;
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 4),
+        ),
+      );
+      return (latitude: pos.latitude, longitude: pos.longitude);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -245,6 +286,11 @@ class NoopDeviceActions implements DeviceActions {
   Future<bool> addToCalendar(OpenLoop loop) async => true;
   @override
   Future<bool> requestNotificationPermission() async => true;
+  @override
+  Future<bool> requestLocationPermission() async => true;
+  @override
+  Future<({double latitude, double longitude})?> getCurrentLocation() async =>
+      null;
   @override
   Future<bool> syncReminders(Iterable<OpenLoop> loops) async => true;
   @override

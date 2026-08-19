@@ -1660,13 +1660,19 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             ),
           );
     if (selected == null || !mounted) return;
+    final currentLocation =
+        await widget.controller.deviceActions.getCurrentLocation();
     final snapshot = await api.weather(
       latitude: selected.latitude,
       longitude: selected.longitude,
       at: loop.startsAt,
     );
     if (!mounted) return;
-    final mapOpened = await api.openKakaoRoute(selected);
+    final mapOpened = await api.openKakaoRoute(
+      selected,
+      currentLat: currentLocation?.latitude,
+      currentLng: currentLocation?.longitude,
+    );
     if (mapOpened) {
       await widget.controller.completeActionByType(loop, 'place');
       AppIntegrations.instance.capture('place_opened');

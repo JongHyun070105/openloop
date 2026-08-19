@@ -12,6 +12,10 @@
 	<string>OpenLoop가 촬영한 공지와 대화에서 일정을 찾기 위해 카메라를 사용합니다.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>OpenLoop가 선택한 이미지에서 일정 정보를 분석하기 위해 사진을 사용합니다.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>OpenLoop가 현재 위치를 바탕으로 정확한 길찾기 및 날씨 예보를 제공하기 위해 위치 정보를 사용합니다.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>OpenLoop가 현재 위치를 바탕으로 정확한 길찾기 및 날씨 예보를 제공하기 위해 위치 정보를 사용합니다.</string>
 	<key>AppGroupId</key>
 	<string>group.com.openloop.openloop_mobile</string>
 	<key>CFBundleURLTypes</key>

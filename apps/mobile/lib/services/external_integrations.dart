@@ -172,24 +172,53 @@ class ContextApi {
         false;
   }
 
-  Future<bool> openKakaoRoute(PlaceResult place) async {
-    final native = Uri.parse(
-      'kakaomap://route?ep=${place.latitude},${place.longitude}&by=CAR',
-    );
-    if (await canLaunchUrl(native)) return launchUrl(native);
+  Future<bool> openKakaoRoute(
+    PlaceResult place, {
+    double? currentLat,
+    double? currentLng,
+  }) async {
+    try {
+      final native = (currentLat != null && currentLng != null)
+          ? Uri.parse(
+              'kakaomap://route?sp=$currentLat,$currentLng&ep=${place.latitude},${place.longitude}&by=CAR',
+            )
+          : Uri.parse(
+              'kakaomap://route?ep=${place.latitude},${place.longitude}&by=CAR',
+            );
+      if (await canLaunchUrl(native)) {
+        final launched = await launchUrl(native);
+        if (launched) return true;
+      }
+    } catch (_) {}
+
     final encodedName = Uri.encodeComponent(place.name);
-    final webRoute = Uri.parse(
-      'https://map.kakao.com/link/to/$encodedName,${place.latitude},${place.longitude}',
-    );
-    if (await launchUrl(webRoute, mode: LaunchMode.externalApplication)) {
-      return true;
+    final webRoute = (currentLat != null && currentLng != null)
+        ? Uri.parse(
+            'https://map.kakao.com/link/to/$encodedName,${place.latitude},${place.longitude}?sp=$currentLat,$currentLng',
+          )
+        : Uri.parse(
+            'https://map.kakao.com/link/to/$encodedName,${place.latitude},${place.longitude}',
+          );
+    try {
+      if (await launchUrl(webRoute, mode: LaunchMode.externalApplication)) {
+        return true;
+      }
+    } catch (_) {}
+
+    try {
+      final web = Uri.tryParse(place.kakaoMapUrl);
+      return web != null &&
+          await launchUrl(web, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      return false;
     }
-    final web = Uri.tryParse(place.kakaoMapUrl);
-    return web != null &&
-        await launchUrl(web, mode: LaunchMode.externalApplication);
   }
 
-  Future<bool> openKakaoMap(PlaceResult place) => openKakaoRoute(place);
+  Future<bool> openKakaoMap(
+    PlaceResult place, {
+    double? currentLat,
+    double? currentLng,
+  }) => openKakaoRoute(place, currentLat: currentLat, currentLng: currentLng);
 }
 
 class AppIntegrations {

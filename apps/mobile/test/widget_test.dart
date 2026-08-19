@@ -1086,6 +1086,13 @@ class _RecordingDeviceActions implements DeviceActions {
   }
 
   @override
+  Future<bool> requestLocationPermission() async => true;
+
+  @override
+  Future<({double latitude, double longitude})?> getCurrentLocation() async =>
+      null;
+
+  @override
   Future<bool> syncReminders(Iterable<OpenLoop> loops) async {
     reminderSyncCalls += 1;
     lastSyncedLoopIds = loops.map((loop) => loop.id).toList();
@@ -1118,6 +1125,13 @@ class _HangingDeviceActions implements DeviceActions {
 
   @override
   Future<bool> requestNotificationPermission() async => true;
+
+  @override
+  Future<bool> requestLocationPermission() async => true;
+
+  @override
+  Future<({double latitude, double longitude})?> getCurrentLocation() async =>
+      null;
 
   @override
   Future<bool> syncReminders(Iterable<OpenLoop> loops) async => true;
