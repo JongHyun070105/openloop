@@ -866,39 +866,39 @@ void main() {
     expect(find.text('완료된 과제 제출'), findsNothing);
 
     // 2. 임박 탭 (쿠폰이 1일 후 만료이므로 1개)
-    await tester.tap(find.text('임박'));
+    await tester.tap(find.byKey(const Key('filter-chip-urgent')));
     await tester.pumpAndSettle();
     expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
     expect(find.text('팀 회의'), findsNothing);
     expect(find.text('맛있는 파스타집'), findsNothing);
 
     // 3. 쿠폰 탭 (1개)
-    await tester.tap(find.text('쿠폰'));
+    await tester.tap(find.byKey(const Key('filter-chip-coupon')));
     await tester.pumpAndSettle();
     expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
     expect(find.text('팀 회의'), findsNothing);
 
     // 4. 일정 탭 (1개)
-    await tester.tap(find.text('일정'));
+    await tester.tap(find.byKey(const Key('filter-chip-schedule')));
     await tester.pumpAndSettle();
     expect(find.text('팀 회의'), findsOneWidget);
     expect(find.text('스타벅스 아메리카노 쿠폰'), findsNothing);
 
     // 5. 장소 탭 (1개)
-    await tester.tap(find.text('장소'));
+    await tester.tap(find.byKey(const Key('filter-chip-place')));
     await tester.pumpAndSettle();
     expect(find.text('맛있는 파스타집'), findsOneWidget);
     expect(find.text('팀 회의'), findsNothing);
 
     // 6. 종료 탭 (1개)
-    await tester.tap(find.text('종료'));
+    await tester.tap(find.byKey(const Key('filter-chip-closed')));
     await tester.pumpAndSettle();
     expect(find.text('완료된 과제 제출'), findsOneWidget);
     expect(find.text('스타벅스 아메리카노 쿠폰'), findsNothing);
     expect(find.text('팀 회의'), findsNothing);
 
     // 7. 전체 탭으로 복귀
-    await tester.tap(find.text('전체'));
+    await tester.tap(find.byKey(const Key('filter-chip-all')));
     await tester.pumpAndSettle();
     expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
     expect(find.text('팀 회의'), findsOneWidget);
@@ -939,7 +939,7 @@ void main() {
     expect(find.text('BHC 뿌링클+콜라1.25L'), findsNothing);
 
     // 2. 종료 탭으로 이동 시 표시됨
-    await tester.tap(find.text('종료'));
+    await tester.tap(find.byKey(const Key('filter-chip-closed')));
     await tester.pumpAndSettle();
     expect(find.text('BHC 뿌링클+콜라1.25L'), findsOneWidget);
   });

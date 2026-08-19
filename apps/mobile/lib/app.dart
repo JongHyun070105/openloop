@@ -336,6 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   for (final item in HomeFilter.values)
                     _FilterChip(
+                      key: Key('filter-chip-${item.name}'),
                       label: item.label,
                       selected: filter == item,
                       count: _filterLoops(allLoops, item).length,
@@ -1702,6 +1703,31 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
     final isExpired = isLoopExpired(loop);
     final isClosed = loop.state == LoopState.closed;
 
+    final isUrgent = !isClosed && !isExpired && isLoopUrgent(loop);
+
+    final (chipBg, chipColor, chipIcon, chipLabel) = () {
+      if (isClosed || isExpired) {
+        final label = (isExpired && loop.kind == LoopKind.coupon)
+            ? '만료된 쿠폰'
+            : '종료된 Loop';
+        final color =
+            isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+        final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+        final icon = isExpired
+            ? Icons.alarm_off_rounded
+            : Icons.check_circle_outline_rounded;
+        return (bg, color, icon, label);
+      }
+      if (isUrgent) {
+        const color = Color(0xFFEA580C);
+        final bg = isDark ? const Color(0xFF381F10) : const Color(0xFFFFEDD5);
+        return (bg, color, Icons.alarm_rounded, '${loopKindLabel(loop.kind)} · 임박');
+      }
+      const color = OLColors.cobalt;
+      final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF);
+      return (bg, color, loopKindIcon(loop.kind), loopKindLabel(loop.kind));
+    }();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -1732,46 +1758,24 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
               decoration: BoxDecoration(
-                color: (isClosed || isExpired)
-                    ? (isDark
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFFF1F5F9))
-                    : (isDark
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFFEEF5FF)),
+                color: chipBg,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    (isClosed || isExpired)
-                        ? (isExpired && loop.kind == LoopKind.coupon
-                              ? Icons.alarm_off_rounded
-                              : Icons.check_circle_outline_rounded)
-                        : loopKindIcon(loop.kind),
+                    chipIcon,
                     size: 14,
-                    color: (isClosed || isExpired)
-                        ? (isExpired && loop.kind == LoopKind.coupon
-                              ? const Color(0xFFEF4444)
-                              : OLColors.iconMuted)
-                        : OLColors.cobalt,
+                    color: chipColor,
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    (isClosed || isExpired)
-                        ? (isExpired && loop.kind == LoopKind.coupon
-                              ? '만료된 쿠폰'
-                              : '종료된 Loop')
-                        : loopKindLabel(loop.kind),
+                    chipLabel,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: (isClosed || isExpired)
-                          ? (isExpired && loop.kind == LoopKind.coupon
-                                ? const Color(0xFFEF4444)
-                                : OLColors.iconMuted)
-                          : OLColors.cobalt,
+                      color: chipColor,
                     ),
                   ),
                 ],
@@ -2470,57 +2474,44 @@ class LoopCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final (iconData, iconColor, iconBg) = switch (loop.kind) {
-      LoopKind.appointment => (
-        Icons.calendar_today_rounded,
-        const Color(0xFF2563EB),
-        isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
-      ),
-      LoopKind.deadline => (
-        Icons.alarm_rounded,
-        const Color(0xFFD97706),
-        isDark ? const Color(0xFF3B2510) : const Color(0xFFFEF3C7),
-      ),
-      LoopKind.coupon => (
-        Icons.confirmation_number_outlined,
-        const Color(0xFFEA580C),
-        isDark ? const Color(0xFF381F10) : const Color(0xFFFFEDD5),
-      ),
-      LoopKind.place => (
-        Icons.place_outlined,
-        const Color(0xFF059669),
-        isDark ? const Color(0xFF102E20) : const Color(0xFFECFDF5),
-      ),
-      _ => (
-        Icons.task_alt_rounded,
-        const Color(0xFF6366F1),
-        isDark ? const Color(0xFF1E1E38) : const Color(0xFFEEF2FF),
-      ),
+    final expired = isLoopExpired(loop);
+    final closed = loop.state == LoopState.closed;
+    final urgent = isLoopUrgent(loop);
+    final needsInput = loop.state == LoopState.needsInput;
+
+    final IconData iconData = switch (loop.kind) {
+      LoopKind.appointment => Icons.calendar_today_rounded,
+      LoopKind.deadline => Icons.alarm_rounded,
+      LoopKind.coupon => Icons.confirmation_number_outlined,
+      LoopKind.place => Icons.place_outlined,
+      LoopKind.reservation => Icons.event_available_rounded,
+      _ => Icons.task_alt_rounded,
     };
 
-    final expired = isLoopExpired(loop);
-    final (badgeText, badgeColor, badgeBg) = switch (loop.state) {
-      LoopState.closed => (
-        '종료',
-        isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-        isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-      ),
-      LoopState.needsInput => (
-        '확인 필요',
-        const Color(0xFFD97706),
-        isDark ? const Color(0xFF3B2510) : const Color(0xFFFEF3C7),
-      ),
-      LoopState.open when expired => (
-        loop.kind == LoopKind.coupon ? '만료됨' : '종료됨',
-        const Color(0xFFEF4444),
-        isDark ? const Color(0xFF3B1E1E) : const Color(0xFFFEE2E2),
-      ),
-      LoopState.open => (
-        '진행 중',
-        const Color(0xFF2563EB),
-        isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
-      ),
-    };
+    // 상태/긴급도 기반 통일된 컬러 시스템 (임박: 주황, 진행 중: 블루, 종료: 회색, 확인 필요: 앰버)
+    final (badgeText, badgeColor, badgeBg, iconColor, iconBg) = () {
+      if (closed || expired) {
+        final text = (expired && loop.kind == LoopKind.coupon) ? '만료됨' : '종료';
+        final color =
+            isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+        final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+        return (text, color, bg, color, bg);
+      }
+      if (needsInput) {
+        const color = Color(0xFFD97706);
+        final bg = isDark ? const Color(0xFF3B2510) : const Color(0xFFFEF3C7);
+        return ('확인 필요', color, bg, color, bg);
+      }
+      if (urgent) {
+        const color = Color(0xFFEA580C);
+        final bg = isDark ? const Color(0xFF381F10) : const Color(0xFFFFEDD5);
+        return ('임박', color, bg, color, bg);
+      }
+      // 일반 진행 중 (블루)
+      const color = Color(0xFF2563EB);
+      final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF);
+      return ('진행 중', color, bg, color, bg);
+    }();
 
     final meta = loopCardMeta(loop);
 
@@ -2629,6 +2620,7 @@ class LoopCard extends StatelessWidget {
 
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,
