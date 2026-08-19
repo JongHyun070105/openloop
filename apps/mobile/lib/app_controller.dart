@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 
 import 'config.dart';
 import 'models/open_loop.dart';
@@ -11,18 +12,6 @@ import 'services/external_integrations.dart';
 import 'services/loop_repository.dart';
 
 typedef LoopApiFactory = LoopApi Function(String baseUrl);
-
-class InAppNotification {
-  const InAppNotification({
-    required this.title,
-    required this.body,
-    this.subtitle,
-  });
-
-  final String title;
-  final String body;
-  final String? subtitle;
-}
 
 class AppController extends ChangeNotifier {
   AppController({
@@ -45,18 +34,16 @@ class AppController extends ChangeNotifier {
   List<OpenLoop> loops = [];
   String baseUrl = '';
   RetentionPolicy retention = RetentionPolicy.sevenDays;
+  ThemeMode themeMode = ThemeMode.system;
   bool ready = false;
   bool processing = false;
   bool lastAnalysisWasLocal = false;
   RemoteCapabilities? capabilities;
   bool capabilitiesLoading = false;
-  InAppNotification? activeNotification;
-  Timer? _notificationTimer;
 
-  void dismissNotification() {
-    _notificationTimer?.cancel();
-    _notificationTimer = null;
-    activeNotification = null;
+  Future<void> updateThemeMode(ThemeMode mode) async {
+    themeMode = mode;
+    await repository.saveThemeMode(mode);
     notifyListeners();
   }
 
@@ -88,6 +75,7 @@ class AppController extends ChangeNotifier {
     }).toList();
     baseUrl = (await repository.loadBaseUrl()) ?? _defaultBaseUrl;
     retention = await repository.loadRetention();
+    themeMode = await repository.loadThemeMode();
     _applyRetention();
     ready = true;
     notifyListeners();
@@ -170,21 +158,8 @@ class AppController extends ChangeNotifier {
   Future<void> triggerTestNotification({
     String title = 'BHC 뿌링클+콜라1.25L',
     String body = '오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!',
-    String subtitle = '쿠폰 유효기간 알림 (오후 7:27)',
+    String subtitle = '쿠폰 유효기간 알림',
   }) async {
-    _notificationTimer?.cancel();
-    activeNotification = InAppNotification(
-      title: title,
-      body: body,
-      subtitle: subtitle,
-    );
-    notifyListeners();
-    _notificationTimer = Timer(const Duration(seconds: 5), () {
-      if (activeNotification?.title == title) {
-        activeNotification = null;
-        notifyListeners();
-      }
-    });
     await deviceActions.requestNotificationPermission();
     await deviceActions.showNotification(
       title: title,

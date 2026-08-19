@@ -3,12 +3,17 @@ import 'package:flutter/material.dart';
 abstract final class OLColors {
   static const cobalt = Color(0xFF246BFD);
   static const cobaltSoft = Color(0xFFEEF5FF);
+  static const cobaltDarkSoft = Color(0xFF1E293B);
   static const navy = Color(0xFF0B1B3A);
   static const muted = Color(0xFF718096);
+  static const darkMuted = Color(0xFF94A3B8);
   static const iconMuted = Color(0xFFA8B2C1);
   static const border = Color(0xFFD9E1EC);
+  static const darkBorder = Color(0xFF334155);
   static const surface = Color(0xFFF7F9FC);
+  static const darkSurface = Color(0xFF1E293B);
   static const background = Color(0xFFFFFFFF);
+  static const darkBackground = Color(0xFF0F172A);
   static const warning = Color(0xFFE08A17);
   static const deadline = Color(0xFFD98522);
 }
@@ -102,6 +107,87 @@ ThemeData openLoopTheme() => ThemeData(
   useMaterial3: true,
 );
 
+ThemeData openLoopDarkTheme() => ThemeData(
+  brightness: Brightness.dark,
+  scaffoldBackgroundColor: OLColors.darkBackground,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: OLColors.cobalt,
+    brightness: Brightness.dark,
+    primary: OLColors.cobalt,
+    surface: OLColors.darkSurface,
+  ),
+  textTheme: const TextTheme(
+    headlineLarge: TextStyle(
+      color: Colors.white,
+      fontSize: 34,
+      height: 1.24,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -1.5,
+    ),
+    titleLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+    bodyLarge: TextStyle(color: Color(0xFFF1F5F9), height: 1.5),
+    bodyMedium: TextStyle(color: OLColors.darkMuted, height: 1.5),
+  ),
+  appBarTheme: const AppBarTheme(
+    backgroundColor: OLColors.darkBackground,
+    foregroundColor: Colors.white,
+    surfaceTintColor: Colors.transparent,
+    elevation: 0,
+    centerTitle: false,
+  ),
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: OLColors.darkSurface,
+    hintStyle: const TextStyle(color: OLColors.darkMuted),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(18),
+      borderSide: const BorderSide(color: OLColors.darkBorder),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(18),
+      borderSide: const BorderSide(color: OLColors.cobalt, width: 1.5),
+    ),
+  ),
+  filledButtonTheme: FilledButtonThemeData(
+    style: FilledButton.styleFrom(
+      backgroundColor: OLColors.cobalt,
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+    ),
+  ),
+  outlinedButtonTheme: OutlinedButtonThemeData(
+    style: OutlinedButton.styleFrom(
+      foregroundColor: Colors.white,
+      side: const BorderSide(color: OLColors.darkBorder),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+  ),
+  floatingActionButtonTheme: const FloatingActionButtonThemeData(
+    backgroundColor: OLColors.cobalt,
+    foregroundColor: Colors.white,
+    elevation: 2,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(18)),
+    ),
+  ),
+  chipTheme: const ChipThemeData(
+    backgroundColor: OLColors.darkSurface,
+    selectedColor: OLColors.cobaltDarkSoft,
+    side: BorderSide(color: OLColors.darkBorder),
+    labelStyle: TextStyle(color: Color(0xFFE2E8F0)),
+    secondaryLabelStyle: TextStyle(
+      color: Color(0xFF60A5FA),
+      fontWeight: FontWeight.w700,
+    ),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(14)),
+    ),
+  ),
+  dividerColor: OLColors.darkBorder,
+  useMaterial3: true,
+);
+
 class OLCard extends StatelessWidget {
   const OLCard({
     super.key,
@@ -112,15 +198,20 @@ class OLCard extends StatelessWidget {
   final EdgeInsets padding;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: padding,
-    decoration: BoxDecoration(
-      color: OLColors.background,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: OLColors.border),
-    ),
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isDark ? OLColors.darkSurface : OLColors.background,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? OLColors.darkBorder : OLColors.border,
+        ),
+      ),
+      child: child,
+    );
+  }
 }
 
 class OLInfoBanner extends StatelessWidget {
@@ -128,16 +219,24 @@ class OLInfoBanner extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: OLColors.cobaltSoft,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: OLColors.cobalt.withValues(alpha: .22)),
-    ),
-    child: Text(
-      text,
-      style: const TextStyle(color: OLColors.navy, height: 1.45),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? OLColors.cobaltDarkSoft : OLColors.cobaltSoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: OLColors.cobalt.withValues(alpha: isDark ? .4 : .22),
+        ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: isDark ? const Color(0xFFE2E8F0) : OLColors.navy,
+          height: 1.45,
+        ),
+      ),
+    );
+  }
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/open_loop.dart';
@@ -11,12 +12,15 @@ abstract interface class LoopRepository {
   Future<void> saveBaseUrl(String value);
   Future<RetentionPolicy> loadRetention();
   Future<void> saveRetention(RetentionPolicy value);
+  Future<ThemeMode> loadThemeMode();
+  Future<void> saveThemeMode(ThemeMode mode);
 }
 
 class SharedPreferencesLoopRepository implements LoopRepository {
   static const _loopsKey = 'open_loops_v1';
   static const _baseUrlKey = 'api_base_url';
   static const _retentionKey = 'retention_policy';
+  static const _themeModeKey = 'theme_mode_v1';
 
   @override
   Future<List<OpenLoop>> load() async {
@@ -69,12 +73,29 @@ class SharedPreferencesLoopRepository implements LoopRepository {
         _retentionKey,
         value.name,
       );
+
+  @override
+  Future<ThemeMode> loadThemeMode() async {
+    final value = (await SharedPreferences.getInstance()).getString(
+      _themeModeKey,
+    );
+    return ThemeMode.values.where((item) => item.name == value).firstOrNull ??
+        ThemeMode.system;
+  }
+
+  @override
+  Future<void> saveThemeMode(ThemeMode mode) async =>
+      (await SharedPreferences.getInstance()).setString(
+        _themeModeKey,
+        mode.name,
+      );
 }
 
 class MemoryLoopRepository implements LoopRepository {
   List<OpenLoop> loops = [];
   String? baseUrl;
   RetentionPolicy retention = RetentionPolicy.sevenDays;
+  ThemeMode themeMode = ThemeMode.system;
 
   @override
   Future<List<OpenLoop>> load() async => List.of(loops);
@@ -88,4 +109,8 @@ class MemoryLoopRepository implements LoopRepository {
   Future<RetentionPolicy> loadRetention() async => retention;
   @override
   Future<void> saveRetention(RetentionPolicy value) async => retention = value;
+  @override
+  Future<ThemeMode> loadThemeMode() async => themeMode;
+  @override
+  Future<void> saveThemeMode(ThemeMode mode) async => themeMode = mode;
 }

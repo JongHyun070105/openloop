@@ -755,7 +755,7 @@ void main() {
   );
 
   testWidgets(
-    'triggers test notification and displays in-app banner',
+    'triggers test notifications for coupon and appointment and switches theme modes',
     (tester) async {
       final repository = MemoryLoopRepository();
       final deviceActions = _RecordingDeviceActions();
@@ -767,27 +767,39 @@ void main() {
       await tester.pumpWidget(OpenLoopApp(controller: controller));
       await tester.pumpAndSettle();
 
-      expect(find.text('쿠폰 유효기간 알림'), findsNothing);
+      // Open settings
+      await tester.tap(find.byKey(const Key('settings-button')));
+      await tester.pumpAndSettle();
 
-      await controller.triggerTestNotification(
-        title: 'BHC 뿌링클+콜라1.25L',
-        body: '오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!',
-        subtitle: '쿠폰 유효기간 알림',
-      );
-      await tester.pump();
+      expect(find.text('화면 테마'), findsOneWidget);
+      expect(find.text('쿠폰 유효기간 알림 즉시 테스트'), findsOneWidget);
+      expect(find.text('약속 시작 전 알림 즉시 테스트'), findsOneWidget);
 
-      expect(find.text('BHC 뿌링클+콜라1.25L'), findsWidgets);
-      expect(find.text('쿠폰 유효기간 알림'), findsOneWidget);
-      expect(
-        find.text('오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!'),
-        findsOneWidget,
-      );
+      // Switch to Dark mode
+      await tester.tap(find.text('다크'));
+      await tester.pumpAndSettle();
+      expect(controller.themeMode, ThemeMode.dark);
+      expect(repository.themeMode, ThemeMode.dark);
 
-      // Dismiss banner
-      await tester.tap(find.byIcon(Icons.close_rounded));
-      await tester.pump();
+      // Switch to Light mode
+      await tester.tap(find.text('라이트'));
+      await tester.pumpAndSettle();
+      expect(controller.themeMode, ThemeMode.light);
+      expect(repository.themeMode, ThemeMode.light);
 
-      expect(find.text('쿠폰 유효기간 알림'), findsNothing);
+      // Trigger coupon notification
+      final couponBtn = find.text('쿠폰 유효기간 알림 즉시 테스트');
+      await tester.ensureVisible(couponBtn);
+      await tester.tap(couponBtn);
+      await tester.pumpAndSettle();
+      expect(find.text('🔔 쿠폰 유효기간 테스트 알림을 발송했습니다.'), findsOneWidget);
+
+      // Trigger appointment notification
+      final appointmentBtn = find.text('약속 시작 전 알림 즉시 테스트');
+      await tester.ensureVisible(appointmentBtn);
+      await tester.tap(appointmentBtn);
+      await tester.pumpAndSettle();
+      expect(find.text('🔔 약속 테스트 푸시 알림을 발송했습니다.'), findsOneWidget);
     },
   );
 }

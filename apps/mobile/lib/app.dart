@@ -113,6 +113,8 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
     title: 'OpenLoop',
     debugShowCheckedModeBanner: false,
     theme: openLoopTheme(),
+    darkTheme: openLoopDarkTheme(),
+    themeMode: widget.controller.themeMode,
     localizationsDelegates: const [
       GlobalMaterialLocalizations.delegate,
       GlobalWidgetsLocalizations.delegate,
@@ -123,36 +125,6 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
       Locale('en', 'US'),
     ],
     locale: const Locale('ko', 'KR'),
-    builder: (context, child) => Stack(
-      children: [
-        if (child != null) child,
-        AnimatedBuilder(
-          animation: widget.controller,
-          builder: (context, _) {
-            final notification = widget.controller.activeNotification;
-            if (notification == null) return const SizedBox.shrink();
-            return SafeArea(
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: _InAppNotificationBanner(
-                      notification: notification,
-                      onDismiss: widget.controller.dismissNotification,
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
     home: AnimatedBuilder(
       animation: widget.controller,
       builder: (_, __) => widget.controller.ready
@@ -160,121 +132,6 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
           : const Scaffold(body: Center(child: CircularProgressIndicator())),
     ),
   );
-}
-
-class _InAppNotificationBanner extends StatelessWidget {
-  const _InAppNotificationBanner({
-    required this.notification,
-    required this.onDismiss,
-  });
-
-  final InAppNotification notification;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withValues(alpha: .96),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .25),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        border: Border.all(
-          color: Colors.white.withValues(alpha: .15),
-          width: 0.8,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: OLColors.cobalt,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.notifications_active,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        notification.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const Text(
-                      '지금',
-                      style: TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                if (notification.subtitle != null &&
-                    notification.subtitle!.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    notification.subtitle!,
-                    style: const TextStyle(
-                      color: Color(0xFF60A5FA),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 3),
-                Text(
-                  notification.body,
-                  style: const TextStyle(
-                    color: Color(0xFFE2E8F0),
-                    fontSize: 13,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            onPressed: onDismiss,
-            icon: const Icon(
-              Icons.close_rounded,
-              color: Color(0xFF94A3B8),
-              size: 18,
-            ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class HomeScreen extends StatefulWidget {
@@ -300,20 +157,41 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Row(
               children: [
-                const CircleAvatar(
-                  radius: 22,
-                  backgroundColor: OLColors.cobalt,
-                  foregroundColor: Colors.white,
-                  child: Text(
-                    'O',
-                    style: TextStyle(fontWeight: FontWeight.w900),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: OLColors.cobalt.withValues(alpha: .22),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/logo.png',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const CircleAvatar(
+                        radius: 22,
+                        backgroundColor: OLColors.cobalt,
+                        foregroundColor: Colors.white,
+                        child: Text(
+                          'O',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
                     'OpenLoop',
-                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
                   ),
                 ),
                 IconButton(
@@ -330,10 +208,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 44),
-            const Text(
+            Text(
               '공유하면\n바로 정리해요.',
               style: TextStyle(
-                color: OLColors.navy,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : OLColors.navy,
                 fontSize: 30,
                 height: 1.22,
                 fontWeight: FontWeight.w800,
@@ -341,9 +221,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 11),
-            const Text(
+            Text(
               '일정·장소·쿠폰을 구분하고 필요한 정보만 물어봅니다.',
-              style: TextStyle(color: OLColors.muted, height: 1.5),
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? OLColors.darkMuted
+                    : OLColors.muted,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 26),
             SingleChildScrollView(
@@ -1344,7 +1229,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   minLines: 1,
                   textInputAction: TextInputAction.done,
                   style: const TextStyle(
-                    color: OLColors.navy,
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1361,7 +1245,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
               : Text(
                   draft.title,
                   style: const TextStyle(
-                    color: OLColors.navy,
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1395,7 +1278,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   ? dateText(draft.expiresOn ?? draft.date)
                   : dateText(draft.date),
               style: const TextStyle(
-                color: OLColors.navy,
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
               ),
@@ -1423,7 +1305,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 controller: timeController,
                 enabled: draft.isDraft,
                 style: const TextStyle(
-                  color: OLColors.navy,
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1466,7 +1347,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
               controller: placeController,
               enabled: draft.isDraft,
               style: const TextStyle(
-                color: OLColors.navy,
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
               ),
@@ -1683,7 +1563,6 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               style: const TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
-                color: OLColors.navy,
                 height: 1.3,
                 letterSpacing: -0.3,
               ),
@@ -1789,49 +1668,60 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
           ],
           if (loop.kind == LoopKind.coupon) ...[
             const SizedBox(height: 18),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: OLColors.cobaltSoft,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: OLColors.cobalt.withValues(alpha: .2),
-                ),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.notifications_active_outlined,
-                    color: OLColors.cobalt,
-                    size: 24,
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '유효기간 알림 자동 예약됨',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            color: OLColors.navy,
-                            fontSize: 14,
-                          ),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          '기한을 놓치지 않도록 만료 전에 푸시 알림으로 알려드립니다.',
-                          style: TextStyle(
-                            color: OLColors.muted,
-                            fontSize: 12,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
+            Builder(
+              builder: (context) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? OLColors.cobaltDarkSoft : OLColors.cobaltSoft,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: OLColors.cobalt.withValues(
+                        alpha: isDark ? .4 : .2,
+                      ),
                     ),
                   ),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.notifications_active_outlined,
+                        color: OLColors.cobalt,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '유효기간 알림 자동 예약됨',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? const Color(0xFFE2E8F0)
+                                    : OLColors.navy,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '기한을 놓치지 않도록 만료 전에 푸시 알림으로 알려드립니다.',
+                              style: TextStyle(
+                                color: isDark
+                                    ? OLColors.darkMuted
+                                    : OLColors.muted,
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ] else ...[
             if (loop.checklist.isNotEmpty) ...[
@@ -2119,12 +2009,14 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController urlController;
   late RetentionPolicy retention;
+  late ThemeMode themeMode;
 
   @override
   void initState() {
     super.initState();
     urlController = TextEditingController(text: widget.controller.baseUrl);
     retention = widget.controller.retention;
+    themeMode = widget.controller.themeMode;
     if (kDebugMode) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _refreshCapabilities(),
@@ -2172,6 +2064,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     body: ListView(
       padding: const EdgeInsets.all(22),
       children: [
+        const Text(
+          '화면 테마',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '앱의 테마를 선택할 수 있습니다.',
+          style: TextStyle(color: OLColors.muted, height: 1.45),
+        ),
+        const SizedBox(height: 12),
+        SegmentedButton<ThemeMode>(
+          segments: const [
+            ButtonSegment(
+              value: ThemeMode.system,
+              icon: Icon(Icons.brightness_auto_rounded),
+              label: Text('시스템 기본'),
+            ),
+            ButtonSegment(
+              value: ThemeMode.light,
+              icon: Icon(Icons.light_mode_rounded),
+              label: Text('라이트'),
+            ),
+            ButtonSegment(
+              value: ThemeMode.dark,
+              icon: Icon(Icons.dark_mode_rounded),
+              label: Text('다크'),
+            ),
+          ],
+          selected: {themeMode},
+          onSelectionChanged: (modes) {
+            final newMode = modes.first;
+            setState(() => themeMode = newMode);
+            widget.controller.updateThemeMode(newMode);
+          },
+        ),
+        const SizedBox(height: 28),
         if (kDebugMode) ...[
           const Text(
             '개발자 연결 설정',
@@ -2180,7 +2108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 8),
           Text(
             _connectionStatus,
-            style: TextStyle(color: OLColors.muted, height: 1.45),
+            style: const TextStyle(color: OLColors.muted, height: 1.45),
           ),
           if (_integrationStatus.isNotEmpty) ...[
             const SizedBox(height: 4),
@@ -2216,17 +2144,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await widget.controller.triggerTestNotification(
                 title: 'BHC 뿌링클+콜라1.25L',
                 body: '오늘 마감되는 교환권입니다. 잊지 말고 지금 사용하세요!',
-                subtitle: '쿠폰 유효기간 알림 (오후 7:27)',
+                subtitle: '쿠폰 유효기간 알림',
               );
               if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('🔔 테스트 푸시 알림을 발송했습니다.'),
-                ),
-              );
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  const SnackBar(
+                    content: Text('🔔 쿠폰 유효기간 테스트 알림을 발송했습니다.'),
+                  ),
+                );
             },
             icon: const Icon(Icons.notifications_active_outlined),
             label: const Text('쿠폰 유효기간 알림 즉시 테스트'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () async {
+              await widget.controller.triggerTestNotification(
+                title: '김성훈과 만남',
+                body: '1시간 후 약속이 시작됩니다. 이동 준비를 시작하세요!',
+                subtitle: '약속 시작 전 알림',
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  const SnackBar(
+                    content: Text('🔔 약속 테스트 푸시 알림을 발송했습니다.'),
+                  ),
+                );
+            },
+            icon: const Icon(Icons.alarm_on_rounded),
+            label: const Text('약속 시작 전 알림 즉시 테스트'),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
@@ -2377,25 +2327,30 @@ class _FilterChip extends StatelessWidget {
 class _EmptyLoops extends StatelessWidget {
   const _EmptyLoops();
   @override
-  Widget build(BuildContext context) => const OLCard(
-    padding: EdgeInsets.symmetric(vertical: 42, horizontal: 22),
-    child: Column(
-      children: [
-        Icon(Icons.inbox_outlined, size: 40, color: OLColors.iconMuted),
-        SizedBox(height: 14),
-        Text(
-          '아직 Open Loop가 없습니다.',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        SizedBox(height: 6),
-        Text(
-          '텍스트나 이미지를 공유해 일정, 장소, 쿠폰을 저장해 보세요.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: OLColors.muted),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return OLCard(
+      padding: const EdgeInsets.symmetric(vertical: 42, horizontal: 22),
+      child: Column(
+        children: [
+          const Icon(Icons.inbox_outlined, size: 40, color: OLColors.iconMuted),
+          const SizedBox(height: 14),
+          const Text(
+            '아직 Open Loop가 없습니다.',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '텍스트나 이미지를 공유해 일정, 장소, 쿠폰을 저장해 보세요.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isDark ? OLColors.darkMuted : OLColors.muted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ReviewFieldCard extends StatelessWidget {
@@ -2414,46 +2369,51 @@ class _ReviewFieldCard extends StatelessWidget {
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 10),
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        decoration: BoxDecoration(
-          color: OLColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: OLColors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: OLColors.cobalt, size: 20),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: OLColors.muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  child,
-                ],
-              ),
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          decoration: BoxDecoration(
+            color: isDark ? OLColors.darkSurface : OLColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? OLColors.darkBorder : OLColors.border,
             ),
-            if (trailing != null) trailing!,
-          ],
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: OLColors.cobalt, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isDark ? OLColors.darkMuted : OLColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    child,
+                  ],
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _Fact extends StatelessWidget {
@@ -2477,15 +2437,26 @@ class _InfoBanner extends StatelessWidget {
   const _InfoBanner({required this.text});
   final String text;
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: OLColors.cobaltSoft,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: OLColors.cobalt.withValues(alpha: .22)),
-    ),
-    child: Text(text, style: const TextStyle(height: 1.45)),
-  );
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? OLColors.cobaltDarkSoft : OLColors.cobaltSoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: OLColors.cobalt.withValues(alpha: isDark ? .4 : .22),
+        ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: isDark ? const Color(0xFFE2E8F0) : OLColors.navy,
+          height: 1.45,
+        ),
+      ),
+    );
+  }
 }
 
 class _SummaryCard extends StatelessWidget {
