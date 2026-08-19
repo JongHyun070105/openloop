@@ -2794,7 +2794,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               await widget.controller.triggerTestNotification(
                 title: '김성훈과 만남 (종로5가역)',
-                body: '1시간 후 약속이 시작됩니다. 맑음 · 24°C (강수 0%) 이동 준비를 시작하세요!',
+                body: '1시간 후 약속이 시작됩니다. 이동 준비를 시작하세요!\n\n🌤️ 날씨: 맑음 · 24°C (강수 0%)',
                 subtitle: '약속 시작 전 알림',
               );
               if (!context.mounted) return;

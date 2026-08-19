@@ -198,7 +198,7 @@ class NativeDeviceActions implements DeviceActions {
           if (loop.place != null &&
               loop.place!.isNotEmpty &&
               !notifBody.contains(loop.place!)) {
-            notifBody = '$notifBody · ${loop.place}';
+            notifBody = '$notifBody\n📍 장소: ${loop.place}';
           }
           await _notifications.zonedSchedule(
             _notificationId(loop.id, checkpoint.id),
