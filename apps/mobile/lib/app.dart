@@ -1610,12 +1610,21 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
     final query = loop.place;
     if (query == null || query.isEmpty) return;
     final api = ContextApi(baseUrl: widget.controller.baseUrl);
-    final results = await api.searchPlaces(query);
+    final currentLocation =
+        await widget.controller.deviceActions.getCurrentLocation();
+    final results = await api.searchPlaces(
+      query,
+      latitude: currentLocation?.latitude,
+      longitude: currentLocation?.longitude,
+    );
     if (!mounted) return;
     if (results.isEmpty) {
       final encodedName = Uri.encodeComponent(query);
-      final fallbackRoute =
-          Uri.parse('https://map.kakao.com/link/to/$encodedName');
+      final fallbackRoute = (currentLocation != null)
+          ? Uri.parse(
+              'https://map.kakao.com/link/to/$encodedName?sp=${currentLocation.latitude},${currentLocation.longitude}',
+            )
+          : Uri.parse('https://map.kakao.com/link/to/$encodedName');
       await launchUrl(fallbackRoute, mode: LaunchMode.externalApplication);
       await widget.controller.completeActionByType(loop, 'place');
       setState(() => notice = '카카오맵 길찾기를 열었습니다.');
@@ -1660,8 +1669,6 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             ),
           );
     if (selected == null || !mounted) return;
-    final currentLocation =
-        await widget.controller.deviceActions.getCurrentLocation();
     final snapshot = await api.weather(
       latitude: selected.latitude,
       longitude: selected.longitude,

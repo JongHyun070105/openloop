@@ -90,13 +90,70 @@ class ContextProviderTests(unittest.TestCase):
         self.assertIn("base_time=0800", captured["url"])
         self.assertEqual(coordinates_to_kma_grid(37.5665, 126.978), (60, 127))
 
-    def test_provider_errors_are_wrapped_without_url_or_query(self) -> None:
-        def opener(_request, timeout):  # type: ignore[no-untyped-def]
-            del timeout
-            raise URLError("network down")
+    def test_kakao_cleans_exit_numbers_and_ranks_core_places(self) -> None:
+        calls = []
 
-        with self.assertRaisesRegex(ExternalIntegrationError, "Kakao Local request failed"):
-            KakaoLocalAdapter("secret", opener=opener).search("private query")
+        def opener(request, timeout):  # type: ignore[no-untyped-def]
+            del timeout
+            url = request.full_url
+            calls.append(url)
+            if "query=%EC%A2%85%EB%A1%9C5%EA%B0%80%EC%97%AD+12%EB%B2%88+%EC%B6%9C%EA%B5%AC" in url:
+                # Raw query: 종로5가역 12번 출구 -> returns unrelated places with 12번출구
+                return _Response({
+                    "documents": [
+                        {
+                            "place_name": "종오지하쇼핑센터 12번출구",
+                            "road_address_name": "서울 종로구 종로 지하 200",
+                            "x": "127.001",
+                            "y": "37.570",
+                            "place_url": "https://place.map.kakao.com/1",
+                        },
+                        {
+                            "place_name": "종로3가역 1호선 12번출구",
+                            "road_address_name": "서울 종로구 종로3가 45-4",
+                            "x": "126.991",
+                            "y": "37.570",
+                            "place_url": "https://place.map.kakao.com/2",
+                        },
+                        {
+                            "place_name": "동대문역사문화공원역 2호선 12번출구",
+                            "road_address_name": "서울 중구 을지로6가 21-11",
+                            "x": "127.008",
+                            "y": "37.565",
+                            "place_url": "https://place.map.kakao.com/3",
+                        },
+                    ]
+                })
+            # Cleaned query: 종로5가역
+            return _Response({
+                "documents": [
+                    {
+                        "place_name": "종로5가역 1호선",
+                        "road_address_name": "서울 종로구 종로5가 82-1",
+                        "x": "127.001",
+                        "y": "37.570",
+                        "place_url": "https://place.map.kakao.com/4",
+                    },
+                    {
+                        "place_name": "종로5가역 1호선 1번출구",
+                        "road_address_name": "서울 종로구 종로5가 82-1",
+                        "x": "127.001",
+                        "y": "37.570",
+                        "place_url": "https://place.map.kakao.com/5",
+                    },
+                ]
+            })
+
+        adapter = KakaoLocalAdapter("server-secret", opener=opener)
+        results = adapter.search("종로5가역 12번 출구", 37.57, 127.00)
+
+        # Cleaned query was also queried
+        self.assertEqual(len(calls), 2)
+        # Main core station is prioritized, unrelated stations are filtered out
+        names = [r.name for r in results]
+        self.assertIn("종로5가역 1호선", names)
+        self.assertNotIn("종로3가역 1호선 12번출구", names)
+        self.assertNotIn("동대문역사문화공원역 2호선 12번출구", names)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import re
 import socket
 from datetime import UTC, datetime, timedelta
 from typing import Callable, Protocol
@@ -15,6 +16,72 @@ from .models import NormalizedPlace, WeatherForecast
 
 OpenUrl = Callable[..., object]
 KST = ZoneInfo("Asia/Seoul")
+
+
+def _clean_place_query(query: str) -> str:
+    cleaned = re.sub(r"\s*\d+\s*(?:번\s*)?(?:출구|출입구|게이트|번홈|홈)", "", query)
+    cleaned = re.sub(r"\s*(?:앞|건너편|맞은편|인근|근처|주변|내부|입구|부근|방면|출구쪽)", "", cleaned)
+    cleaned = re.sub(r"\s*(?:지하\s*\d+\s*층|지상\s*\d+\s*층|\d+\s*층|B\d+F?)\b", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _extract_core_tokens(cleaned_query: str) -> list[str]:
+    words = re.findall(r"[가-힣a-zA-Z0-9]+", cleaned_query)
+    tokens: set[str] = set()
+    for w in words:
+        if len(w) >= 2:
+            tokens.add(w.lower())
+        if w.endswith("역") and len(w) > 2:
+            tokens.add(w[:-1].lower())
+        if w.endswith("점") and len(w) > 2:
+            tokens.add(w[:-1].lower())
+    return list(tokens)
+
+
+def _rank_and_filter_places(
+    raw_query: str, cleaned_query: str, places: list[NormalizedPlace]
+) -> list[NormalizedPlace]:
+    core_tokens = _extract_core_tokens(cleaned_query or raw_query)
+    raw_tokens = [t.lower() for t in re.findall(r"[가-힣a-zA-Z0-9]+", raw_query)]
+
+    seen: set[tuple[str, str]] = set()
+    scored: list[tuple[float, NormalizedPlace]] = []
+
+    for place in places:
+        key = (place.name.strip(), place.address.strip())
+        if key in seen:
+            continue
+        seen.add(key)
+
+        name_lower = place.name.lower()
+        addr_lower = place.address.lower()
+        score = 0.0
+
+        if name_lower == raw_query.lower():
+            score += 120
+        elif cleaned_query and name_lower == cleaned_query.lower():
+            score += 100
+        elif cleaned_query and name_lower.startswith(cleaned_query.lower()):
+            score += 80
+        elif any(token in name_lower for token in core_tokens):
+            score += 50
+        elif any(token in addr_lower for token in core_tokens):
+            score += 15
+        else:
+            score -= 60
+
+        for t in raw_tokens:
+            if t in name_lower:
+                score += 10
+            elif t in addr_lower:
+                score += 3
+
+        scored.append((score, place))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    positive = [p for s, p in scored if s > 0]
+    return positive[:8] if positive else [p for s, p in scored][:8]
 
 
 class PlaceAdapter(Protocol):
@@ -43,7 +110,7 @@ class KakaoLocalAdapter:
         self.timeout_seconds = timeout_seconds
         self.opener = opener
 
-    def search(
+    def _fetch_places(
         self, query: str, latitude: float | None = None, longitude: float | None = None
     ) -> list[NormalizedPlace]:
         params: dict[str, str | int] = {"query": query, "size": 10}
@@ -67,6 +134,27 @@ class KakaoLocalAdapter:
             ]
         except (KeyError, TypeError, ValueError) as error:
             raise ExternalIntegrationError("Kakao Local returned an invalid response") from error
+
+    def search(
+        self, query: str, latitude: float | None = None, longitude: float | None = None
+    ) -> list[NormalizedPlace]:
+        raw_query = query.strip()
+        cleaned_query = _clean_place_query(raw_query)
+
+        primary_results = self._fetch_places(raw_query, latitude=latitude, longitude=longitude)
+
+        secondary_results: list[NormalizedPlace] = []
+        if cleaned_query and cleaned_query != raw_query:
+            try:
+                secondary_results = self._fetch_places(cleaned_query, latitude=latitude, longitude=longitude)
+            except Exception:
+                secondary_results = []
+
+        all_candidates = primary_results + secondary_results
+        if not all_candidates:
+            return []
+
+        return _rank_and_filter_places(raw_query, cleaned_query, all_candidates)
 
 
 class WeatherAdapter(Protocol):

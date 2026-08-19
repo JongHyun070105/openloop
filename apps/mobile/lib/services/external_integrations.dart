@@ -95,13 +95,22 @@ class ContextApi {
   final http.Client _client;
   String get _root => baseUrl.replaceAll(RegExp(r'/$'), '');
 
-  Future<List<PlaceResult>> searchPlaces(String query) async {
+  Future<List<PlaceResult>> searchPlaces(
+    String query, {
+    double? latitude,
+    double? longitude,
+  }) async {
     if (_root.isEmpty || query.trim().isEmpty) return [];
+    final params = <String, String>{
+      'q': query.trim(),
+      if (latitude != null && longitude != null) ...{
+        'lat': latitude.toString(),
+        'lon': longitude.toString(),
+      },
+    };
     final response = await _client
         .get(
-          Uri.parse(
-            '$_root/v1/places/search',
-          ).replace(queryParameters: {'q': query.trim()}),
+          Uri.parse('$_root/v1/places/search').replace(queryParameters: params),
           headers: {'X-OpenLoop-Install-Id': await InstallationIdentity.get()},
         )
         .timeout(const Duration(seconds: 10));
