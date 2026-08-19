@@ -2076,85 +2076,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: TextStyle(color: OLColors.muted, height: 1.45),
         ),
         const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF1E293B)
-                : const Color(0xFFE2E8F0),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: CupertinoSlidingSegmentedControl<ThemeMode>(
-            groupValue: widget.controller.themeMode == ThemeMode.dark
-                ? ThemeMode.dark
-                : ThemeMode.light,
-            backgroundColor: Colors.transparent,
-            thumbColor: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF334155)
-                : Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-            children: {
-              ThemeMode.light: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.light_mode_rounded,
-                      size: 18,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF0F172A),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '라이트',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF0F172A),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ThemeMode.dark: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.dark_mode_rounded,
-                      size: 18,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white
-                          : const Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '다크',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : const Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            },
-            onValueChanged: (newMode) {
-              if (newMode == null || newMode == widget.controller.themeMode) {
-                return;
-              }
-              widget.controller.updateThemeMode(newMode);
-            },
-          ),
+        _NativeThemeSlider(
+          selectedMode: widget.controller.themeMode,
+          onChanged: (mode) => widget.controller.updateThemeMode(mode),
         ),
         const SizedBox(height: 28),
         if (kDebugMode) ...[
@@ -2735,3 +2659,176 @@ String retentionText(RetentionPolicy policy) => switch (policy) {
   RetentionPolicy.thirtyDays => '30일 후 삭제',
   RetentionPolicy.keep => '계속 보관',
 };
+
+class _NativeThemeSlider extends StatefulWidget {
+  const _NativeThemeSlider({
+    required this.selectedMode,
+    required this.onChanged,
+  });
+
+  final ThemeMode selectedMode;
+  final ValueChanged<ThemeMode> onChanged;
+
+  @override
+  State<_NativeThemeSlider> createState() => _NativeThemeSliderState();
+}
+
+class _NativeThemeSliderState extends State<_NativeThemeSlider> {
+  late ThemeMode _mode;
+
+  @override
+  void initState() {
+    super.initState();
+    _mode = widget.selectedMode;
+  }
+
+  @override
+  void didUpdateWidget(covariant _NativeThemeSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedMode != widget.selectedMode) {
+      _mode = widget.selectedMode;
+    }
+  }
+
+  void _handleSelect(ThemeMode newMode) {
+    if (_mode == newMode) return;
+    setState(() => _mode = newMode);
+    scheduleMicrotask(() => widget.onChanged(newMode));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDarkModeSelected = _mode == ThemeMode.dark;
+
+    return RepaintBoundary(
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final itemWidth = (constraints.maxWidth - 8) / 2;
+            return Stack(
+              children: [
+                AnimatedAlign(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  alignment: isDarkModeSelected
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: Container(
+                    width: itemWidth,
+                    height: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF334155) : Colors.white,
+                      borderRadius: BorderRadius.circular(11),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.3 : 0.08,
+                          ),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _handleSelect(ThemeMode.light),
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.light_mode_rounded,
+                                size: 18,
+                                color: !isDarkModeSelected
+                                    ? (isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A))
+                                    : (isDark
+                                        ? const Color(0xFF64748B)
+                                        : const Color(0xFF94A3B8)),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '라이트',
+                                style: TextStyle(
+                                  fontWeight: !isDarkModeSelected
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  fontSize: 14,
+                                  color: !isDarkModeSelected
+                                      ? (isDark
+                                          ? Colors.white
+                                          : const Color(0xFF0F172A))
+                                      : (isDark
+                                          ? const Color(0xFF64748B)
+                                          : const Color(0xFF94A3B8)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _handleSelect(ThemeMode.dark),
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.dark_mode_rounded,
+                                size: 18,
+                                color: isDarkModeSelected
+                                    ? (isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A))
+                                    : (isDark
+                                        ? const Color(0xFF64748B)
+                                        : const Color(0xFF94A3B8)),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '다크',
+                                style: TextStyle(
+                                  fontWeight: isDarkModeSelected
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  fontSize: 14,
+                                  color: isDarkModeSelected
+                                      ? (isDark
+                                          ? Colors.white
+                                          : const Color(0xFF0F172A))
+                                      : (isDark
+                                          ? const Color(0xFF64748B)
+                                          : const Color(0xFF94A3B8)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
