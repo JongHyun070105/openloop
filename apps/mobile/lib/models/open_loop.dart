@@ -248,7 +248,20 @@ class OpenLoop {
       suggestedQuestion: json['suggested_question'] as String?,
       missingFields: List<String>.from(
         event['missing_fields'] as List<dynamic>? ?? const [],
-      ),
+      ).where((f) {
+        // 쿠폰·구매·장소는 시간 정보가 불필요하므로 start_time 질문을 제거
+        if (f == 'start_time') {
+          final kind = LoopKind.values
+              .where((k) => k.name == event['type'])
+              .firstOrNull ?? LoopKind.appointment;
+          if (kind == LoopKind.coupon ||
+              kind == LoopKind.purchase ||
+              kind == LoopKind.place) {
+            return false;
+          }
+        }
+        return true;
+      }).toList(),
       reminderOffsets: reminders
           .map((item) => (item as Map<String, dynamic>)['offset'] as String?)
           .whereType<String>()
