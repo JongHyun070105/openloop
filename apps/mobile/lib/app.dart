@@ -529,8 +529,6 @@ class _CaptureScreenState extends State<CaptureScreen> {
             style: const TextStyle(fontWeight: FontWeight.w800),
           ),
         ),
-        const SizedBox(height: 18),
-        const _PrivacyNote(),
       ],
     ),
   );
@@ -2890,23 +2888,6 @@ class _SummaryCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PrivacyNote extends StatelessWidget {
-  const _PrivacyNote();
-  @override
-  Widget build(BuildContext context) => const Row(
-    children: [
-      Icon(Icons.lock_outline_rounded, size: 17, color: OLColors.iconMuted),
-      SizedBox(width: 9),
-      Expanded(
-        child: Text(
-          '직접 공유한 정보만 처리하고 원본 이미지는 저장하지 않습니다.',
-          style: TextStyle(color: OLColors.muted, fontSize: 12),
-        ),
-      ),
-    ],
-  );
 }
 
 String dateText(DateTime? date) =>
