@@ -889,16 +889,12 @@ void main() {
     expect(find.text('맛있는 파스타집'), findsOneWidget);
     expect(find.text('팀 회의'), findsNothing);
 
-    // 6. 닫힘 탭 (1개)
-    await tester.tap(find.text('닫힘'));
+    // 6. 전체 탭으로 복귀
+    await tester.tap(find.text('전체'));
     await tester.pumpAndSettle();
-    expect(find.text('완료된 과제 제출'), findsOneWidget);
-    expect(find.text('맛있는 파스타집'), findsNothing);
-
-    // 7. 확인 필요 탭 (0개 -> 빈 상태 메시지)
-    await tester.tap(find.text('확인 필요'));
-    await tester.pumpAndSettle();
-    expect(find.text('확인이 필요한 항목이 없습니다.'), findsOneWidget);
+    expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
+    expect(find.text('팀 회의'), findsOneWidget);
+    expect(find.text('맛있는 파스타집'), findsOneWidget);
   });
 }
 

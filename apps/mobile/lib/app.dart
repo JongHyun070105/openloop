@@ -149,9 +149,7 @@ enum HomeFilter {
   urgent('임박'),
   coupon('쿠폰'),
   schedule('일정'),
-  place('장소'),
-  needsInput('확인 필요'),
-  closed('닫힘');
+  place('장소');
 
   const HomeFilter(this.label);
   final String label;
@@ -224,10 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 (l.place != null && l.place!.trim().isNotEmpty),
           )
           .toList(),
-      HomeFilter.needsInput =>
-        loops.where((l) => l.state == LoopState.needsInput).toList(),
-      HomeFilter.closed =>
-        loops.where((l) => l.state == LoopState.closed).toList(),
     };
   }
 
@@ -2605,14 +2599,6 @@ class _EmptyFilterLoops extends StatelessWidget {
       HomeFilter.place => (
         Icons.place_outlined,
         '저장된 장소가 없습니다.',
-      ),
-      HomeFilter.needsInput => (
-        Icons.check_circle_outline_rounded,
-        '확인이 필요한 항목이 없습니다.',
-      ),
-      HomeFilter.closed => (
-        Icons.inbox_outlined,
-        '닫힌 Loop가 없습니다.',
       ),
       HomeFilter.all => (
         Icons.inbox_outlined,
