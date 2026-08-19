@@ -80,7 +80,7 @@ class SharedPreferencesLoopRepository implements LoopRepository {
       _themeModeKey,
     );
     return ThemeMode.values.where((item) => item.name == value).firstOrNull ??
-        ThemeMode.system;
+        ThemeMode.light;
   }
 
   @override
@@ -95,7 +95,7 @@ class MemoryLoopRepository implements LoopRepository {
   List<OpenLoop> loops = [];
   String? baseUrl;
   RetentionPolicy retention = RetentionPolicy.sevenDays;
-  ThemeMode themeMode = ThemeMode.system;
+  ThemeMode themeMode = ThemeMode.light;
 
   @override
   Future<List<OpenLoop>> load() async => List.of(loops);

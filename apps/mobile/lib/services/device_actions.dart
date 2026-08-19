@@ -136,20 +136,28 @@ class NativeDeviceActions implements DeviceActions {
           if (checkpoint.completed || dueAt == null || !dueAt.isAfter(now)) {
             continue;
           }
+          final notifTitle = loop.title;
+          final notifSubtitle = switch (loop.kind) {
+            LoopKind.appointment => '약속 시작 전 알림',
+            LoopKind.deadline => '마감 전 알림',
+            LoopKind.coupon => '쿠폰 유효기간 알림',
+            LoopKind.purchase => '반품·보증 기한 알림',
+            LoopKind.reservation => '예약 시간 알림',
+            LoopKind.place => '장소 저장 알림',
+          };
+          var notifBody = checkpoint.title;
+          if (loop.place != null &&
+              loop.place!.isNotEmpty &&
+              !notifBody.contains(loop.place!)) {
+            notifBody = '$notifBody · ${loop.place}';
+          }
           await _notifications.zonedSchedule(
             _notificationId(loop.id, checkpoint.id),
-            switch (loop.kind) {
-              LoopKind.appointment => '일정 확인 시간입니다',
-              LoopKind.deadline => '마감 확인 시간입니다',
-              LoopKind.coupon => '쿠폰 기한 확인 시간입니다',
-              LoopKind.purchase => '반품·보증 기한 확인 시간입니다',
-              LoopKind.reservation => '예약 확인 시간입니다',
-              LoopKind.place => '저장한 장소입니다',
-            },
-            checkpoint.title,
+            notifTitle,
+            notifBody,
             tz.TZDateTime.from(dueAt.toUtc(), tz.UTC),
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
+            NotificationDetails(
+              android: const AndroidNotificationDetails(
                 'openloop_reminders',
                 'OpenLoop reminders',
                 channelDescription: 'OpenLoop 일정과 마감 알림',
@@ -157,6 +165,7 @@ class NativeDeviceActions implements DeviceActions {
                 priority: Priority.high,
               ),
               iOS: DarwinNotificationDetails(
+                subtitle: notifSubtitle,
                 presentAlert: true,
                 presentBadge: true,
                 presentSound: true,

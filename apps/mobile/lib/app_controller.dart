@@ -34,7 +34,7 @@ class AppController extends ChangeNotifier {
   List<OpenLoop> loops = [];
   String baseUrl = '';
   RetentionPolicy retention = RetentionPolicy.sevenDays;
-  ThemeMode themeMode = ThemeMode.system;
+  ThemeMode themeMode = ThemeMode.light;
   bool ready = false;
   bool processing = false;
   bool lastAnalysisWasLocal = false;

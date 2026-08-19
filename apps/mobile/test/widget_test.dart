@@ -772,8 +772,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('화면 테마'), findsOneWidget);
+      expect(controller.themeMode, ThemeMode.light);
       expect(find.text('쿠폰 유효기간 알림 즉시 테스트'), findsOneWidget);
-      expect(find.text('약속 시작 전 알림 즉시 테스트'), findsOneWidget);
+      expect(find.text('약속 시작 전 알림 즉시 테스트 (날씨 포함)'), findsOneWidget);
 
       // Switch to Dark mode
       await tester.tap(find.text('다크'));
@@ -795,11 +796,14 @@ void main() {
       expect(find.text('🔔 쿠폰 유효기간 테스트 알림을 발송했습니다.'), findsOneWidget);
 
       // Trigger appointment notification
-      final appointmentBtn = find.text('약속 시작 전 알림 즉시 테스트');
+      final appointmentBtn = find.text('약속 시작 전 알림 즉시 테스트 (날씨 포함)');
       await tester.ensureVisible(appointmentBtn);
       await tester.tap(appointmentBtn);
       await tester.pumpAndSettle();
-      expect(find.text('🔔 약속 테스트 푸시 알림을 발송했습니다.'), findsOneWidget);
+      expect(
+        find.text('🔔 날씨 정보가 포함된 약속 테스트 푸시 알림을 발송했습니다.'),
+        findsOneWidget,
+      );
     },
   );
 }

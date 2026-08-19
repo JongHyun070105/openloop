@@ -107,27 +107,27 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    navigatorKey: navigatorKey,
-    scaffoldMessengerKey: scaffoldMessengerKey,
-    title: 'OpenLoop',
-    debugShowCheckedModeBanner: false,
-    theme: openLoopTheme(),
-    darkTheme: openLoopDarkTheme(),
-    themeMode: widget.controller.themeMode,
-    localizationsDelegates: const [
-      GlobalMaterialLocalizations.delegate,
-      GlobalWidgetsLocalizations.delegate,
-      GlobalCupertinoLocalizations.delegate,
-    ],
-    supportedLocales: const [
-      Locale('ko', 'KR'),
-      Locale('en', 'US'),
-    ],
-    locale: const Locale('ko', 'KR'),
-    home: AnimatedBuilder(
-      animation: widget.controller,
-      builder: (_, __) => widget.controller.ready
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.controller,
+    builder: (context, _) => MaterialApp(
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      title: 'OpenLoop',
+      debugShowCheckedModeBanner: false,
+      theme: openLoopTheme(),
+      darkTheme: openLoopDarkTheme(),
+      themeMode: widget.controller.themeMode,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ko', 'KR'),
+        Locale('en', 'US'),
+      ],
+      locale: const Locale('ko', 'KR'),
+      home: widget.controller.ready
           ? HomeScreen(controller: widget.controller)
           : const Scaffold(body: Center(child: CircularProgressIndicator())),
     ),
@@ -2077,11 +2077,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SegmentedButton<ThemeMode>(
           segments: const [
             ButtonSegment(
-              value: ThemeMode.system,
-              icon: Icon(Icons.brightness_auto_rounded),
-              label: Text('시스템 기본'),
-            ),
-            ButtonSegment(
               value: ThemeMode.light,
               icon: Icon(Icons.light_mode_rounded),
               label: Text('라이트'),
@@ -2092,7 +2087,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: Text('다크'),
             ),
           ],
-          selected: {themeMode},
+          selected: {
+            themeMode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
+          },
           onSelectionChanged: (modes) {
             final newMode = modes.first;
             setState(() => themeMode = newMode);
@@ -2162,8 +2159,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           OutlinedButton.icon(
             onPressed: () async {
               await widget.controller.triggerTestNotification(
-                title: '김성훈과 만남',
-                body: '1시간 후 약속이 시작됩니다. 이동 준비를 시작하세요!',
+                title: '김성훈과 만남 (종로5가역)',
+                body: '1시간 후 약속이 시작됩니다. 맑음 · 24°C (강수 0%) 이동 준비를 시작하세요!',
                 subtitle: '약속 시작 전 알림',
               );
               if (!context.mounted) return;
@@ -2171,12 +2168,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ..hideCurrentSnackBar()
                 ..showSnackBar(
                   const SnackBar(
-                    content: Text('🔔 약속 테스트 푸시 알림을 발송했습니다.'),
+                    content: Text('🔔 날씨 정보가 포함된 약속 테스트 푸시 알림을 발송했습니다.'),
                   ),
                 );
             },
             icon: const Icon(Icons.alarm_on_rounded),
-            label: const Text('약속 시작 전 알림 즉시 테스트'),
+            label: const Text('약속 시작 전 알림 즉시 테스트 (날씨 포함)'),
           ),
           const SizedBox(height: 10),
           OutlinedButton.icon(
