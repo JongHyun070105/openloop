@@ -460,14 +460,15 @@ void main() {
       deviceActions: deviceActions,
       defaultBaseUrl: '',
     );
+    final futureDate = DateTime.now().add(const Duration(days: 7));
     final loop = OpenLoop(
       id: 'review-calendar',
       kind: LoopKind.appointment,
       state: LoopState.open,
       title: '성수 회의',
       source: 'image',
-      createdAt: DateTime(2026, 8, 16),
-      date: DateTime(2026, 8, 16),
+      createdAt: DateTime.now(),
+      date: futureDate,
       time: '19:00:00',
       actions: const [
         LoopAction(id: 'calendar', type: 'calendar', title: '일정 추가'),
@@ -858,11 +859,11 @@ void main() {
     await tester.pumpWidget(OpenLoopApp(controller: controller));
     await tester.pumpAndSettle();
 
-    // 1. 전체 (4개 중 4개)
+    // 1. 전체 (활성 3개: 쿠폰, 약속, 장소)
     expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
     expect(find.text('팀 회의'), findsOneWidget);
     expect(find.text('맛있는 파스타집'), findsOneWidget);
-    expect(find.text('완료된 과제 제출'), findsOneWidget);
+    expect(find.text('완료된 과제 제출'), findsNothing);
 
     // 2. 임박 탭 (쿠폰이 1일 후 만료이므로 1개)
     await tester.tap(find.text('임박'));
@@ -889,12 +890,58 @@ void main() {
     expect(find.text('맛있는 파스타집'), findsOneWidget);
     expect(find.text('팀 회의'), findsNothing);
 
-    // 6. 전체 탭으로 복귀
+    // 6. 종료 탭 (1개)
+    await tester.tap(find.text('종료'));
+    await tester.pumpAndSettle();
+    expect(find.text('완료된 과제 제출'), findsOneWidget);
+    expect(find.text('스타벅스 아메리카노 쿠폰'), findsNothing);
+    expect(find.text('팀 회의'), findsNothing);
+
+    // 7. 전체 탭으로 복귀
     await tester.tap(find.text('전체'));
     await tester.pumpAndSettle();
     expect(find.text('스타벅스 아메리카노 쿠폰'), findsOneWidget);
     expect(find.text('팀 회의'), findsOneWidget);
     expect(find.text('맛있는 파스타집'), findsOneWidget);
+  });
+
+  testWidgets('과거 유효기간(2024-08-08) 쿠폰 등록 시 종료 상태로 처리되고 종료 탭에 표시된다', (tester) async {
+    final repository = MemoryLoopRepository();
+    final controller = AppController(
+      repository: repository,
+      deviceActions: NoopDeviceActions(),
+      defaultBaseUrl: '',
+    );
+    await controller.initialize();
+
+    // 2024-08-08 유효기간인 만료 쿠폰 분석 JSON 시뮬레이션
+    final expiredCoupon = OpenLoop.fromAnalyzeJson({
+      'id': 'expired-bhc',
+      'kind': 'coupon',
+      'title': 'BHC 뿌링클+콜라1.25L',
+      'event': {
+        'title': 'BHC 뿌링클+콜라1.25L',
+        'expires_on': '2024-08-08',
+        'place': 'BHC치킨',
+      },
+    });
+
+    expect(expiredCoupon.state, LoopState.closed);
+    expect(isLoopExpired(expiredCoupon), isTrue);
+
+    // 승인 및 저장
+    await controller.approveDraft(expiredCoupon);
+
+    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpAndSettle();
+
+    // 1. 전체(활성) 탭에는 만료 쿠폰이 안 뜸
+    expect(find.text('BHC 뿌링클+콜라1.25L'), findsNothing);
+
+    // 2. 종료 탭으로 이동 시 표시됨
+    await tester.tap(find.text('종료'));
+    await tester.pumpAndSettle();
+    expect(find.text('BHC 뿌링클+콜라1.25L'), findsOneWidget);
   });
 }
 
@@ -904,8 +951,8 @@ OpenLoop _remoteDraft() => OpenLoop(
   state: LoopState.open,
   title: '향수 거래',
   source: 'image',
-  createdAt: DateTime(2026, 8, 16),
-  date: DateTime(2026, 8, 16),
+  createdAt: DateTime.now(),
+  date: DateTime.now().add(const Duration(days: 7)),
   time: '16:00:00',
   place: '종로5가역 12번 출구',
   confidence: const {'date': .98, 'time': .98, 'location': .98, 'title': .9},

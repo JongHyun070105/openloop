@@ -149,14 +149,54 @@ enum HomeFilter {
   urgent('임박'),
   coupon('쿠폰'),
   schedule('일정'),
-  place('장소');
+  place('장소'),
+  closed('종료');
 
   const HomeFilter(this.label);
   final String label;
 }
 
+bool isLoopExpired(OpenLoop loop, [DateTime? referenceTime]) {
+  if (loop.state == LoopState.closed) return true;
+  final now = referenceTime ?? DateTime.now();
+
+  if (loop.expiresOn != null) {
+    final endOfExpiry = DateTime(
+      loop.expiresOn!.year,
+      loop.expiresOn!.month,
+      loop.expiresOn!.day,
+      23,
+      59,
+      59,
+    );
+    if (endOfExpiry.isBefore(now)) return true;
+  } else if (loop.date != null) {
+    int hour = 23;
+    int minute = 59;
+    if (loop.time != null && loop.time!.trim().isNotEmpty) {
+      final timeParts = loop.time!.split(':');
+      if (timeParts.length >= 2) {
+        hour = int.tryParse(timeParts[0]) ?? 23;
+        minute = int.tryParse(timeParts[1]) ?? 59;
+      }
+    }
+    final loopEnd = DateTime(
+      loop.date!.year,
+      loop.date!.month,
+      loop.date!.day,
+      hour,
+      minute,
+      59,
+    );
+    if (loopEnd.isBefore(now)) return true;
+  }
+  return false;
+}
+
 bool isLoopUrgent(OpenLoop loop, [DateTime? referenceTime]) {
-  if (loop.state == LoopState.closed) return false;
+  if (loop.state == LoopState.closed || isLoopExpired(loop, referenceTime)) {
+    return false;
+  }
   final now = referenceTime ?? DateTime.now();
 
   final targetDate = loop.date ?? loop.expiresOn;
@@ -180,8 +220,8 @@ bool isLoopUrgent(OpenLoop loop, [DateTime? referenceTime]) {
     );
     final difference = loopDateTime.difference(now);
 
-    // 지난 일정이거나 3일(72시간) 이내에 도래하는 일정/마감/쿠폰
-    if (difference.inSeconds < 0 || difference.inDays <= 3) {
+    // 0초 이상 미래, 3일(72시간) 이내에 도래하는 활성 일정/마감/쿠폰
+    if (difference.inSeconds >= 0 && difference.inDays <= 3) {
       return true;
     }
   }
@@ -189,7 +229,7 @@ bool isLoopUrgent(OpenLoop loop, [DateTime? referenceTime]) {
   for (final cp in loop.checkpoints) {
     if (!cp.completed && cp.dueAt != null) {
       final diff = cp.dueAt!.difference(now);
-      if (diff.inSeconds < 0 || diff.inDays <= 3) {
+      if (diff.inSeconds >= 0 && diff.inDays <= 3) {
         return true;
       }
     }
@@ -203,24 +243,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<OpenLoop> _filterLoops(List<OpenLoop> loops, HomeFilter targetFilter) {
     return switch (targetFilter) {
-      HomeFilter.all => loops,
+      HomeFilter.all => loops
+          .where((l) => l.state != LoopState.closed && !isLoopExpired(l))
+          .toList(),
       HomeFilter.urgent => loops.where(isLoopUrgent).toList(),
-      HomeFilter.coupon =>
-        loops.where((l) => l.kind == LoopKind.coupon).toList(),
+      HomeFilter.coupon => loops
+          .where(
+            (l) =>
+                l.kind == LoopKind.coupon &&
+                l.state != LoopState.closed &&
+                !isLoopExpired(l),
+          )
+          .toList(),
       HomeFilter.schedule => loops
           .where(
             (l) =>
-                l.kind == LoopKind.appointment ||
-                l.kind == LoopKind.deadline ||
-                l.kind == LoopKind.reservation,
+                (l.kind == LoopKind.appointment ||
+                    l.kind == LoopKind.deadline ||
+                    l.kind == LoopKind.reservation) &&
+                l.state != LoopState.closed &&
+                !isLoopExpired(l),
           )
           .toList(),
       HomeFilter.place => loops
           .where(
             (l) =>
-                l.kind == LoopKind.place ||
-                (l.place != null && l.place!.trim().isNotEmpty),
+                (l.kind == LoopKind.place ||
+                    (l.place != null && l.place!.trim().isNotEmpty)) &&
+                l.state != LoopState.closed,
           )
+          .toList(),
+      HomeFilter.closed => loops
+          .where((l) => l.state == LoopState.closed || isLoopExpired(l))
           .toList(),
     };
   }
@@ -1202,24 +1256,31 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (submitting || draft.missingFields.isNotEmpty) return;
     setState(() => submitting = true);
     try {
-      final persisted = await controller.approveDraft(draft);
+      final bool expired = isLoopExpired(draft);
+      final loopToSave = expired && draft.state != LoopState.closed
+          ? draft.copyWith(state: LoopState.closed)
+          : draft;
+      final persisted = await controller.approveDraft(loopToSave);
       if (!mounted) return;
       setState(() => draft = persisted);
 
-      final bool isCalendarEvent = persisted.kind == LoopKind.appointment ||
-          persisted.kind == LoopKind.reservation ||
-          (persisted.date != null && persisted.time != null);
+      final bool isCalendarEvent = !expired &&
+          (persisted.kind == LoopKind.appointment ||
+              persisted.kind == LoopKind.reservation ||
+              (persisted.date != null && persisted.time != null));
 
-      // 약속·예약 등 날짜/시간이 있는 경우 캘린더에 추가
+      // 약속·예약 등 날짜/시간이 있는 경우 캘린더에 추가 (만료된 일정은 캘린더 연동 제외)
       if (isCalendarEvent) {
         _launchCalendarHandoff(controller, persisted);
       }
 
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
 
-      final String message = isCalendarEvent
-          ? '‘${persisted.title}’ 일정이 캘린더에 추가되었습니다.'
-          : '‘${persisted.title}’ 저장이 완료되었습니다.';
+      final String message = expired
+          ? '‘${persisted.title}’ 종료된 항목으로 저장되었습니다.'
+          : (isCalendarEvent
+              ? '‘${persisted.title}’ 일정이 캘린더에 추가되었습니다.'
+              : '‘${persisted.title}’ 저장이 완료되었습니다.');
 
       final messenger =
           scaffoldMessengerKey.currentState ??
@@ -1327,6 +1388,45 @@ class _ReviewScreenState extends State<ReviewScreen> {
         if (draft.summary?.trim().isNotEmpty == true) ...[
           const SizedBox(height: 14),
           _SummaryCard(summary: draft.summary!),
+        ],
+        if (isLoopExpired(draft)) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF3B1E1E)
+                  : const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFEF4444).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  color: Color(0xFFEF4444),
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    draft.kind == LoopKind.coupon
+                        ? '유효기간이 이미 지난 쿠폰입니다. [종료] 상태로 등록됩니다.'
+                        : '일정 기한이 이미 지난 항목입니다. [종료] 상태로 등록됩니다.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFFFCA5A5)
+                          : const Color(0xFFB91C1C),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
         const SizedBox(height: 4),
         if (draft.kind != LoopKind.place)
@@ -1599,26 +1699,31 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               loop.relatedLoopIds.contains(candidate.id),
         )
         .toList();
+    final isExpired = isLoopExpired(loop);
+    final isClosed = loop.state == LoopState.closed;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(loop.state == LoopState.closed ? '닫힌 Loop' : 'Open Loop'),
-        actions: loop.state == LoopState.closed
-            ? null
-            : [
-                IconButton(
-                  tooltip: '삭제',
-                  onPressed: () async {
-                    final confirm = await showAdaptiveDeleteConfirmation(
-                      context,
-                    );
-                    if (confirm != true) return;
-                    await widget.controller.deleteLoop(loop);
-                    if (!context.mounted) return;
-                    Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.delete_outline),
-                ),
-              ],
+        title: Text(
+          (isClosed || isExpired)
+              ? (loop.kind == LoopKind.coupon ? '만료된 쿠폰' : '종료된 Loop')
+              : 'Open Loop',
+        ),
+        actions: [
+          IconButton(
+            tooltip: '삭제',
+            onPressed: () async {
+              final confirm = await showAdaptiveDeleteConfirmation(
+                context,
+              );
+              if (confirm != true) return;
+              await widget.controller.deleteLoop(loop);
+              if (!context.mounted) return;
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(22, 14, 22, 40),
@@ -1627,7 +1732,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
               decoration: BoxDecoration(
-                color: loop.state == LoopState.closed
+                color: (isClosed || isExpired)
                     ? (isDark
                           ? const Color(0xFF1E293B)
                           : const Color(0xFFF1F5F9))
@@ -1640,24 +1745,32 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    loop.state == LoopState.closed
-                        ? Icons.check_circle_outline_rounded
+                    (isClosed || isExpired)
+                        ? (isExpired && loop.kind == LoopKind.coupon
+                              ? Icons.alarm_off_rounded
+                              : Icons.check_circle_outline_rounded)
                         : loopKindIcon(loop.kind),
                     size: 14,
-                    color: loop.state == LoopState.closed
-                        ? OLColors.iconMuted
+                    color: (isClosed || isExpired)
+                        ? (isExpired && loop.kind == LoopKind.coupon
+                              ? const Color(0xFFEF4444)
+                              : OLColors.iconMuted)
                         : OLColors.cobalt,
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    loop.state == LoopState.closed
-                        ? '완료된 Loop'
+                    (isClosed || isExpired)
+                        ? (isExpired && loop.kind == LoopKind.coupon
+                              ? '만료된 쿠폰'
+                              : '종료된 Loop')
                         : loopKindLabel(loop.kind),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: loop.state == LoopState.closed
-                          ? OLColors.iconMuted
+                      color: (isClosed || isExpired)
+                          ? (isExpired && loop.kind == LoopKind.coupon
+                                ? const Color(0xFFEF4444)
+                                : OLColors.iconMuted)
                           : OLColors.cobalt,
                     ),
                   ),
@@ -1731,7 +1844,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                     label: '유효기간',
                     value: (loop.expiresOn ?? loop.date) == null
                         ? '기한 정보 없음'
-                        : dateText(loop.expiresOn ?? loop.date),
+                        : '${dateText(loop.expiresOn ?? loop.date)}${isExpired ? ' (만료됨)' : ''}',
                   ),
                 if (loop.place != null)
                   _FactItem(
@@ -1860,19 +1973,29 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1E293B)
-                    : const Color(0xFFEEF5FF),
+                color: (isExpired || isClosed)
+                    ? (isDark
+                          ? const Color(0xFF2D1818)
+                          : const Color(0xFFFEF2F2))
+                    : (isDark
+                          ? const Color(0xFF1E293B)
+                          : const Color(0xFFEEF5FF)),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: OLColors.cobalt.withValues(alpha: isDark ? .4 : .2),
+                  color: (isExpired || isClosed)
+                      ? const Color(0xFFEF4444).withValues(alpha: isDark ? .4 : .25)
+                      : OLColors.cobalt.withValues(alpha: isDark ? .4 : .2),
                 ),
               ),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.notifications_active_outlined,
-                    color: OLColors.cobalt,
+                  Icon(
+                    (isExpired || isClosed)
+                        ? Icons.alarm_off_outlined
+                        : Icons.notifications_active_outlined,
+                    color: (isExpired || isClosed)
+                        ? const Color(0xFFEF4444)
+                        : OLColors.cobalt,
                     size: 22,
                   ),
                   const SizedBox(width: 12),
@@ -1881,20 +2004,32 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '유효기간 알림 자동 예약됨',
+                          (isExpired || isClosed)
+                              ? '유효기간이 만료되었습니다'
+                              : '유효기간 알림 자동 예약됨',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
-                            color: isDark ? Colors.white : OLColors.navy,
+                            color: (isExpired || isClosed)
+                                ? (isDark
+                                      ? const Color(0xFFFCA5A5)
+                                      : const Color(0xFF991B1B))
+                                : (isDark ? Colors.white : OLColors.navy),
                             fontSize: 14,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '기한을 놓치지 않도록 만료 전에 푸시 알림으로 알려드립니다.',
+                          (isExpired || isClosed)
+                              ? '기한이 지나 알림이 발송되지 않습니다.'
+                              : '기한을 놓치지 않도록 만료 전에 푸시 알림으로 알려드립니다.',
                           style: TextStyle(
-                            color: isDark
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF64748B),
+                            color: (isExpired || isClosed)
+                                ? (isDark
+                                      ? const Color(0xFFF87171)
+                                      : const Color(0xFFB91C1C))
+                                : (isDark
+                                      ? const Color(0xFF94A3B8)
+                                      : const Color(0xFF64748B)),
                             fontSize: 12,
                             height: 1.35,
                           ),
@@ -2007,7 +2142,21 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             _InfoBanner(text: notice!),
           ],
           const SizedBox(height: 24),
-          if (loop.state != LoopState.closed) ...[
+          if (loop.state == LoopState.closed) ...[
+            OutlinedButton.icon(
+              key: const Key('reopen-loop-button'),
+              onPressed: () async {
+                await widget.controller.saveLoop(
+                  loop.copyWith(state: LoopState.open),
+                );
+                if (mounted) {
+                  setState(() => notice = 'Loop를 다시 진행 중 상태로 열었습니다.');
+                }
+              },
+              icon: const Icon(Icons.replay_rounded),
+              label: const Text('Loop 다시 열기'),
+            ),
+          ] else ...[
             if (loop.place != null)
               OutlinedButton.icon(
                 key: const Key('directions-button'),
@@ -2349,21 +2498,27 @@ class LoopCard extends StatelessWidget {
       ),
     };
 
+    final expired = isLoopExpired(loop);
     final (badgeText, badgeColor, badgeBg) = switch (loop.state) {
-      LoopState.open => (
-        '진행 중',
-        const Color(0xFF2563EB),
-        isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
+      LoopState.closed => (
+        '종료',
+        isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+        isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
       ),
       LoopState.needsInput => (
         '확인 필요',
         const Color(0xFFD97706),
         isDark ? const Color(0xFF3B2510) : const Color(0xFFFEF3C7),
       ),
-      LoopState.closed => (
-        '닫힘',
-        isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-        isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+      LoopState.open when expired => (
+        loop.kind == LoopKind.coupon ? '만료됨' : '종료됨',
+        const Color(0xFFEF4444),
+        isDark ? const Color(0xFF3B1E1E) : const Color(0xFFFEE2E2),
+      ),
+      LoopState.open => (
+        '진행 중',
+        const Color(0xFF2563EB),
+        isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
       ),
     };
 
@@ -2615,6 +2770,10 @@ class _EmptyFilterLoops extends StatelessWidget {
       HomeFilter.place => (
         Icons.place_outlined,
         '저장된 장소가 없습니다.',
+      ),
+      HomeFilter.closed => (
+        Icons.check_circle_outline_rounded,
+        '종료되거나 만료된 Loop가 없습니다.',
       ),
       HomeFilter.all => (
         Icons.inbox_outlined,

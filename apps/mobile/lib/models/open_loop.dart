@@ -291,11 +291,21 @@ class OpenLoop {
       return true;
     }).toList();
 
+    final now = DateTime.now();
+    final isPast = (expiresOn != null &&
+            DateTime(expiresOn.year, expiresOn.month, expiresOn.day, 23, 59, 59)
+                .isBefore(now)) ||
+        (date != null &&
+            DateTime(date.year, date.month, date.day, 23, 59, 59)
+                .isBefore(now));
+
     final rawStatus = json['status'] as String?;
     final state = switch (rawStatus) {
       'closed' => LoopState.closed,
-      'needs_input' => missingFields.isEmpty ? LoopState.open : LoopState.needsInput,
-      _ => LoopState.open,
+      'needs_input' => missingFields.isEmpty
+          ? (isPast ? LoopState.closed : LoopState.open)
+          : LoopState.needsInput,
+      _ => isPast ? LoopState.closed : LoopState.open,
     };
 
     return OpenLoop(
@@ -312,7 +322,11 @@ class OpenLoop {
       date: date,
       time: time,
       expiresOn: expiresOn,
-      place: (event['place'] as Map<String, dynamic>?)?['name'] as String?,
+      place: switch (event['place']) {
+        String s => s,
+        Map<String, dynamic> m => m['name'] as String?,
+        _ => null,
+      },
       purpose: purpose,
       summary: summary,
       participants: List<String>.from(
