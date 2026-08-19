@@ -172,15 +172,24 @@ class ContextApi {
         false;
   }
 
-  Future<bool> openKakaoMap(PlaceResult place) async {
+  Future<bool> openKakaoRoute(PlaceResult place) async {
     final native = Uri.parse(
-      'kakaomap://look?p=${place.latitude},${place.longitude}',
+      'kakaomap://route?ep=${place.latitude},${place.longitude}&by=CAR',
     );
     if (await canLaunchUrl(native)) return launchUrl(native);
+    final encodedName = Uri.encodeComponent(place.name);
+    final webRoute = Uri.parse(
+      'https://map.kakao.com/link/to/$encodedName,${place.latitude},${place.longitude}',
+    );
+    if (await launchUrl(webRoute, mode: LaunchMode.externalApplication)) {
+      return true;
+    }
     final web = Uri.tryParse(place.kakaoMapUrl);
     return web != null &&
         await launchUrl(web, mode: LaunchMode.externalApplication);
   }
+
+  Future<bool> openKakaoMap(PlaceResult place) => openKakaoRoute(place);
 }
 
 class AppIntegrations {
