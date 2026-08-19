@@ -147,56 +147,37 @@ class _HomeScreenState extends State<HomeScreen> {
   LoopState? filter;
   @override
   Widget build(BuildContext context) {
+    final allLoops = widget.controller.loops;
     final loops = filter == null
-        ? widget.controller.loops
-        : widget.controller.loops
-              .where((loop) => loop.state == filter)
-              .toList();
+        ? allLoops
+        : allLoops.where((loop) => loop.state == filter).toList();
+
+    final openCount = allLoops.where((l) => l.state == LoopState.open).length;
+    final needsInputCount =
+        allLoops.where((l) => l.state == LoopState.needsInput).length;
+    final closedCount =
+        allLoops.where((l) => l.state == LoopState.closed).length;
+
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 28, 22, 110),
+          padding: const EdgeInsets.fromLTRB(22, 16, 22, 110),
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: OLColors.cobalt.withValues(alpha: .22),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'assets/logo.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const CircleAvatar(
-                        radius: 22,
-                        backgroundColor: OLColors.cobalt,
-                        foregroundColor: Colors.white,
-                        child: Text(
-                          'O',
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? OLColors.darkSurface
+                      : OLColors.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? OLColors.darkBorder
+                        : OLColors.border,
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'OpenLoop',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                IconButton(
+                child: IconButton(
                   key: const Key('settings-button'),
                   onPressed: () => Navigator.push(
                     context,
@@ -205,62 +186,69 @@ class _HomeScreenState extends State<HomeScreen> {
                           SettingsScreen(controller: widget.controller),
                     ),
                   ),
-                  icon: const Icon(Icons.settings_outlined),
+                  icon: const Icon(Icons.settings_outlined, size: 22),
+                  tooltip: '설정',
                 ),
-              ],
+              ),
             ),
-            const SizedBox(height: 44),
+            const SizedBox(height: 14),
             Text(
               '공유하면\n바로 정리해요.',
               style: TextStyle(
                 color: Theme.of(context).brightness == Brightness.dark
                     ? Colors.white
                     : OLColors.navy,
-                fontSize: 30,
-                height: 1.22,
+                fontSize: 32,
+                height: 1.2,
                 fontWeight: FontWeight.w800,
-                letterSpacing: -1.1,
+                letterSpacing: -1.2,
               ),
             ),
-            const SizedBox(height: 11),
+            const SizedBox(height: 8),
             Text(
               '일정·장소·쿠폰을 구분하고 필요한 정보만 물어봅니다.',
               style: TextStyle(
                 color: Theme.of(context).brightness == Brightness.dark
                     ? OLColors.darkMuted
                     : OLColors.muted,
-                height: 1.5,
+                fontSize: 15,
+                height: 1.45,
               ),
             ),
-            const SizedBox(height: 26),
+            const SizedBox(height: 24),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
               child: Row(
                 children: [
                   _FilterChip(
                     label: '전체',
                     selected: filter == null,
+                    count: allLoops.length,
                     onTap: () => setState(() => filter = null),
                   ),
                   _FilterChip(
                     label: '진행 중',
                     selected: filter == LoopState.open,
+                    count: openCount,
                     onTap: () => setState(() => filter = LoopState.open),
                   ),
                   _FilterChip(
                     label: '확인 필요',
                     selected: filter == LoopState.needsInput,
+                    count: needsInputCount,
                     onTap: () => setState(() => filter = LoopState.needsInput),
                   ),
                   _FilterChip(
                     label: '닫힘',
                     selected: filter == LoopState.closed,
+                    count: closedCount,
                     onTap: () => setState(() => filter = LoopState.closed),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
             if (loops.isEmpty)
               const _EmptyLoops()
             else
@@ -281,8 +269,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            const SizedBox(height: 20),
-            const _PrivacyNote(),
           ],
         ),
       ),
@@ -2258,52 +2244,156 @@ class LoopCard extends StatelessWidget {
   const LoopCard({super.key, required this.loop, required this.onTap});
   final OpenLoop loop;
   final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    final accent = loop.state == LoopState.closed
-        ? OLColors.iconMuted
-        : loop.state == LoopState.needsInput
-        ? OLColors.warning
-        : loop.kind == LoopKind.deadline
-        ? OLColors.deadline
-        : OLColors.cobalt;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: OLCard(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          children: [
-            Icon(loopKindIcon(loop.kind), color: accent),
-            const SizedBox(width: 15),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    loop.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final (iconData, iconColor, iconBg) = switch (loop.kind) {
+      LoopKind.appointment => (
+        Icons.calendar_today_rounded,
+        const Color(0xFF2563EB),
+        isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
+      ),
+      LoopKind.deadline => (
+        Icons.alarm_rounded,
+        const Color(0xFFD97706),
+        isDark ? const Color(0xFF3B2510) : const Color(0xFFFEF3C7),
+      ),
+      LoopKind.coupon => (
+        Icons.confirmation_number_outlined,
+        const Color(0xFFEA580C),
+        isDark ? const Color(0xFF381F10) : const Color(0xFFFFEDD5),
+      ),
+      LoopKind.place => (
+        Icons.place_outlined,
+        const Color(0xFF059669),
+        isDark ? const Color(0xFF102E20) : const Color(0xFFECFDF5),
+      ),
+      _ => (
+        Icons.task_alt_rounded,
+        const Color(0xFF6366F1),
+        isDark ? const Color(0xFF1E1E38) : const Color(0xFFEEF2FF),
+      ),
+    };
+
+    final (badgeText, badgeColor, badgeBg) = switch (loop.state) {
+      LoopState.open => (
+        '진행 중',
+        const Color(0xFF2563EB),
+        isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
+      ),
+      LoopState.needsInput => (
+        '확인 필요',
+        const Color(0xFFD97706),
+        isDark ? const Color(0xFF3B2510) : const Color(0xFFFEF3C7),
+      ),
+      LoopState.closed => (
+        '닫힘',
+        isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+        isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+      ),
+    };
+
+    final meta = loopCardMeta(loop);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161E2E) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? const Color(0xFF26334D) : const Color(0xFFEDF2F7),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: iconBg,
+                    borderRadius: BorderRadius.circular(13),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    loopCardMeta(loop),
-                    style: const TextStyle(color: OLColors.muted, fontSize: 12),
+                  child: Icon(iconData, color: iconColor, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              loop.title,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A),
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: badgeBg,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              badgeText,
+                              style: TextStyle(
+                                color: badgeColor,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (meta.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          meta,
+                          style: TextStyle(
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Text(
-              stateText(loop.state),
-              style: TextStyle(
-                color: accent,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -2315,19 +2405,90 @@ class _FilterChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.count,
   });
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final int? count;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(right: 8),
-    child: ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? OLColors.cobalt
+                : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: OLColors.cobalt.withValues(alpha: 0.28),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected
+                      ? Colors.white
+                      : (isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF475569)),
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  fontSize: 13.5,
+                ),
+              ),
+              if (count != null && count! > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 1.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? Colors.white.withValues(alpha: 0.22)
+                        : (isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    count.toString(),
+                    style: TextStyle(
+                      color: selected
+                          ? Colors.white
+                          : (isDark
+                                ? const Color(0xFFCBD5E1)
+                                : const Color(0xFF64748B)),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EmptyLoops extends StatelessWidget {
