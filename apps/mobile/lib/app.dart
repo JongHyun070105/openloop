@@ -2074,27 +2074,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
           style: TextStyle(color: OLColors.muted, height: 1.45),
         ),
         const SizedBox(height: 12),
-        SegmentedButton<ThemeMode>(
-          segments: const [
-            ButtonSegment(
-              value: ThemeMode.light,
-              icon: Icon(Icons.light_mode_rounded),
-              label: Text('라이트'),
-            ),
-            ButtonSegment(
-              value: ThemeMode.dark,
-              icon: Icon(Icons.dark_mode_rounded),
-              label: Text('다크'),
-            ),
-          ],
-          selected: {
-            themeMode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
-          },
-          onSelectionChanged: (modes) {
-            final newMode = modes.first;
-            setState(() => themeMode = newMode);
-            widget.controller.updateThemeMode(newMode);
-          },
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF1E293B)
+                : const Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: CupertinoSlidingSegmentedControl<ThemeMode>(
+            groupValue:
+                themeMode == ThemeMode.dark ? ThemeMode.dark : ThemeMode.light,
+            backgroundColor: Colors.transparent,
+            thumbColor: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF334155)
+                : Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+            children: {
+              ThemeMode.light: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.light_mode_rounded,
+                      size: 18,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF0F172A),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '라이트',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ThemeMode.dark: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.dark_mode_rounded,
+                      size: 18,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '다크',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            },
+            onValueChanged: (newMode) {
+              if (newMode == null) return;
+              setState(() => themeMode = newMode);
+              widget.controller.updateThemeMode(newMode);
+            },
+          ),
         ),
         const SizedBox(height: 28),
         if (kDebugMode) ...[
