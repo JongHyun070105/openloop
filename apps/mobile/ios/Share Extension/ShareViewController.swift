@@ -115,7 +115,27 @@ final class ShareViewController: UIViewController {
             userDefaults?.synchronize()
         }
 
-        completeExtension()
+        sendNotificationAndComplete()
+    }
+
+    private func sendNotificationAndComplete() {
+        let content = UNMutableNotificationContent()
+        content.title = "🎯 OpenLoop에 공유되었습니다"
+        content.body = "AI 비서가 분석을 시작합니다.\n탭하여 결과를 확인하고 정리하세요."
+        content.sound = .default
+        content.userInfo = ["payload": "share:pending"]
+
+        let request = UNNotificationRequest(
+            identifier: "openloop_share_\(UUID().uuidString)",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 0.5, repeats: false)
+        )
+
+        UNUserNotificationCenter.current().add(request) { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.completeExtension()
+            }
+        }
     }
 
     private func completeExtension() {

@@ -132,12 +132,22 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
 
   Future<void> _processSharedCaptureInBackground(SharedCapturePayload capture) async {
     try {
-      await widget.controller.analyzeInBackground(
+      final loop = await widget.controller.analyzeInBackground(
         text: capture.text,
         imagePath: capture.imagePath,
         source: capture.imagePath != null ? 'image' : 'text',
         sendNotificationOnComplete: true,
       );
+      if (mounted && widget.controller.ready) {
+        final hasMissing = loop.effectiveMissingFields.isNotEmpty;
+        navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => (loop.state == LoopState.needsInput && hasMissing)
+                ? AmbiguityScreen(controller: widget.controller, loop: loop)
+                : ReviewScreen(controller: widget.controller, loop: loop),
+          ),
+        );
+      }
     } catch (_) {
       // 에러 발생 시 사용자에게 필요 시 안내
     }
@@ -522,7 +532,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
       imagePath: image?.path,
       text: text.isEmpty ? null : text,
       source: source,
-      sendNotificationOnComplete: true,
+      sendNotificationOnComplete: false,
     );
     try {
       final failure = await Navigator.push<String>(
