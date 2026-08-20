@@ -77,6 +77,10 @@ class AppController extends ChangeNotifier {
     baseUrl = (await repository.loadBaseUrl()) ?? _defaultBaseUrl;
     retention = await repository.loadRetention();
     themeMode = await repository.loadThemeMode();
+    pendingReviewedDraft = await repository.loadPendingDraft();
+    if (pendingReviewedDraft != null) {
+      AppIntegrations.instance.pendingDraftLoop = pendingReviewedDraft;
+    }
     _applyRetention();
     ready = true;
     notifyListeners();
@@ -156,6 +160,7 @@ class AppController extends ChangeNotifier {
 
     pendingReviewedDraft = loop;
     AppIntegrations.instance.pendingDraftLoop = loop;
+    await repository.savePendingDraft(loop);
 
     if (sendNotificationOnComplete) {
       final isNeedsInput = loop.state == LoopState.needsInput &&
@@ -164,8 +169,8 @@ class AppController extends ChangeNotifier {
           ? '❓ [${loop.title}] 추가 확인이 필요해요'
           : '🎯 [${loop.title}] 정리 완료';
       final body = isNeedsInput
-          ? '시간이나 날짜 정보를 확인해 주시면 바로 정리해 드릴게요.'
-          : '탭하여 세부 내용과 알림 일정을 확인하세요.';
+          ? '시간이나 날짜 정보가 명확하지 않아요.\n확인해 주시면 바로 정리해 드릴게요.'
+          : '분석이 완료되었습니다.\n탭하여 세부 내용과 알림 일정을 확인하세요.';
       final subtitle = switch (loop.kind) {
         LoopKind.coupon => '쿠폰 자동 분석 완료',
         LoopKind.appointment => '약속 일정 분석 완료',
@@ -187,6 +192,11 @@ class AppController extends ChangeNotifier {
   Future<void> saveLoop(OpenLoop loop) async {
     if (loop.isDraft) {
       throw StateError('분석 초안은 승인 전 저장할 수 없습니다.');
+    }
+    if (pendingReviewedDraft?.id == loop.id) {
+      pendingReviewedDraft = null;
+      AppIntegrations.instance.pendingDraftLoop = null;
+      await repository.savePendingDraft(null);
     }
     loops = _linkContextLocally(loop, loops);
     await repository.save(loops);

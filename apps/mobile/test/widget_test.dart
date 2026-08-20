@@ -1036,6 +1036,46 @@ void main() {
     AppIntegrations.instance.handleNotificationPayload(deviceActions.lastNotificationPayload!);
     expect(AppIntegrations.instance.pendingDraft.value?.id, equals(draft.id));
   });
+
+  test('AppController.analyzeInBackground는 분석 초안을 repository에 저장하고 알림 수신 시 복원된다', () async {
+    final testRepo = MemoryLoopRepository();
+    final testController = AppController(
+      repository: testRepo,
+      deviceActions: deviceActions,
+      defaultBaseUrl: '',
+    );
+    await testController.initialize();
+
+    final draft = await testController.analyzeInBackground(
+      text: '스타벅스 아메리카노 2026년 12월 31일까지',
+      sendNotificationOnComplete: true,
+    );
+
+    // 1. repository에 pendingDraft가 저장됨
+    final saved = await testRepo.loadPendingDraft();
+    expect(saved?.id, equals(draft.id));
+    expect(saved?.title, contains('스타벅스 아메리카노'));
+
+    // 2. 앱이 종료되었다가 다시 켜지는 상황 시뮬레이션
+    AppIntegrations.instance.reset();
+    expect(AppIntegrations.instance.pendingDraftLoop, isNull);
+
+    final coldRepo = testRepo;
+    final coldController = AppController(
+      repository: coldRepo,
+      deviceActions: deviceActions,
+      defaultBaseUrl: '',
+    );
+    await coldController.initialize();
+
+    // 3. 앱 초기화 시 저장된 pendingDraft가 자동 복원됨
+    expect(coldController.pendingReviewedDraft?.id, equals(draft.id));
+    expect(AppIntegrations.instance.pendingDraftLoop?.id, equals(draft.id));
+
+    // 4. 알림 페이로드(draft:id) 수신 시 즉시 pendingDraft.value로 연결됨
+    AppIntegrations.instance.handleNotificationPayload('draft:${draft.id}');
+    expect(AppIntegrations.instance.pendingDraft.value?.id, equals(draft.id));
+  });
 }
 
 OpenLoop _remoteDraft() => OpenLoop(

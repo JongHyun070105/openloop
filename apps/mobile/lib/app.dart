@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -41,7 +42,11 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   Future<void> _initialize() async {
     await widget.controller.initialize();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(widget.controller.enableAutomaticReminders());
+      if (mounted) {
+        unawaited(widget.controller.enableAutomaticReminders());
+        _openPushDraft();
+        _openPushLoop();
+      }
     });
     final queuedShare = _queuedShare;
     _queuedShare = null;
@@ -51,12 +56,12 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   }
 
   void _openPushLoop() {
-    if (!mounted) return;
+    if (!mounted || !widget.controller.ready) return;
     final id = AppIntegrations.instance.pendingLoopId.value;
-    if (id == null || !widget.controller.ready) return;
+    if (id == null) return;
     if (!widget.controller.loops.any((loop) => loop.id == id)) return;
     AppIntegrations.instance.pendingLoopId.value = null;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void doPush() {
       if (!mounted) return;
       navigatorKey.currentState?.push(
         MaterialPageRoute<void>(
@@ -64,15 +69,22 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
               LoopDetailScreen(controller: widget.controller, loopId: id),
         ),
       );
-    });
+    }
+
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => doPush());
+    } else {
+      doPush();
+    }
   }
 
   void _openPushDraft() {
-    if (!mounted) return;
+    if (!mounted || !widget.controller.ready) return;
     final draft = AppIntegrations.instance.pendingDraft.value;
-    if (draft == null || !widget.controller.ready) return;
+    if (draft == null) return;
     AppIntegrations.instance.pendingDraft.value = null;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    void doPush() {
       if (!mounted) return;
       final hasMissing = draft.effectiveMissingFields.isNotEmpty;
       navigatorKey.currentState?.push(
@@ -82,7 +94,14 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
               : ReviewScreen(controller: widget.controller, loop: draft),
         ),
       );
-    });
+    }
+
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => doPush());
+    } else {
+      doPush();
+    }
   }
 
   Future<void> _listenForShares() async {

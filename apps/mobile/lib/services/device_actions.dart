@@ -92,6 +92,15 @@ class NativeDeviceActions implements DeviceActions {
         }
       },
     );
+    final launchDetails =
+        await _notifications.getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp == true &&
+        launchDetails?.notificationResponse?.payload != null) {
+      final payload = launchDetails!.notificationResponse!.payload!;
+      if (payload.isNotEmpty) {
+        AppIntegrations.instance.handleNotificationPayload(payload);
+      }
+    }
     _initialized = true;
   }
 

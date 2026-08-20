@@ -14,6 +14,8 @@ abstract interface class LoopRepository {
   Future<void> saveRetention(RetentionPolicy value);
   Future<ThemeMode> loadThemeMode();
   Future<void> saveThemeMode(ThemeMode mode);
+  Future<OpenLoop?> loadPendingDraft();
+  Future<void> savePendingDraft(OpenLoop? draft);
 }
 
 class SharedPreferencesLoopRepository implements LoopRepository {
@@ -21,6 +23,7 @@ class SharedPreferencesLoopRepository implements LoopRepository {
   static const _baseUrlKey = 'api_base_url';
   static const _retentionKey = 'retention_policy';
   static const _themeModeKey = 'theme_mode_v1';
+  static const _pendingDraftKey = 'pending_draft_v1';
 
   @override
   Future<List<OpenLoop>> load() async {
@@ -89,6 +92,28 @@ class SharedPreferencesLoopRepository implements LoopRepository {
         _themeModeKey,
         mode.name,
       );
+
+  @override
+  Future<OpenLoop?> loadPendingDraft() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_pendingDraftKey);
+    if (raw == null) return null;
+    try {
+      return OpenLoop.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> savePendingDraft(OpenLoop? draft) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (draft == null) {
+      await prefs.remove(_pendingDraftKey);
+    } else {
+      await prefs.setString(_pendingDraftKey, jsonEncode(draft.toJson()));
+    }
+  }
 }
 
 class MemoryLoopRepository implements LoopRepository {
@@ -96,6 +121,7 @@ class MemoryLoopRepository implements LoopRepository {
   String? baseUrl;
   RetentionPolicy retention = RetentionPolicy.sevenDays;
   ThemeMode themeMode = ThemeMode.light;
+  OpenLoop? pendingDraft;
 
   @override
   Future<List<OpenLoop>> load() async => List.of(loops);
@@ -113,4 +139,8 @@ class MemoryLoopRepository implements LoopRepository {
   Future<ThemeMode> loadThemeMode() async => themeMode;
   @override
   Future<void> saveThemeMode(ThemeMode mode) async => themeMode = mode;
+  @override
+  Future<OpenLoop?> loadPendingDraft() async => pendingDraft;
+  @override
+  Future<void> savePendingDraft(OpenLoop? draft) async => pendingDraft = draft;
 }
