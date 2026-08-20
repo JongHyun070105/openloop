@@ -25,7 +25,8 @@ class OpenLoopApp extends StatefulWidget {
   State<OpenLoopApp> createState() => _OpenLoopAppState();
 }
 
-class _OpenLoopAppState extends State<OpenLoopApp> {
+class _OpenLoopAppState extends State<OpenLoopApp>
+    with WidgetsBindingObserver {
   final navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<List<SharedMediaFile>>? shareSubscription;
   SharedCapturePayload? _queuedShare;
@@ -33,14 +34,32 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_initialize());
     _listenForShares();
     AppIntegrations.instance.pendingLoopId.addListener(_openPushLoop);
     AppIntegrations.instance.pendingDraft.addListener(_openPushDraft);
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_checkDirectSharedMedia());
+    }
+  }
+
+  Future<void> _checkDirectSharedMedia() async {
+    try {
+      final payload = await NativeSharedMediaBridge.getAppGroupSharedCapture();
+      if (payload != null && !payload.isEmpty) {
+        _openSharedPayload(payload);
+      }
+    } catch (_) {}
+  }
+
   Future<void> _initialize() async {
     await widget.controller.initialize();
+    await _checkDirectSharedMedia();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(widget.controller.enableAutomaticReminders());
@@ -119,15 +138,20 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
     }
   }
 
-  void _openSharedMedia(List<SharedMediaFile> items) {
-    final capture = normalizeSharedMedia(items);
+  void _openSharedPayload(SharedCapturePayload capture) {
     if (capture.isEmpty) return;
-    ReceiveSharingIntent.instance.reset();
     if (!widget.controller.ready) {
       _queuedShare = capture;
       return;
     }
     unawaited(_processSharedCaptureInBackground(capture));
+  }
+
+  void _openSharedMedia(List<SharedMediaFile> items) {
+    final capture = normalizeSharedMedia(items);
+    if (capture.isEmpty) return;
+    ReceiveSharingIntent.instance.reset();
+    _openSharedPayload(capture);
   }
 
   Future<void> _processSharedCaptureInBackground(SharedCapturePayload capture) async {
@@ -155,6 +179,7 @@ class _OpenLoopAppState extends State<OpenLoopApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     shareSubscription?.cancel();
     AppIntegrations.instance.pendingLoopId.removeListener(_openPushLoop);
     AppIntegrations.instance.pendingDraft.removeListener(_openPushDraft);

@@ -12,6 +12,29 @@ import UserNotifications
       UNUserNotificationCenter.current().delegate = self
     }
     GeneratedPluginRegistrant.register(with: self)
+
+    let controller = window?.rootViewController as? FlutterViewController
+    if let messenger = controller?.binaryMessenger {
+      let channel = FlutterMethodChannel(name: "com.openloop.app/shared_group", binaryMessenger: messenger)
+      channel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
+        let userDefaults = UserDefaults(suiteName: "group.com.openloop.openloop_mobile")
+        if call.method == "getSharedMedia" {
+          if let data = userDefaults?.data(forKey: "ShareKey") {
+            let jsonString = String(data: data, encoding: .utf8)
+            result(jsonString)
+          } else {
+            result(nil)
+          }
+        } else if call.method == "clearSharedMedia" {
+          userDefaults?.removeObject(forKey: "ShareKey")
+          userDefaults?.removeObject(forKey: "ShareMessageKey")
+          userDefaults?.synchronize()
+          result(true)
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
+      }
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

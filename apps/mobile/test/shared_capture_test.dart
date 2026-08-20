@@ -42,4 +42,12 @@ void main() {
 
     expect(payload.isEmpty, isTrue);
   });
+
+  test('parseSharedMediaJson parses JSON array saved in App Group UserDefaults', () {
+    const rawJson = '[{"path":"/var/mobile/Containers/Shared/AppGroup/UUID.png","type":"image","mimeType":"image/png"}]';
+    final payload = parseSharedMediaJson(rawJson);
+    expect(payload, isNotNull);
+    expect(payload!.imagePath, equals('/var/mobile/Containers/Shared/AppGroup/UUID.png'));
+    expect(payload.text, isEmpty);
+  });
 }
