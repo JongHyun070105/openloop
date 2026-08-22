@@ -266,9 +266,35 @@ def _suggested_question(missing_fields: list[str]) -> str | None:
     return questions[missing_fields[0]]
 
 
+from .privacy import detect_prompt_injection, sanitize_input_text
+
+
 def analyze_demo(request: AnalyzeRequest, reference_date: date | None = None) -> AnalyzeResponse:
     """Extract only explicit values when no remote model credential is configured."""
-    text = request.text
+    text = sanitize_input_text(request.text)
+    is_injection, _ = detect_prompt_injection(text)
+    if is_injection:
+        return AnalyzeResponse(
+            status=LoopStatus.NEEDS_INPUT,
+            event=StructuredEvent(
+                type=Intent.OTHER,
+                title="식별되지 않은 항목",
+                date=None,
+                start_time=None,
+                expires_on=None,
+                place=None,
+                participants=[],
+                reminders=[],
+                checklist=[],
+                source=request.source,
+                confidence=Confidence(date=0.0, time=0.0, location=0.0, title=0.0),
+                missing_fields=["title"],
+                summary="보안상 안전하지 않은 입력이거나 유효한 일정이 확인되지 않았습니다.",
+                resolution_note="비정상적이거나 악의적인 입력, 탈출 프롬프트 등은 처리되지 않습니다.",
+            ),
+            suggested_question="어떤 일정을 등록할까요?",
+        )
+
     intent = _classify_intent(text)
     extracted_date = _extract_date(text, reference_date or datetime.now(_KST).date())
     event_date = extracted_date if intent not in (Intent.COUPON, Intent.PLACE) else None

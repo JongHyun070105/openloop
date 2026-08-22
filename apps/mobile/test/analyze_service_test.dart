@@ -205,6 +205,52 @@ void main() {
   });
 
   test(
+    'API client uploads browser-selected image bytes with its filename',
+    () async {
+      final client = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.toString(), 'https://api.example/v1/analyze/image');
+        expect(
+          request.headers['content-type'],
+          startsWith('multipart/form-data; boundary='),
+        );
+        final body = latin1.decode(request.bodyBytes);
+        expect(body, contains('filename="capture.jpeg"'));
+        expect(body.toLowerCase(), contains('content-type: image/jpeg'));
+        expect(body, contains('name="source"'));
+        return http.Response(
+          jsonEncode({
+            'id': 'browser-image-loop',
+            'status': 'open',
+            'event': {
+              'type': 'appointment',
+              'title': '브라우저 이미지 일정',
+              'source': 'image',
+              'confidence': {},
+              'missing_fields': [],
+              'reminders': [],
+            },
+          }),
+          201,
+          headers: const {'content-type': 'application/json'},
+        );
+      });
+
+      final result =
+          await ApiAnalyzeService(
+            baseUrl: 'https://api.example',
+            client: client,
+          ).analyzeImage(
+            imagePath: 'blob:https://openloop-action.netlify.app/picked-image',
+            imageBytes: const [0xff, 0xd8, 0xff, 0xdb],
+            imageName: 'capture.jpeg',
+          );
+
+      expect(result.id, 'browser-image-loop');
+    },
+  );
+
+  test(
     'API client persists a reviewed draft only through POST /v1/loops',
     () async {
       final client = MockClient((request) async {
@@ -380,31 +426,37 @@ void main() {
     expect(result.checkpoints.map((item) => item.offset), ['D-1']);
   });
 
-  test('local purchase keeps an expiry date without asking for a time', () async {
-    final result = await LocalAnalyzeService(
-      clock: () => DateTime(2026, 8, 1, 9),
-    ).analyze(text: '쿠팡 무선 이어폰 주문 2026-08-25까지 반품 가능', source: 'text');
+  test(
+    'local purchase keeps an expiry date without asking for a time',
+    () async {
+      final result = await LocalAnalyzeService(
+        clock: () => DateTime(2026, 8, 1, 9),
+      ).analyze(text: '쿠팡 무선 이어폰 주문 2026-08-25까지 반품 가능', source: 'text');
 
-    expect(result.kind, LoopKind.purchase);
-    expect(result.state, LoopState.open);
-    expect(result.expiresOn, DateTime(2026, 8, 25));
-    expect(result.time, isNull);
-    expect(result.missingFields, isEmpty);
-    expect(result.checkpoints.map((item) => item.offset), ['D-1']);
-    expect(result.actions.map((item) => item.type), contains('purchase'));
-  });
+      expect(result.kind, LoopKind.purchase);
+      expect(result.state, LoopState.open);
+      expect(result.expiresOn, DateTime(2026, 8, 25));
+      expect(result.time, isNull);
+      expect(result.missingFields, isEmpty);
+      expect(result.checkpoints.map((item) => item.offset), ['D-1']);
+      expect(result.actions.map((item) => item.type), contains('purchase'));
+    },
+  );
 
-  test('local reservation extracts date, time, place and creates T-2h checkpoint', () async {
-    final result = await LocalAnalyzeService(
-      clock: () => DateTime(2026, 8, 1, 9),
-    ).analyze(text: '2026-08-20 14:30 김포공항 제주 항공권 예약', source: 'text');
+  test(
+    'local reservation extracts date, time, place and creates T-2h checkpoint',
+    () async {
+      final result = await LocalAnalyzeService(
+        clock: () => DateTime(2026, 8, 1, 9),
+      ).analyze(text: '2026-08-20 14:30 김포공항 제주 항공권 예약', source: 'text');
 
-    expect(result.kind, LoopKind.reservation);
-    expect(result.state, LoopState.open);
-    expect(result.date, DateTime(2026, 8, 20));
-    expect(result.time, '14:30:00');
-    expect(result.missingFields, isEmpty);
-    expect(result.checkpoints.map((item) => item.offset), ['T-2h']);
-    expect(result.actions.map((item) => item.type), contains('reservation'));
-  });
+      expect(result.kind, LoopKind.reservation);
+      expect(result.state, LoopState.open);
+      expect(result.date, DateTime(2026, 8, 20));
+      expect(result.time, '14:30:00');
+      expect(result.missingFields, isEmpty);
+      expect(result.checkpoints.map((item) => item.offset), ['T-2h']);
+      expect(result.actions.map((item) => item.type), contains('reservation'));
+    },
+  );
 }

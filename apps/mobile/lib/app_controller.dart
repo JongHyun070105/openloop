@@ -17,9 +17,10 @@ class AppController extends ChangeNotifier {
   AppController({
     required this.repository,
     required this.deviceActions,
-    String defaultBaseUrl = configuredOpenLoopApiBaseUrl,
+    String? defaultBaseUrl,
     LoopApiFactory? apiFactory,
-  }) : _defaultBaseUrl = defaultBaseUrl,
+  }) : _defaultBaseUrl = defaultBaseUrl ??
+           (kIsWeb ? defaultWebProxyBaseUrl : configuredOpenLoopApiBaseUrl),
        _apiFactory = apiFactory ?? ((url) => ApiAnalyzeService(baseUrl: url));
 
   final LoopRepository repository;
@@ -48,7 +49,204 @@ class AppController extends ChangeNotifier {
     await repository.saveThemeMode(mode);
   }
 
+List<OpenLoop> createDemoSeedLoops([DateTime? nowTime]) {
+  final now = nowTime ?? DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final tomorrow = today.add(const Duration(days: 1));
+  final in3Days = today.add(const Duration(days: 3));
+  final in5Days = today.add(const Duration(days: 5));
+  final in7Days = today.add(const Duration(days: 7));
+
+  return [
+    OpenLoop(
+      id: 'demo-loop-1',
+      title: '향수 거래',
+      kind: LoopKind.appointment,
+      state: LoopState.open,
+      source: 'share',
+      createdAt: now,
+      confidence: const {
+        'title': 0.98,
+        'date': 0.98,
+        'time': 0.98,
+        'place': 0.95,
+      },
+      date: today,
+      time: '21:00',
+      place: '종로5가역 12번 출구',
+      purpose: '종로5가역 12번 출구에서 향수 직거래 진행',
+      summary: '오늘 21:00 종로5가역 12번 출구에서 만나기로 했습니다.',
+    ),
+    OpenLoop(
+      id: 'demo-loop-2',
+      title: '저녁 약속',
+      kind: LoopKind.appointment,
+      state: LoopState.open,
+      source: 'manual',
+      createdAt: now,
+      confidence: const {
+        'title': 0.96,
+        'date': 0.96,
+        'time': 0.96,
+        'place': 0.94,
+      },
+      date: tomorrow,
+      time: '19:00',
+      place: '성수역 3번 출구',
+      purpose: '성수역 3번 출구에서 저녁 모임',
+      summary: '내일 19:00 성수역 3번 출구에서 만나기로 했습니다.',
+    ),
+    OpenLoop(
+      id: 'demo-loop-3',
+      title: '스타벅스 아이스 아메리카노 T',
+      kind: LoopKind.coupon,
+      state: LoopState.open,
+      source: 'share',
+      createdAt: now,
+      confidence: const {
+        'title': 0.99,
+        'expiresOn': 0.98,
+        'place': 0.95,
+      },
+      expiresOn: in7Days,
+      place: '스타벅스 전국 매장',
+      purpose: '카카오톡 선물함 모바일 쿠폰 사용',
+      summary: '사용 기한이 7일 남은 스타벅스 모바일 교환권입니다.',
+    ),
+    OpenLoop(
+      id: 'demo-loop-4',
+      title: '성수동 LCDC 팝업스토어 방문',
+      kind: LoopKind.place,
+      state: LoopState.open,
+      source: 'share',
+      createdAt: now,
+      confidence: const {
+        'title': 0.95,
+        'date': 0.92,
+        'place': 0.97,
+      },
+      date: in3Days,
+      time: '14:30',
+      place: '성수동 LCDC SEOUL',
+      purpose: '인스타그램에서 공유된 디자인 브랜드 팝업 방문',
+      summary: '이번 주말 성수 LCDC SEOUL 팝업스토어 방문 예정입니다.',
+    ),
+    OpenLoop(
+      id: 'demo-loop-5',
+      title: 'OpenLoop 최종 기획서 제출',
+      kind: LoopKind.deadline,
+      state: LoopState.open,
+      source: 'share',
+      createdAt: now,
+      confidence: const {
+        'title': 0.97,
+        'date': 0.95,
+        'time': 0.92,
+      },
+      date: in5Days,
+      time: '23:59',
+      purpose: '경진대회 최종 기획안 PDF 업로드',
+      summary: '마감 기한 전까지 슬라이드 자료 최종 업로드 필요',
+    ),
+    OpenLoop(
+      id: 'demo-loop-closed-1',
+      title: 'BHC 뿌링클+콜라1.25L 모바일 교환권',
+      kind: LoopKind.coupon,
+      state: LoopState.closed,
+      source: 'share',
+      createdAt: now.subtract(const Duration(days: 10)),
+      confidence: const {
+        'title': 0.99,
+        'expiresOn': 0.99,
+        'place': 0.95,
+      },
+      expiresOn: today.subtract(const Duration(days: 1)),
+      place: 'BHC 전국 매장',
+      purpose: '기프티콘 바코드 제시 후 포장/배달 주문',
+      summary: '사용 완료된 모바일 교환권입니다.',
+    ),
+    OpenLoop(
+      id: 'demo-loop-closed-2',
+      title: '홍대 브런치 모임',
+      kind: LoopKind.appointment,
+      state: LoopState.closed,
+      source: 'share',
+      createdAt: now.subtract(const Duration(days: 4)),
+      confidence: const {
+        'title': 0.98,
+        'date': 0.98,
+        'place': 0.96,
+      },
+      date: today.subtract(const Duration(days: 2)),
+      time: '12:00',
+      place: '홍대입구역 9번 출구',
+      purpose: '주말 브런치 식사',
+      summary: '완료된 약속입니다.',
+    ),
+  ];
+}
+
   Future<void> initialize() async {
+    var loaded = await repository.load();
+    if ((loaded.length < 5) &&
+        (kIsWeb || repository is! MemoryLoopRepository)) {
+      loaded = createDemoSeedLoops();
+      await repository.save(loaded);
+    }
+    loops = loaded.map((loop) {
+      final textCheck = '${loop.title} ${loop.purpose ?? ''}';
+      if ((loop.kind == LoopKind.deadline ||
+              loop.kind == LoopKind.appointment) &&
+          [
+            '뿌링클',
+            '기프티콘',
+            '기프티쇼',
+            '교환권',
+            '모바일상품권',
+            '상품권',
+            '모바일쿠폰',
+            '깊티',
+            '쿠폰',
+          ].any(textCheck.contains)) {
+        return loop.copyWith(
+          kind: LoopKind.coupon,
+          time: null,
+          expiresOn: loop.expiresOn ?? loop.date,
+          date: null,
+        );
+      }
+      return loop;
+    }).toList();
+    final savedBaseUrl = await repository.loadBaseUrl();
+    if (kIsWeb &&
+        (savedBaseUrl == null ||
+            savedBaseUrl.contains('amazonaws.com') ||
+            savedBaseUrl.isEmpty)) {
+      baseUrl = _defaultBaseUrl;
+    } else {
+      baseUrl = savedBaseUrl ?? _defaultBaseUrl;
+    }
+    retention = await repository.loadRetention();
+    themeMode = await repository.loadThemeMode();
+    pendingReviewedDraft = await repository.loadPendingDraft();
+    if (pendingReviewedDraft != null) {
+      AppIntegrations.instance.pendingDraftLoop = pendingReviewedDraft;
+    }
+    _applyRetention();
+    ready = true;
+    notifyListeners();
+    if (baseUrl.trim().isNotEmpty) {
+      refreshCapabilities();
+    }
+  }
+
+  Future<void> resetToDemoSeedLoops() async {
+    final seed = createDemoSeedLoops();
+    await repository.save(seed);
+    await refreshLoops();
+  }
+
+  Future<void> refreshLoops() async {
     final loaded = await repository.load();
     loops = loaded.map((loop) {
       final textCheck = '${loop.title} ${loop.purpose ?? ''}';
@@ -74,19 +272,8 @@ class AppController extends ChangeNotifier {
       }
       return loop;
     }).toList();
-    baseUrl = (await repository.loadBaseUrl()) ?? _defaultBaseUrl;
-    retention = await repository.loadRetention();
-    themeMode = await repository.loadThemeMode();
-    pendingReviewedDraft = await repository.loadPendingDraft();
-    if (pendingReviewedDraft != null) {
-      AppIntegrations.instance.pendingDraftLoop = pendingReviewedDraft;
-    }
     _applyRetention();
-    ready = true;
     notifyListeners();
-    if (baseUrl.trim().isNotEmpty) {
-      refreshCapabilities();
-    }
   }
 
   Future<OpenLoop> analyze({
@@ -117,6 +304,8 @@ class AppController extends ChangeNotifier {
 
   Future<OpenLoop> analyzeImage({
     required String imagePath,
+    List<int>? imageBytes,
+    String? imageName,
     String? companionText,
     String source = 'image',
   }) async {
@@ -128,12 +317,24 @@ class AppController extends ChangeNotifier {
         try {
           return await _api.analyzeImage(
             imagePath: imagePath,
+            imageBytes: imageBytes,
+            imageName: imageName,
             companionText: companionText,
             source: source,
           );
         } catch (_) {
-          throw StateError('이미지 AI 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+          if (!kIsWeb) {
+            throw StateError('이미지 AI 분석에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+          }
         }
+      }
+      if (kIsWeb) {
+        lastAnalysisWasLocal = true;
+        final fallbackText = companionText?.trim().isNotEmpty == true
+            ? companionText!
+            : (imageName?.replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '') ??
+                  '스크린샷 일정');
+        return LocalAnalyzeService().analyze(text: fallbackText, source: source);
       }
       throw StateError('이미지 AI 분석 서버가 설정되지 않았습니다. 설정을 확인한 뒤 다시 시도해 주세요.');
     } finally {
@@ -147,12 +348,19 @@ class AppController extends ChangeNotifier {
   Future<OpenLoop> analyzeInBackground({
     String? text,
     String? imagePath,
+    List<int>? imageBytes,
+    String? imageName,
     String source = 'text',
     bool sendNotificationOnComplete = true,
+    bool? persistForColdStart,
   }) async {
-    final loop = imagePath != null
+    final hasImage =
+        (imagePath != null && imagePath.isNotEmpty) || imageBytes != null;
+    final loop = hasImage
         ? await analyzeImage(
-            imagePath: imagePath,
+            imagePath: imagePath ?? imageName ?? 'screenshot.png',
+            imageBytes: imageBytes,
+            imageName: imageName,
             companionText: text,
             source: source,
           )
@@ -160,10 +368,12 @@ class AppController extends ChangeNotifier {
 
     pendingReviewedDraft = loop;
     AppIntegrations.instance.pendingDraftLoop = loop;
-    await repository.savePendingDraft(loop);
+    final shouldPersist = persistForColdStart ?? sendNotificationOnComplete;
+    await repository.savePendingDraft(shouldPersist ? loop : null);
 
     if (sendNotificationOnComplete) {
-      final isNeedsInput = loop.state == LoopState.needsInput &&
+      final isNeedsInput =
+          loop.state == LoopState.needsInput &&
           loop.effectiveMissingFields.isNotEmpty;
       final title = isNeedsInput
           ? '❓ [${loop.title}] 추가 확인이 필요해요'
@@ -187,6 +397,11 @@ class AppController extends ChangeNotifier {
       );
     }
     return loop;
+  }
+
+  Future<void> markPendingDraftPresented(String draftId) async {
+    if (pendingReviewedDraft?.id != draftId) return;
+    await repository.savePendingDraft(null);
   }
 
   Future<void> saveLoop(OpenLoop loop) async {
@@ -390,15 +605,12 @@ class AppController extends ChangeNotifier {
       ),
       _ => loop.copyWith(state: state, missingFields: remaining),
     };
-    final bool isTemplateSummary = loop.summary == null ||
+    final bool isTemplateSummary =
+        loop.summary == null ||
         (loop.summary!.contains('로 정리했습니다') ||
             loop.summary!.contains('확인이 필요합니다'));
-    final summary = isTemplateSummary
-        ? _summaryForLoop(updated)
-        : loop.summary;
-    return _refreshLocalGraph(
-      updated.copyWith(summary: summary),
-    );
+    final summary = isTemplateSummary ? _summaryForLoop(updated) : loop.summary;
+    return _refreshLocalGraph(updated.copyWith(summary: summary));
   }
 
   Future<void> closeLoop(OpenLoop loop) async {
@@ -761,14 +973,20 @@ String _summaryForLoop(OpenLoop loop) {
       '${loop.date!.year.toString().padLeft(4, '0')}-${loop.date!.month.toString().padLeft(2, '0')}-${loop.date!.day.toString().padLeft(2, '0')}',
     );
   }
-  if (loop.time != null) facts.add(loop.time!.substring(0, 5));
+  if (loop.time != null) {
+    facts.add(loop.time!.substring(0, 5));
+  }
   if (loop.expiresOn != null) {
     facts.add(
       '기한 ${loop.expiresOn!.year.toString().padLeft(4, '0')}-${loop.expiresOn!.month.toString().padLeft(2, '0')}-${loop.expiresOn!.day.toString().padLeft(2, '0')}',
     );
   }
-  if (loop.place != null) facts.add(loop.place!);
-  if (loop.effectiveMissingFields.isEmpty) return '${facts.join(' · ')}로 정리했습니다.';
+  if (loop.place != null) {
+    facts.add(loop.place!);
+  }
+  if (loop.effectiveMissingFields.isEmpty) {
+    return '${facts.join(' · ')}로 정리했습니다.';
+  }
   const labels = {
     'date': '날짜',
     'start_time': '시간',

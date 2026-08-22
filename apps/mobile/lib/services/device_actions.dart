@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:add_2_calendar/add_2_calendar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/open_loop.dart';
 import 'external_integrations.dart';
@@ -42,6 +46,25 @@ class NativeDeviceActions implements DeviceActions {
   Future<bool> addToCalendar(OpenLoop loop) async {
     final start = loop.startsAt;
     if (start == null) return false;
+    if (kIsWeb) {
+      try {
+        final title = Uri.encodeComponent(loop.title);
+        final details = Uri.encodeComponent(loop.summary ?? loop.purpose ?? '');
+        final location = Uri.encodeComponent(loop.place ?? '');
+        final end = start.add(
+          loop.kind == LoopKind.deadline
+              ? const Duration(minutes: 30)
+              : const Duration(hours: 1),
+        );
+        String formatUtc(DateTime dt) =>
+            '${dt.toUtc().toIso8601String().replaceAll(RegExp(r'[-:]'), '').split('.').first}Z';
+        final gCalUrl = Uri.parse(
+          'https://calendar.google.com/calendar/render?action=TEMPLATE&text=$title&details=$details&location=$location&dates=${formatUtc(start)}/${formatUtc(end)}',
+        );
+        await launchUrl(gCalUrl, mode: LaunchMode.externalApplication);
+      } catch (_) {}
+      return true;
+    }
     try {
       final launched = _calendarLauncher(
         Event(
@@ -88,17 +111,19 @@ class NativeDeviceActions implements DeviceActions {
       onDidReceiveNotificationResponse: (response) {
         final payload = response.payload;
         if (payload != null && payload.isNotEmpty) {
-          AppIntegrations.instance.handleNotificationPayload(payload);
+          unawaited(
+            AppIntegrations.instance.handleNotificationPayload(payload),
+          );
         }
       },
     );
-    final launchDetails =
-        await _notifications.getNotificationAppLaunchDetails();
+    final launchDetails = await _notifications
+        .getNotificationAppLaunchDetails();
     if (launchDetails?.didNotificationLaunchApp == true &&
         launchDetails?.notificationResponse?.payload != null) {
       final payload = launchDetails!.notificationResponse!.payload!;
       if (payload.isNotEmpty) {
-        AppIntegrations.instance.handleNotificationPayload(payload);
+        unawaited(AppIntegrations.instance.handleNotificationPayload(payload));
       }
     }
     _initialized = true;

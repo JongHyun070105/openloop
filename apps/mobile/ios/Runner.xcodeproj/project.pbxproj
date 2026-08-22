@@ -11,6 +11,10 @@
 		0A0A00030000000000000003 /* Share Extension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 0A0A00040000000000000004 /* Share Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		0A0A00160000000000000016 /* RSIShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0A00170000000000000017 /* RSIShareViewController.swift */; };
 		0A0A00180000000000000018 /* SharedMediaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0A00190000000000000019 /* SharedMediaModels.swift */; };
+		0B0B00010000000000000001 /* OpenLoopAnalysisAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0B00060000000000000006 /* OpenLoopAnalysisAttributes.swift */; };
+		0B0B00020000000000000002 /* OpenLoopAnalysisAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0B00060000000000000006 /* OpenLoopAnalysisAttributes.swift */; };
+		0B0B00030000000000000003 /* OpenLoopLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B0B00070000000000000007 /* OpenLoopLiveActivity.swift */; };
+		0B0B00040000000000000004 /* OpenLoopActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 0B0B00090000000000000009 /* OpenLoopActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		297E311E04888311AC0FBDEB /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96BDF440C5AE6097CF91138B /* Pods_RunnerTests.framework */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
@@ -19,7 +23,7 @@
 		8A56D0C58A938BFD06CE4F0C /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6D88FC55710C1EE33933FE7A /* Pods_Runner.framework */; };
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
-		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		97C147011CF9000F007C117D /* BrandLaunch.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* BrandLaunch.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,6 +41,13 @@
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
+		0B0B00050000000000000005 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0B0B000C000000000000000C;
+			remoteInfo = OpenLoopActivity;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -47,6 +58,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				0A0A00030000000000000003 /* Share Extension.appex in Embed App Extensions */,
+				0B0B00040000000000000004 /* OpenLoopActivity.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -71,6 +83,10 @@
 		0A0A00090000000000000009 /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		0A0A00170000000000000017 /* RSIShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RSIShareViewController.swift; path = ../.symlinks/plugins/receive_sharing_intent/ios/Classes/RSIShareViewController.swift; sourceTree = "<group>"; };
 		0A0A00190000000000000019 /* SharedMediaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedMediaModels.swift; sourceTree = "<group>"; };
+		0B0B00060000000000000006 /* OpenLoopAnalysisAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLoopAnalysisAttributes.swift; sourceTree = "<group>"; };
+		0B0B00070000000000000007 /* OpenLoopLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenLoopLiveActivity.swift; sourceTree = "<group>"; };
+		0B0B00080000000000000008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0B0B00090000000000000009 /* OpenLoopActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenLoopActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C5C13291331D4FEAC32DB7D /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
@@ -90,7 +106,7 @@
 		97C146EE1CF9000F007C117D /* Runner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Runner.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		97C146FB1CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/BrandLaunch.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A15BF851FAD74C01713D8227 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		B2E90A855EEECE94AA109A6F /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
@@ -98,6 +114,13 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		0A0A000A000000000000000A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0B0B000B000000000000000B /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -133,6 +156,16 @@
 				0A0A00190000000000000019 /* SharedMediaModels.swift */,
 			);
 			path = "Share Extension";
+			sourceTree = "<group>";
+		};
+		0B0B000A000000000000000A /* OpenLoopActivity */ = {
+			isa = PBXGroup;
+			children = (
+				0B0B00060000000000000006 /* OpenLoopAnalysisAttributes.swift */,
+				0B0B00070000000000000007 /* OpenLoopLiveActivity.swift */,
+				0B0B00080000000000000008 /* Info.plist */,
+			);
+			path = OpenLoopActivity;
 			sourceTree = "<group>";
 		};
 		0D0DD81EEE2269A8D4D44F05 /* Pods */ = {
@@ -176,6 +209,7 @@
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
 				0A0A000B000000000000000B /* Share Extension */,
+				0B0B000A000000000000000A /* OpenLoopActivity */,
 				0D0DD81EEE2269A8D4D44F05 /* Pods */,
 				B37B17489014A3DC4022B12C /* Frameworks */,
 			);
@@ -187,6 +221,7 @@
 				97C146EE1CF9000F007C117D /* Runner.app */,
 				331C8081294A63A400263BE5 /* RunnerTests.xctest */,
 				0A0A00040000000000000004 /* Share Extension.appex */,
+				0B0B00090000000000000009 /* OpenLoopActivity.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -196,7 +231,7 @@
 			children = (
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
-				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
+				97C146FF1CF9000F007C117D /* BrandLaunch.storyboard */,
 				97C147021CF9000F007C117D /* Info.plist */,
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,
@@ -219,6 +254,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0B0B000C000000000000000C /* OpenLoopActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B0B00130000000000000013 /* Build configuration list for PBXNativeTarget "OpenLoopActivity" */;
+			buildPhases = (
+				0B0B000E000000000000000E /* Sources */,
+				0B0B000B000000000000000B /* Frameworks */,
+				0B0B000D000000000000000D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OpenLoopActivity;
+			productName = OpenLoopActivity;
+			productReference = 0B0B00090000000000000009 /* OpenLoopActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		0A0A000C000000000000000C /* Share Extension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 0A0A00150000000000000015 /* Build configuration list for PBXNativeTarget "Share Extension" */;
@@ -274,6 +326,7 @@
 			);
 			dependencies = (
 				0A0A000D000000000000000D /* PBXTargetDependency */,
+				0B0B000F000000000000000F /* PBXTargetDependency */,
 			);
 			name = Runner;
 			productName = Runner;
@@ -291,6 +344,9 @@
 				ORGANIZATIONNAME = "";
 				TargetAttributes = {
 					0A0A000C000000000000000C = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					0B0B000C000000000000000C = {
 						CreatedOnToolsVersion = 16.0;
 					};
 					331C8080294A63A400263BE5 = {
@@ -319,11 +375,19 @@
 				97C146ED1CF9000F007C117D /* Runner */,
 				331C8080294A63A400263BE5 /* RunnerTests */,
 				0A0A000C000000000000000C /* Share Extension */,
+				0B0B000C000000000000000C /* OpenLoopActivity */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		0B0B000D000000000000000D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0A0A000F000000000000000F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -342,7 +406,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
+				97C147011CF9000F007C117D /* BrandLaunch.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
@@ -464,6 +528,15 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0B0B000E000000000000000E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0B0B00020000000000000002 /* OpenLoopAnalysisAttributes.swift in Sources */,
+				0B0B00030000000000000003 /* OpenLoopLiveActivity.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0A0A000E000000000000000E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -487,6 +560,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
+				0B0B00010000000000000001 /* OpenLoopAnalysisAttributes.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -494,6 +568,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		0B0B000F000000000000000F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0B0B000C000000000000000C /* OpenLoopActivity */;
+			targetProxy = 0B0B00050000000000000005 /* PBXContainerItemProxy */;
+		};
 		0A0A000D000000000000000D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 0A0A000C000000000000000C /* Share Extension */;
@@ -515,23 +594,100 @@
 			name = Main.storyboard;
 			sourceTree = "<group>";
 		};
-		97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */ = {
+		97C146FF1CF9000F007C117D /* BrandLaunch.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
 				97C147001CF9000F007C117D /* Base */,
 			);
-			name = LaunchScreen.storyboard;
+			name = BrandLaunch.storyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		0B0B00100000000000000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = G37QVRMDK8;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenLoopActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.openloop.openloopMobile.OpenLoopActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		0B0B00110000000000000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = G37QVRMDK8;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenLoopActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.openloop.openloopMobile.OpenLoopActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		0B0B00120000000000000012 /* Profile */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+				DEVELOPMENT_TEAM = G37QVRMDK8;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenLoopActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.openloop.openloopMobile.OpenLoopActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Profile;
+		};
 		0A0A00100000000000000010 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "Share Extension/Share Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				CUSTOM_GROUP_ID = group.com.openloop.openloop_mobile;
 				DEVELOPMENT_TEAM = G37QVRMDK8;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -542,7 +698,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.openloop.openloopMobile.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -554,10 +710,11 @@
 		};
 		0A0A00110000000000000011 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "Share Extension/Share Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				CUSTOM_GROUP_ID = group.com.openloop.openloop_mobile;
 				DEVELOPMENT_TEAM = G37QVRMDK8;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -568,7 +725,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.openloop.openloopMobile.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -579,10 +736,11 @@
 		};
 		0A0A00120000000000000012 /* Profile */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB31CF90195004384FC /* Generated.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = "Share Extension/Share Extension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
 				CUSTOM_GROUP_ID = group.com.openloop.openloop_mobile;
 				DEVELOPMENT_TEAM = G37QVRMDK8;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -593,7 +751,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.0;
+				MARKETING_VERSION = "$(FLUTTER_BUILD_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.openloop.openloopMobile.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -894,6 +1052,16 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0B0B00130000000000000013 /* Build configuration list for PBXNativeTarget "OpenLoopActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0B0B00100000000000000010 /* Debug */,
+				0B0B00110000000000000011 /* Release */,
+				0B0B00120000000000000012 /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		0A0A00150000000000000015 /* Build configuration list for PBXNativeTarget "Share Extension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

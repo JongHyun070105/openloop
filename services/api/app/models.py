@@ -14,6 +14,7 @@ class Intent(str, Enum):
     COUPON = "coupon"
     PURCHASE = "purchase"
     RESERVATION = "reservation"
+    OTHER = "other"
 
 
 class LoopStatus(str, Enum):
@@ -214,6 +215,10 @@ class PushTokenRequest(BaseModel):
 class PushTokenResponse(BaseModel):
     registered: bool
     provider: Literal["disabled", "dynamodb"]
+
+
+class LiveActivityTokenRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
 
 
 class CapabilitiesResponse(BaseModel):

@@ -11,6 +11,7 @@ ECS service, RDS database, or NAT Gateway.
 - EventBridge Scheduler wakes one 128 MB Lambda every 15 minutes. The schedule is disabled by default.
 - The dispatcher sends due checkpoint work to a FIFO SQS queue.
 - When `FcmSecretArn` is supplied, a short-lived queue consumer sends Android and iOS notifications through FCM HTTP v1. The API reports server push as enabled only in that configuration, so the client cannot mistake device-token storage for deliverable push. iOS delivery uses Firebase's APNs bridge and still requires APNs credentials in the Firebase project.
+- The same FCM secret enables iOS 17.2+ ActivityKit push-to-start delivery for external-share completion. The iOS app registers its ActivityKit token under the installation partition; the API accepts an explicitly requested completion into a dedicated SQS queue, and a worker sends the Live Activity outside the analysis response path. Missing tokens, disabled Live Activities, or FCM errors use one ordinary FCM completion notification instead.
 - CloudWatch application and access logs expire after 7 days.
 - An optional AWS Budget sends alerts at 50% actual, 80% forecast, and 100% actual monthly spend.
 
@@ -187,6 +188,7 @@ The API owns registration, refresh, and user-scoped deletion of device tokens. T
 ```
 
 - `platform` is `ios` or `android`. Both use an FCM registration token; never send the raw APNs token to this worker.
+- iOS also registers a separate ActivityKit push-to-start token at `POST /v1/devices/live-activity-token`. It is stored as `SK=LIVE_ACTIVITY#PUSH_TO_START`, never logged or returned, and is paired only with the latest active iOS FCM token in the same installation partition.
 - On FCM `UNREGISTERED`, or a token-specific `INVALID_ARGUMENT`, the worker marks the token inactive instead of retrying it forever.
 - Mobile clients must upsert after installation and token refresh, and deactivate the record on logout before switching accounts.
 - Until authentication is implemented, the client sends a stable random UUID through `X-OpenLoop-Install-Id`. The API validates the UUID and uses it as `owner_id`; checkpoints copy that value to `userId`, and device records use `PK=USER#<installation-id>`.

@@ -14,6 +14,8 @@ abstract interface class AnalyzeService {
 abstract interface class LoopApi implements AnalyzeService {
   Future<OpenLoop> analyzeImage({
     required String imagePath,
+    List<int>? imageBytes,
+    String? imageName,
     String? companionText,
     String source,
   });
@@ -89,6 +91,8 @@ class ApiAnalyzeService implements LoopApi {
   @override
   Future<OpenLoop> analyzeImage({
     required String imagePath,
+    List<int>? imageBytes,
+    String? imageName,
     String? companionText,
     String source = 'image',
   }) async {
@@ -97,12 +101,30 @@ class ApiAnalyzeService implements LoopApi {
       Uri.parse('$_root/v1/analyze/image'),
     );
     request.headers['X-OpenLoop-Install-Id'] = await InstallationIdentity.get();
+    final uploadName = imageName?.trim().isNotEmpty == true
+        ? imageName!.trim()
+        : imagePath;
+    final isAscii = RegExp(r'^[\x00-\x7F]+$').hasMatch(uploadName);
+    final extension = uploadName.contains('.')
+        ? uploadName.split('.').last.toLowerCase()
+        : 'png';
+    final safeFilename = isAscii
+        ? uploadName
+        : 'upload_${DateTime.now().millisecondsSinceEpoch}.$extension';
     request.files.add(
-      await http.MultipartFile.fromPath(
-        'file',
-        imagePath,
-        contentType: imageMediaType(imagePath),
-      ),
+      imageBytes == null
+          ? await http.MultipartFile.fromPath(
+              'file',
+              imagePath,
+              filename: safeFilename,
+              contentType: imageMediaType(uploadName),
+            )
+          : http.MultipartFile.fromBytes(
+              'file',
+              imageBytes,
+              filename: safeFilename,
+              contentType: imageMediaType(uploadName),
+            ),
     );
     if (companionText?.trim().isNotEmpty == true) {
       request.fields['companion_text'] = companionText!.trim();
@@ -268,16 +290,15 @@ class LocalAnalyzeService implements AnalyzeService {
     final date = kind == LoopKind.coupon || kind == LoopKind.place
         ? null
         : extractedDate;
-    final expiresOn =
-        (kind == LoopKind.coupon || kind == LoopKind.purchase)
-            ? extractedDate
-            : null;
+    final expiresOn = (kind == LoopKind.coupon || kind == LoopKind.purchase)
+        ? extractedDate
+        : null;
     final startTime =
         (kind == LoopKind.appointment ||
-                kind == LoopKind.deadline ||
-                kind == LoopKind.reservation)
-            ? _explicitTime(text)
-            : null;
+            kind == LoopKind.deadline ||
+            kind == LoopKind.reservation)
+        ? _explicitTime(text)
+        : null;
     final title = _localTitle(text, kind);
     final place = kind == LoopKind.place
         ? _explicitPlace(text) ?? title
@@ -349,6 +370,7 @@ class LocalAnalyzeService implements AnalyzeService {
     return OpenLoop.fromAnalyzeJson(
       fallbackJson,
       persistence: LoopPersistence.localDraft,
+      referenceTime: now,
     );
   }
 }
@@ -719,10 +741,30 @@ LoopKind _localKind(String text, DateTime now) {
   if (['마감', '제출', '공모전', '접수', '신청 기한', '데드라인'].any(text.contains)) {
     return LoopKind.deadline;
   }
-  if (['구매', '주문', '결제', '배송', '반품', '영수증', '쇼핑', '주문번호', '송장'].any(text.contains)) {
+  if ([
+    '구매',
+    '주문',
+    '결제',
+    '배송',
+    '반품',
+    '영수증',
+    '쇼핑',
+    '주문번호',
+    '송장',
+  ].any(text.contains)) {
     return LoopKind.purchase;
   }
-  if (['예약', '체크인', '항공권', '호텔', '숙소', '티켓', '탑승', '진료', '예매'].any(text.contains)) {
+  if ([
+    '예약',
+    '체크인',
+    '항공권',
+    '호텔',
+    '숙소',
+    '티켓',
+    '탑승',
+    '진료',
+    '예매',
+  ].any(text.contains)) {
     return LoopKind.reservation;
   }
   if (['회의', '미팅', '약속', '만나', '만남', '방문'].any(text.contains)) {

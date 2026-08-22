@@ -31,6 +31,13 @@ ThemeData openLoopDarkTheme() => _darkTheme;
 
 final ThemeData _lightTheme = ThemeData(
   brightness: Brightness.light,
+  fontFamilyFallback: const [
+    '-apple-system',
+    'BlinkMacSystemFont',
+    'Apple SD Gothic Neo',
+    'Malgun Gothic',
+    'sans-serif',
+  ],
   scaffoldBackgroundColor: OLColors.background,
   colorScheme: ColorScheme.fromSeed(
     seedColor: OLColors.cobalt,
@@ -112,6 +119,13 @@ final ThemeData _lightTheme = ThemeData(
 
 final ThemeData _darkTheme = ThemeData(
   brightness: Brightness.dark,
+  fontFamilyFallback: const [
+    '-apple-system',
+    'BlinkMacSystemFont',
+    'Apple SD Gothic Neo',
+    'Malgun Gothic',
+    'sans-serif',
+  ],
   scaffoldBackgroundColor: OLColors.darkBackground,
   colorScheme: ColorScheme.fromSeed(
     seedColor: OLColors.cobalt,

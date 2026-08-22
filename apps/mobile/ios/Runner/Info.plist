@@ -16,6 +16,12 @@
 	<string>OpenLoop가 현재 위치를 바탕으로 정확한 길찾기 및 날씨 예보를 제공하기 위해 위치 정보를 사용합니다.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>OpenLoop가 현재 위치를 바탕으로 정확한 길찾기 및 날씨 예보를 제공하기 위해 위치 정보를 사용합니다.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>OpenLoop가 분석한 일정을 기기 캘린더에 등록하기 위해 캘린더 접근 권한이 필요합니다.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>OpenLoop가 분석한 일정을 기기 캘린더에 등록하기 위해 캘린더 접근 권한이 필요합니다.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>OpenLoop가 분석한 일정을 기기 캘린더에 등록하기 위해 캘린더 접근 권한이 필요합니다.</string>
 	<key>AppGroupId</key>
 	<string>group.com.openloop.openloop_mobile</string>
 	<key>CFBundleURLTypes</key>
@@ -26,6 +32,7 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>ShareMedia-$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+				<string>openloop</string>
 			</array>
 		</dict>
 	</array>
@@ -47,8 +54,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
+	<string>BrandLaunch</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UISupportedInterfaceOrientations</key>

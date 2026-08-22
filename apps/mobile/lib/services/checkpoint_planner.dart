@@ -71,7 +71,8 @@ List<CheckpointPlan> planCheckpoints({
     (item) => item.dueAt.isBefore(eventAt),
   );
   if (!hasUpcomingPreparation && eventAt.isAfter(reference)) {
-    final shortLeadTimes = (kind == LoopKind.appointment || kind == LoopKind.reservation)
+    final shortLeadTimes =
+        (kind == LoopKind.appointment || kind == LoopKind.reservation)
         ? <({String offset, String label, Duration delta})>[
             (
               offset: 'T-15m',

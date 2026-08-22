@@ -27,13 +27,92 @@ void main() {
     );
   });
 
+  testWidgets('startup splash reveals the OpenLoop mark before home', (
+    tester,
+  ) async {
+    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pump();
+
+    expect(find.byKey(const Key('startup-logo')), findsOneWidget);
+    expect(find.byKey(const Key('startup-wordmark')), findsOneWidget);
+    expect(find.byKey(const Key('capture-button')), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1850));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('startup-logo')), findsNothing);
+    expect(find.byKey(const Key('capture-button')), findsOneWidget);
+  });
+
+  testWidgets('cold-start shared result waits for the complete splash', (
+    tester,
+  ) async {
+    await repository.savePendingDraft(_remoteDraft());
+    await controller.initialize();
+
+    await tester.pumpWidget(
+      OpenLoopApp(
+        controller: controller,
+        splashDuration: const Duration(milliseconds: 800),
+      ),
+    );
+    await tester.pump();
+    await AppIntegrations.instance.handleNotificationPayload(
+      'draft:draft-loop',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('startup-logo')), findsOneWidget);
+    expect(find.text('분석 결과'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('분석 결과'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 379));
+    expect(find.text('분석 결과'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+
+    expect(find.byKey(const Key('startup-logo')), findsNothing);
+    expect(find.text('분석 결과'), findsOneWidget);
+    expect(find.text('향수 거래'), findsOneWidget);
+    expect(await repository.loadPendingDraft(), isNull);
+  });
+
+  testWidgets('ordinary cold start does not reopen an unrequested draft', (
+    tester,
+  ) async {
+    await repository.savePendingDraft(_remoteDraft());
+
+    await tester.pumpWidget(
+      OpenLoopApp(
+        controller: controller,
+        splashDuration: const Duration(milliseconds: 100),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('startup-logo')), findsNothing);
+    expect(find.byKey(const Key('capture-button')), findsOneWidget);
+    expect(find.text('분석 결과'), findsNothing);
+    expect(controller.pendingReviewedDraft?.id, equals('draft-loop'));
+    expect(AppIntegrations.instance.pendingDraft.value, isNull);
+    expect((await repository.loadPendingDraft())?.id, equals('draft-loop'));
+  });
+
   testWidgets('captures, analyzes, saves, details, and closes a deadline', (
     tester,
   ) async {
     final future = DateTime.now().add(const Duration(days: 14));
     final date =
         '${future.year}-${future.month.toString().padLeft(2, '0')}-${future.day.toString().padLeft(2, '0')}';
-    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpWidget(
+      OpenLoopApp(controller: controller, splashDuration: Duration.zero),
+    );
     await tester.pumpAndSettle();
     expect(find.text('아직 Open Loop가 없습니다.'), findsOneWidget);
 
@@ -111,7 +190,9 @@ void main() {
         defaultBaseUrl: '',
       );
 
-      await tester.pumpWidget(OpenLoopApp(controller: controller));
+      await tester.pumpWidget(
+        OpenLoopApp(controller: controller, splashDuration: Duration.zero),
+      );
       await tester.pumpAndSettle();
 
       expect(deviceActions.notificationPermissionCalls, 1);
@@ -123,7 +204,9 @@ void main() {
   testWidgets('settings persist base URL and retention choice', (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1100));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpWidget(
+      OpenLoopApp(controller: controller, splashDuration: Duration.zero),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('settings-button')));
     await tester.pumpAndSettle();
@@ -537,6 +620,7 @@ void main() {
         deviceActions: deviceActions,
         defaultBaseUrl: '',
       );
+      final futureDate = DateTime.now().add(const Duration(days: 1));
       final loop = OpenLoop(
         id: 'calendar-handoff',
         kind: LoopKind.appointment,
@@ -544,7 +628,7 @@ void main() {
         title: '성수 회의',
         source: 'image',
         createdAt: DateTime(2026, 8, 16),
-        date: DateTime(2026, 8, 20),
+        date: DateTime(futureDate.year, futureDate.month, futureDate.day),
         time: '19:00:00',
         actions: const [
           LoopAction(id: 'calendar', type: 'calendar', title: '일정 추가'),
@@ -609,6 +693,32 @@ void main() {
       expect(find.byType(CupertinoAlertDialog), findsOneWidget);
       expect(find.text('취소'), findsOneWidget);
       expect(find.text('삭제'), findsOneWidget);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+
+  testWidgets(
+    'showAdaptiveDatePicker opens safely with past expired dates (e.g. 2024)',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showAdaptiveDatePicker(
+                context,
+                initialDate: DateTime(2024, 8, 8),
+              ),
+              child: const Text('날짜 선택 열기'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('날짜 선택 열기'));
+      await tester.pumpAndSettle();
+      expect(find.text('완료'), findsOneWidget);
+      expect(find.text('취소'), findsOneWidget);
+      await tester.tap(find.text('취소'));
+      await tester.pumpAndSettle();
     },
     variant: TargetPlatformVariant.only(TargetPlatform.iOS),
   );
@@ -764,7 +874,9 @@ void main() {
         deviceActions: deviceActions,
       );
 
-      await tester.pumpWidget(OpenLoopApp(controller: controller));
+      await tester.pumpWidget(
+        OpenLoopApp(controller: controller, splashDuration: Duration.zero),
+      );
       await tester.pumpAndSettle();
 
       // Open settings
@@ -800,10 +912,7 @@ void main() {
       await tester.ensureVisible(appointmentBtn);
       await tester.tap(appointmentBtn);
       await tester.pumpAndSettle();
-      expect(
-        find.text('🔔 날씨 정보가 포함된 약속 테스트 푸시 알림을 발송했습니다.'),
-        findsOneWidget,
-      );
+      expect(find.text('🔔 날씨 정보가 포함된 약속 테스트 푸시 알림을 발송했습니다.'), findsOneWidget);
     },
   );
 
@@ -860,7 +969,9 @@ void main() {
 
     repository.loops = [couponLoop, appointmentLoop, placeLoop, closedLoop];
 
-    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpWidget(
+      OpenLoopApp(controller: controller, splashDuration: Duration.zero),
+    );
     await tester.pumpAndSettle();
 
     // 1. 전체 (활성 3개: 쿠폰, 약속, 장소)
@@ -909,7 +1020,9 @@ void main() {
     expect(find.text('맛있는 파스타집'), findsOneWidget);
   });
 
-  testWidgets('과거 유효기간(2024-08-08) 쿠폰 등록 시 종료 상태로 처리되고 종료 탭에 표시된다', (tester) async {
+  testWidgets('과거 유효기간(2024-08-08) 쿠폰 등록 시 종료 상태로 처리되고 종료 탭에 표시된다', (
+    tester,
+  ) async {
     final repository = MemoryLoopRepository();
     final controller = AppController(
       repository: repository,
@@ -936,7 +1049,9 @@ void main() {
     // 승인 및 저장
     await controller.approveDraft(expiredCoupon);
 
-    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpWidget(
+      OpenLoopApp(controller: controller, splashDuration: Duration.zero),
+    );
     await tester.pumpAndSettle();
 
     // 1. 전체(활성) 탭에는 만료 쿠폰이 안 뜸
@@ -961,7 +1076,9 @@ void main() {
     );
 
     repository.loops = [closedLoop];
-    await tester.pumpWidget(OpenLoopApp(controller: controller));
+    await tester.pumpWidget(
+      OpenLoopApp(controller: controller, splashDuration: Duration.zero),
+    );
     await tester.pumpAndSettle();
 
     // 1. 종료 탭으로 이동 후 상세 화면 진입
@@ -990,7 +1107,10 @@ void main() {
     final completer = Completer<OpenLoop>();
     await tester.pumpWidget(
       MaterialApp(
-        home: ProcessingScreen(result: completer.future, controller: controller),
+        home: ProcessingScreen(
+          result: completer.future,
+          controller: controller,
+        ),
       ),
     );
     await tester.pump();
@@ -1021,61 +1141,111 @@ void main() {
     expect(find.text('분석 결과'), findsOneWidget);
   });
 
-  test('AppController.analyzeInBackground는 분석 후 맞춤 알림을 발송하고 pendingDraft를 준비한다', () async {
+  test(
+    'AppController.analyzeInBackground는 분석 후 맞춤 알림을 발송하고 pendingDraft를 준비한다',
+    () async {
+      final draft = await controller.analyzeInBackground(
+        text: '스타벅스 아메리카노 2026년 12월 31일까지',
+        sendNotificationOnComplete: true,
+      );
+
+      expect(deviceActions.notificationCalls, 1);
+      expect(deviceActions.lastNotificationTitle, contains('정리 완료'));
+      expect(
+        deviceActions.lastNotificationPayload,
+        equals('draft:${draft.id}'),
+      );
+      expect(AppIntegrations.instance.pendingDraftLoop?.id, equals(draft.id));
+
+      // 알림 페이로드 수신 시 pendingDraft로 연결 검증
+      AppIntegrations.instance.handleNotificationPayload(
+        deviceActions.lastNotificationPayload!,
+      );
+      expect(AppIntegrations.instance.pendingDraft.value?.id, equals(draft.id));
+    },
+  );
+
+  test('앱 내부 분석은 결과 화면을 보여주므로 중복 완료 알림을 보내지 않는다', () async {
     final draft = await controller.analyzeInBackground(
-      text: '스타벅스 아메리카노 2026년 12월 31일까지',
-      sendNotificationOnComplete: true,
+      text: '8월 22일 오후 7시 성수역 3번 출구에서 저녁 약속',
+      sendNotificationOnComplete: false,
     );
 
-    expect(deviceActions.notificationCalls, 1);
-    expect(deviceActions.lastNotificationTitle, contains('정리 완료'));
-    expect(deviceActions.lastNotificationPayload, equals('draft:${draft.id}'));
-    expect(AppIntegrations.instance.pendingDraftLoop?.id, equals(draft.id));
-
-    // 알림 페이로드 수신 시 pendingDraft로 연결 검증
-    AppIntegrations.instance.handleNotificationPayload(deviceActions.lastNotificationPayload!);
-    expect(AppIntegrations.instance.pendingDraft.value?.id, equals(draft.id));
+    expect(deviceActions.notificationCalls, 0);
+    expect(controller.pendingReviewedDraft?.id, draft.id);
+    expect(await repository.loadPendingDraft(), isNull);
   });
 
-  test('AppController.analyzeInBackground는 분석 초안을 repository에 저장하고 알림 수신 시 복원된다', () async {
+  test('저장하지 않은 앱 내부 분석 초안은 다음 실행에 복원되지 않는다', () async {
     final testRepo = MemoryLoopRepository();
-    final testController = AppController(
+    final firstController = AppController(
       repository: testRepo,
       deviceActions: deviceActions,
       defaultBaseUrl: '',
     );
-    await testController.initialize();
+    await firstController.initialize();
 
-    final draft = await testController.analyzeInBackground(
-      text: '스타벅스 아메리카노 2026년 12월 31일까지',
-      sendNotificationOnComplete: true,
+    await firstController.analyzeInBackground(
+      text: '2026년 12월 31일 오후 7시 성수역 3번 출구에서 저녁 약속',
+      sendNotificationOnComplete: false,
     );
+    expect(firstController.pendingReviewedDraft, isNotNull);
+    expect(await testRepo.loadPendingDraft(), isNull);
 
-    // 1. repository에 pendingDraft가 저장됨
-    final saved = await testRepo.loadPendingDraft();
-    expect(saved?.id, equals(draft.id));
-    expect(saved?.title, contains('스타벅스 아메리카노'));
-
-    // 2. 앱이 종료되었다가 다시 켜지는 상황 시뮬레이션
     AppIntegrations.instance.reset();
-    expect(AppIntegrations.instance.pendingDraftLoop, isNull);
-
-    final coldRepo = testRepo;
-    final coldController = AppController(
-      repository: coldRepo,
+    final relaunchedController = AppController(
+      repository: testRepo,
       deviceActions: deviceActions,
       defaultBaseUrl: '',
     );
-    await coldController.initialize();
+    await relaunchedController.initialize();
 
-    // 3. 앱 초기화 시 저장된 pendingDraft가 자동 복원됨
-    expect(coldController.pendingReviewedDraft?.id, equals(draft.id));
-    expect(AppIntegrations.instance.pendingDraftLoop?.id, equals(draft.id));
-
-    // 4. 알림 페이로드(draft:id) 수신 시 즉시 pendingDraft.value로 연결됨
-    AppIntegrations.instance.handleNotificationPayload('draft:${draft.id}');
-    expect(AppIntegrations.instance.pendingDraft.value?.id, equals(draft.id));
+    expect(relaunchedController.pendingReviewedDraft, isNull);
+    expect(AppIntegrations.instance.pendingDraftLoop, isNull);
   });
+
+  test(
+    'AppController.analyzeInBackground는 분석 초안을 repository에 저장하고 알림 수신 시 복원된다',
+    () async {
+      final testRepo = MemoryLoopRepository();
+      final testController = AppController(
+        repository: testRepo,
+        deviceActions: deviceActions,
+        defaultBaseUrl: '',
+      );
+      await testController.initialize();
+
+      final draft = await testController.analyzeInBackground(
+        text: '스타벅스 아메리카노 2026년 12월 31일까지',
+        sendNotificationOnComplete: true,
+      );
+
+      // 1. repository에 pendingDraft가 저장됨
+      final saved = await testRepo.loadPendingDraft();
+      expect(saved?.id, equals(draft.id));
+      expect(saved?.title, contains('스타벅스 아메리카노'));
+
+      // 2. 앱이 종료되었다가 다시 켜지는 상황 시뮬레이션
+      AppIntegrations.instance.reset();
+      expect(AppIntegrations.instance.pendingDraftLoop, isNull);
+
+      final coldRepo = testRepo;
+      final coldController = AppController(
+        repository: coldRepo,
+        deviceActions: deviceActions,
+        defaultBaseUrl: '',
+      );
+      await coldController.initialize();
+
+      // 3. 앱 초기화 시 저장된 pendingDraft가 자동 복원됨
+      expect(coldController.pendingReviewedDraft?.id, equals(draft.id));
+      expect(AppIntegrations.instance.pendingDraftLoop?.id, equals(draft.id));
+
+      // 4. 알림 페이로드(draft:id) 수신 시 즉시 pendingDraft.value로 연결됨
+      AppIntegrations.instance.handleNotificationPayload('draft:${draft.id}');
+      expect(AppIntegrations.instance.pendingDraft.value?.id, equals(draft.id));
+    },
+  );
 }
 
 OpenLoop _remoteDraft() => OpenLoop(
@@ -1109,6 +1279,8 @@ class _RecordingLoopApi implements LoopApi {
   @override
   Future<OpenLoop> analyzeImage({
     required String imagePath,
+    List<int>? imageBytes,
+    String? imageName,
     String? companionText,
     String source = 'image',
   }) async => _remoteDraft();

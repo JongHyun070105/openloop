@@ -12,6 +12,18 @@ from app.errors import ExternalIntegrationError, ExternalIntegrationTimeout
 from app.main import create_app
 
 
+class CapturingLiveActivitySender:
+    provider = "fcm"
+
+    def __init__(self, accepted: bool = True) -> None:
+        self.accepted = accepted
+        self.calls: list[tuple[str, str, str]] = []
+
+    def send_completed(self, owner_id: str, title: str, job_id: str) -> bool:
+        self.calls.append((owner_id, title, job_id))
+        return self.accepted
+
+
 class ApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -59,6 +71,47 @@ class ApiTests(unittest.TestCase):
             },
         )
         self.assertEqual(invalid.status_code, 422)
+
+    def test_external_share_prefers_live_activity_and_exposes_acceptance_header(self) -> None:
+        sender = CapturingLiveActivitySender()
+        app = create_app(
+            database_path=Path(self.temp_dir.name) / "live-activity.sqlite3",
+            analyzer=DeterministicAnalysisAdapter(),
+            live_activity_sender=sender,
+        )
+        with TestClient(app) as client:
+            owner = "11111111-1111-4111-8111-111111111111"
+            job_id = "22222222-2222-4222-8222-222222222222"
+            response = client.post(
+                "/v1/analyze",
+                json={"text": "8월 22일 오후 7시 성수역에서 저녁 약속"},
+                headers={
+                    "X-OpenLoop-Install-Id": owner,
+                    "X-OpenLoop-Live-Activity": "preferred",
+                    "X-OpenLoop-Analysis-Job-Id": job_id,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-OpenLoop-Live-Activity"], "accepted")
+        self.assertEqual(sender.calls[0][0], owner)
+        self.assertEqual(sender.calls[0][2], job_id)
+
+    def test_in_app_analysis_does_not_send_live_activity(self) -> None:
+        sender = CapturingLiveActivitySender()
+        app = create_app(
+            database_path=Path(self.temp_dir.name) / "no-live-activity.sqlite3",
+            analyzer=DeterministicAnalysisAdapter(),
+            live_activity_sender=sender,
+        )
+        with TestClient(app) as client:
+            response = client.post(
+                "/v1/analyze",
+                json={"text": "8월 22일 오후 7시 성수역에서 저녁 약속"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(sender.calls, [])
 
     def test_capabilities_expose_provider_state_without_configuration_values(self) -> None:
         response = self.client.get("/v1/capabilities")

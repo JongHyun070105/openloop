@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math' as math;
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
@@ -14,27 +16,77 @@ import 'app_controller.dart';
 import 'design_system.dart';
 import 'models/open_loop.dart';
 import 'services/external_integrations.dart';
+import 'services/installation_identity.dart';
 import 'services/shared_capture.dart';
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.unknown,
+      };
+}
 
 final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
+const _embeddedWebTopInset = 44.0;
+const _embeddedWebBottomInset = 48.0;
+const _startupTransitionDuration = Duration(milliseconds: 180);
+const _startupNavigationDelay = Duration(milliseconds: 100);
+
+EdgeInsets _embeddedWebSafePadding(EdgeInsets current) => EdgeInsets.fromLTRB(
+  current.left,
+  current.top < _embeddedWebTopInset ? _embeddedWebTopInset : current.top,
+  current.right,
+  current.bottom < _embeddedWebBottomInset
+      ? _embeddedWebBottomInset
+      : current.bottom,
+);
+
 class OpenLoopApp extends StatefulWidget {
-  const OpenLoopApp({super.key, required this.controller});
+  const OpenLoopApp({
+    super.key,
+    required this.controller,
+    this.splashDuration = const Duration(milliseconds: 1750),
+  });
+
   final AppController controller;
+  final Duration splashDuration;
+
   @override
   State<OpenLoopApp> createState() => _OpenLoopAppState();
 }
 
-class _OpenLoopAppState extends State<OpenLoopApp>
-    with WidgetsBindingObserver {
+class _OpenLoopAppState extends State<OpenLoopApp> with WidgetsBindingObserver {
   final navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<List<SharedMediaFile>>? shareSubscription;
+  Timer? _splashTimer;
+  Timer? _startupTransitionTimer;
   SharedCapturePayload? _queuedShare;
+  bool _processingSharedCapture = false;
+  bool _checkingRequestedDraft = false;
+  bool _splashMinimumElapsed = false;
+  bool _startupTransitionScheduled = false;
+  bool _startupNavigationReady = false;
+  String? _openingDraftId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.splashDuration == Duration.zero) {
+      _splashMinimumElapsed = true;
+    } else {
+      _splashTimer = Timer(widget.splashDuration, () {
+        if (!mounted) return;
+        setState(() => _splashMinimumElapsed = true);
+      });
+    }
     unawaited(_initialize());
     _listenForShares();
     AppIntegrations.instance.pendingLoopId.addListener(_openPushLoop);
@@ -44,12 +96,21 @@ class _OpenLoopAppState extends State<OpenLoopApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (!_splashMinimumElapsed) {
+        setState(() => _splashMinimumElapsed = true);
+      }
       unawaited(_checkDirectSharedMedia());
     }
   }
 
   Future<void> _checkDirectSharedMedia() async {
     try {
+      if (await _restoreRequestedDraft()) return;
+      final draft = await NativeSharedMediaBridge.getAppGroupPendingDraft();
+      if (draft != null) {
+        await _publishPendingDraft(draft);
+        return;
+      }
       final payload = await NativeSharedMediaBridge.getAppGroupSharedCapture();
       if (payload != null && !payload.isEmpty) {
         _openSharedPayload(payload);
@@ -57,9 +118,43 @@ class _OpenLoopAppState extends State<OpenLoopApp>
     } catch (_) {}
   }
 
+  Future<bool> _restoreRequestedDraft() async {
+    if (_checkingRequestedDraft) return true;
+    final jobId = await NativeSharedMediaBridge.getPendingDraftRequest();
+    if (jobId == null) return false;
+
+    _checkingRequestedDraft = true;
+    try {
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (mounted && DateTime.now().isBefore(deadline)) {
+        final draft = await NativeSharedMediaBridge.getAppGroupPendingDraft(
+          jobId: jobId,
+        );
+        if (draft != null) {
+          await NativeSharedMediaBridge.clearPendingDraftRequest(jobId);
+          await _publishPendingDraft(draft);
+          return true;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+      await NativeSharedMediaBridge.clearPendingDraftRequest(jobId);
+      return false;
+    } finally {
+      _checkingRequestedDraft = false;
+    }
+  }
+
+  Future<void> _publishPendingDraft(OpenLoop draft) async {
+    await widget.controller.repository.savePendingDraft(draft);
+    widget.controller.pendingReviewedDraft = draft;
+    AppIntegrations.instance.pendingDraftLoop = draft;
+    AppIntegrations.instance.pendingDraft.value = draft;
+  }
+
   Future<void> _initialize() async {
-    await widget.controller.initialize();
-    await _checkDirectSharedMedia();
+    try {
+      await widget.controller.initialize();
+    } catch (_) {}
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(widget.controller.enableAutomaticReminders());
@@ -67,6 +162,23 @@ class _OpenLoopAppState extends State<OpenLoopApp>
         _openPushLoop();
       }
     });
+    try {
+      if (widget.controller.baseUrl.trim().isNotEmpty) {
+        unawaited(
+          NativeSharedMediaBridge.configureShareExtension(
+            apiBaseUrl: widget.controller.baseUrl,
+            installationId: await InstallationIdentity.get(),
+          ),
+        );
+      }
+    } catch (_) {}
+    final restoredDraft = widget.controller.pendingReviewedDraft;
+    if (restoredDraft != null) {
+      AppIntegrations.instance.pendingDraftLoop = restoredDraft;
+    }
+    unawaited(_checkDirectSharedMedia());
+    _openPushDraft();
+    _openPushLoop();
     final queuedShare = _queuedShare;
     _queuedShare = null;
     if (queuedShare != null) {
@@ -75,55 +187,72 @@ class _OpenLoopAppState extends State<OpenLoopApp>
   }
 
   void _openPushLoop() {
-    if (!mounted || !widget.controller.ready) return;
+    if (!mounted || !widget.controller.ready || !_startupNavigationReady) {
+      return;
+    }
     final id = AppIntegrations.instance.pendingLoopId.value;
     if (id == null) return;
     if (!widget.controller.loops.any((loop) => loop.id == id)) return;
+    final nav = navigatorKey.currentState;
+    if (nav == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openPushLoop();
+      });
+      return;
+    }
     AppIntegrations.instance.pendingLoopId.value = null;
-    void doPush() {
-      if (!mounted) return;
-      navigatorKey.currentState?.push(
-        MaterialPageRoute<void>(
-          builder: (_) =>
-              LoopDetailScreen(controller: widget.controller, loopId: id),
-        ),
-      );
-    }
-
-    if (WidgetsBinding.instance.schedulerPhase ==
-        SchedulerPhase.persistentCallbacks) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => doPush());
-    } else {
-      doPush();
-    }
+    nav.push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            LoopDetailScreen(controller: widget.controller, loopId: id),
+      ),
+    );
   }
 
-  void _openPushDraft() {
-    if (!mounted || !widget.controller.ready) return;
+  void _openPushDraft() => unawaited(_openPushDraftAfterStartup());
+
+  Future<void> _openPushDraftAfterStartup() async {
+    if (!mounted || !widget.controller.ready || !_startupNavigationReady) {
+      return;
+    }
     final draft = AppIntegrations.instance.pendingDraft.value;
     if (draft == null) return;
+    if (_openingDraftId == draft.id) return;
+    final nav = navigatorKey.currentState;
+    if (nav == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openPushDraft();
+      });
+      return;
+    }
+    _openingDraftId = draft.id;
     AppIntegrations.instance.pendingDraft.value = null;
-    void doPush() {
-      if (!mounted) return;
-      final hasMissing = draft.effectiveMissingFields.isNotEmpty;
-      navigatorKey.currentState?.push(
-        MaterialPageRoute<void>(
-          builder: (_) => (draft.state == LoopState.needsInput && hasMissing)
-              ? AmbiguityScreen(controller: widget.controller, loop: draft)
-              : ReviewScreen(controller: widget.controller, loop: draft),
-        ),
-      );
+    try {
+      await widget.controller.markPendingDraftPresented(draft.id);
+    } catch (_) {
+      // Presenting the already available result must not be blocked by a
+      // best-effort cleanup failure.
     }
-
-    if (WidgetsBinding.instance.schedulerPhase ==
-        SchedulerPhase.persistentCallbacks) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => doPush());
-    } else {
-      doPush();
-    }
+    if (!mounted) return;
+    final hasMissing = draft.effectiveMissingFields.isNotEmpty;
+    unawaited(
+      nav
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  (draft.state == LoopState.needsInput && hasMissing)
+                  ? AmbiguityScreen(controller: widget.controller, loop: draft)
+                  : ReviewScreen(controller: widget.controller, loop: draft),
+            ),
+          )
+          .whenComplete(() {
+            if (_openingDraftId == draft.id) _openingDraftId = null;
+          }),
+    );
   }
 
   Future<void> _listenForShares() async {
+    if (kIsWeb) return;
     try {
       shareSubscription = ReceiveSharingIntent.instance.getMediaStream().listen(
         _openSharedMedia,
@@ -131,7 +260,10 @@ class _OpenLoopAppState extends State<OpenLoopApp>
       );
       final initial = await ReceiveSharingIntent.instance
           .getInitialMedia()
-          .timeout(const Duration(milliseconds: 200), onTimeout: () => const []);
+          .timeout(
+            const Duration(milliseconds: 200),
+            onTimeout: () => const [],
+          );
       _openSharedMedia(initial);
     } catch (_) {
       // Sharing is unavailable on web and some test hosts; normal capture remains usable.
@@ -154,32 +286,60 @@ class _OpenLoopAppState extends State<OpenLoopApp>
     _openSharedPayload(capture);
   }
 
-  Future<void> _processSharedCaptureInBackground(SharedCapturePayload capture) async {
+  Future<void> _processSharedCaptureInBackground(
+    SharedCapturePayload capture,
+  ) async {
+    if (_processingSharedCapture) return;
+    _processingSharedCapture = true;
     try {
       final loop = await widget.controller.analyzeInBackground(
         text: capture.text,
         imagePath: capture.imagePath,
         source: capture.imagePath != null ? 'image' : 'text',
-        sendNotificationOnComplete: true,
+        sendNotificationOnComplete: false,
       );
+      await NativeSharedMediaBridge.clearAppGroupSharedCapture();
       if (mounted && widget.controller.ready) {
-        final hasMissing = loop.effectiveMissingFields.isNotEmpty;
-        navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => (loop.state == LoopState.needsInput && hasMissing)
-                ? AmbiguityScreen(controller: widget.controller, loop: loop)
-                : ReviewScreen(controller: widget.controller, loop: loop),
-          ),
-        );
+        AppIntegrations.instance.pendingDraftLoop = loop;
+        AppIntegrations.instance.pendingDraft.value = loop;
       }
     } catch (_) {
-      // 에러 발생 시 사용자에게 필요 시 안내
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('공유 이미지를 분석하지 못했어요. 앱에서 다시 시도해 주세요.')),
+      );
+    } finally {
+      _processingSharedCapture = false;
     }
+  }
+
+  void _scheduleStartupNavigation() {
+    if (_startupNavigationReady ||
+        _startupTransitionScheduled ||
+        !_splashMinimumElapsed ||
+        !widget.controller.ready) {
+      return;
+    }
+    _startupTransitionScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_splashMinimumElapsed || !widget.controller.ready) {
+        _startupTransitionScheduled = false;
+        return;
+      }
+      _startupTransitionTimer = Timer(_startupNavigationDelay, () {
+        if (!mounted) return;
+        _startupNavigationReady = true;
+        _openPushDraft();
+        _openPushLoop();
+      });
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _splashTimer?.cancel();
+    _startupTransitionTimer?.cancel();
     shareSubscription?.cancel();
     AppIntegrations.instance.pendingLoopId.removeListener(_openPushLoop);
     AppIntegrations.instance.pendingDraft.removeListener(_openPushDraft);
@@ -189,31 +349,224 @@ class _OpenLoopAppState extends State<OpenLoopApp>
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.controller,
-    builder: (context, _) => MaterialApp(
-      navigatorKey: navigatorKey,
-      scaffoldMessengerKey: scaffoldMessengerKey,
-      title: 'OpenLoop',
-      debugShowCheckedModeBanner: false,
-      theme: openLoopTheme(),
-      darkTheme: openLoopDarkTheme(),
-      themeMode: widget.controller.themeMode,
-      themeAnimationDuration: const Duration(milliseconds: 250),
-      themeAnimationCurve: Curves.easeInOutCubic,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('ko', 'KR'),
-        Locale('en', 'US'),
-      ],
-      locale: const Locale('ko', 'KR'),
-      home: widget.controller.ready
-          ? HomeScreen(controller: widget.controller)
-          : const Scaffold(body: Center(child: CircularProgressIndicator())),
+    builder: (context, _) {
+      _scheduleStartupNavigation();
+      return MaterialApp(
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: scaffoldMessengerKey,
+        title: 'OpenLoop',
+        scrollBehavior: const AppScrollBehavior(),
+        debugShowCheckedModeBanner: false,
+        theme: openLoopTheme(),
+        darkTheme: openLoopDarkTheme(),
+        themeMode: widget.controller.themeMode,
+        themeAnimationDuration: const Duration(milliseconds: 250),
+        themeAnimationCurve: Curves.easeInOutCubic,
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+        locale: const Locale('ko', 'KR'),
+        builder: (context, child) {
+          final embeddedWeb =
+              kIsWeb && Uri.base.queryParameters['embedded'] == '1';
+          if (!embeddedWeb || child == null) return child ?? const SizedBox();
+          final mediaQuery = MediaQuery.of(context);
+          final safePadding = _embeddedWebSafePadding(mediaQuery.viewPadding);
+          return MediaQuery(
+            data: mediaQuery.copyWith(
+              padding: safePadding,
+              viewPadding: safePadding,
+            ),
+            child: child,
+          );
+        },
+        home: AnimatedSwitcher(
+          duration: _startupTransitionDuration,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: widget.controller.ready && _splashMinimumElapsed
+              ? HomeScreen(
+                  key: const ValueKey('home'),
+                  controller: widget.controller,
+                )
+              : const _StartupSplash(key: ValueKey('startup-splash')),
+        ),
+      );
+    },
+  );
+}
+
+class _StartupSplash extends StatefulWidget {
+  const _StartupSplash({super.key});
+
+  @override
+  State<_StartupSplash> createState() => _StartupSplashState();
+}
+
+class _StartupSplashState extends State<_StartupSplash>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _markScale;
+  late final Animation<double> _wordmarkOpacity;
+  late final Animation<Offset> _wordmarkOffset;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1700),
+    );
+    _markScale = Tween<double>(begin: 0.82, end: 1).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0, 0.72, curve: Curves.easeOutBack),
+      ),
+    );
+    _wordmarkOpacity = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.6, 0.86, curve: Curves.easeOut),
+    );
+    _wordmarkOffset =
+        Tween<Offset>(begin: const Offset(0, 0.34), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _controller,
+            curve: const Interval(0.6, 0.88, curve: Curves.easeOutCubic),
+          ),
+        );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SystemUiOverlayStyle.light,
+    child: Scaffold(
+      backgroundColor: OLColors.cobalt,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: _markScale,
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => CustomPaint(
+                  key: const Key('startup-logo'),
+                  size: const Size.square(148),
+                  painter: _OpenLoopMarkPainter(_controller.value),
+                ),
+              ),
+            ),
+            const SizedBox(height: 26),
+            FadeTransition(
+              opacity: _wordmarkOpacity,
+              child: SlideTransition(
+                position: _wordmarkOffset,
+                child: const Text(
+                  key: Key('startup-wordmark'),
+                  'OpenLoop',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 29,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.9,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     ),
   );
+}
+
+class _OpenLoopMarkPainter extends CustomPainter {
+  const _OpenLoopMarkPainter(this.progress);
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide * 0.31;
+    final strokeWidth = size.shortestSide * 0.105;
+    final arcProgress = Curves.easeInOutCubic.transform(
+      ((progress - 0.04) / 0.58).clamp(0.0, 1.0),
+    );
+    final orbitProgress = Curves.easeInOutCubic.transform(
+      (progress / 0.68).clamp(0.0, 1.0),
+    );
+    final settleProgress = Curves.easeOut.transform(
+      ((progress - 0.58) / 0.22).clamp(0.0, 1.0),
+    );
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    const startAngle = 0.45;
+    final sweepAngle = math.pi * 1.48;
+    final markPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      rect,
+      startAngle,
+      sweepAngle * arcProgress,
+      false,
+      markPaint,
+    );
+
+    final orbitStart = -math.pi * 0.72;
+    final orbitEnd = -math.pi * 0.11 + math.pi * 2;
+    final orbitAngle = orbitStart + (orbitEnd - orbitStart) * orbitProgress;
+    final orbitRadius = radius * (1.42 - 0.28 * settleProgress);
+    final dotCenter =
+        center +
+        Offset(math.cos(orbitAngle), math.sin(orbitAngle)) * orbitRadius;
+    if (orbitProgress > 0.06 && orbitProgress < 0.96) {
+      for (var index = 3; index >= 1; index--) {
+        final trailAngle = orbitAngle - 0.13 * index;
+        final trailCenter =
+            center +
+            Offset(math.cos(trailAngle), math.sin(trailAngle)) * orbitRadius;
+        canvas.drawCircle(
+          trailCenter,
+          strokeWidth * (0.42 - index * 0.07),
+          Paint()..color = Colors.white.withValues(alpha: 0.06 * (4 - index)),
+        );
+      }
+    }
+    canvas.drawCircle(
+      dotCenter,
+      strokeWidth * 0.48,
+      Paint()..color = Colors.white,
+    );
+
+    if (settleProgress > 0 && settleProgress < 1) {
+      canvas.drawCircle(
+        dotCenter,
+        strokeWidth * (0.48 + settleProgress * 1.1),
+        Paint()
+          ..color = Colors.white.withValues(alpha: (1 - settleProgress) * 0.3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_OpenLoopMarkPainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class HomeScreen extends StatefulWidget {
@@ -319,42 +672,73 @@ bool isLoopUrgent(OpenLoop loop, [DateTime? referenceTime]) {
 
 class _HomeScreenState extends State<HomeScreen> {
   HomeFilter filter = HomeFilter.all;
+  Timer? _demoNotificationTimer;
+  Timer? _demoNotificationAutoDismiss;
+  bool _showDemoBanner = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _demoNotificationTimer = Timer(const Duration(seconds: 5), () {
+        if (!mounted) return;
+        if (widget.controller.loops.isNotEmpty) {
+          setState(() => _showDemoBanner = true);
+          _demoNotificationAutoDismiss = Timer(const Duration(seconds: 8), () {
+            if (mounted) setState(() => _showDemoBanner = false);
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _demoNotificationTimer?.cancel();
+    _demoNotificationAutoDismiss?.cancel();
+    super.dispose();
+  }
 
   List<OpenLoop> _filterLoops(List<OpenLoop> loops, HomeFilter targetFilter) {
     return switch (targetFilter) {
-      HomeFilter.all => loops
-          .where((l) => l.state != LoopState.closed && !isLoopExpired(l))
-          .toList(),
+      HomeFilter.all =>
+        loops
+            .where((l) => l.state != LoopState.closed && !isLoopExpired(l))
+            .toList(),
       HomeFilter.urgent => loops.where(isLoopUrgent).toList(),
-      HomeFilter.coupon => loops
-          .where(
-            (l) =>
-                l.kind == LoopKind.coupon &&
-                l.state != LoopState.closed &&
-                !isLoopExpired(l),
-          )
-          .toList(),
-      HomeFilter.schedule => loops
-          .where(
-            (l) =>
-                (l.kind == LoopKind.appointment ||
-                    l.kind == LoopKind.deadline ||
-                    l.kind == LoopKind.reservation) &&
-                l.state != LoopState.closed &&
-                !isLoopExpired(l),
-          )
-          .toList(),
-      HomeFilter.place => loops
-          .where(
-            (l) =>
-                (l.kind == LoopKind.place ||
-                    (l.place != null && l.place!.trim().isNotEmpty)) &&
-                l.state != LoopState.closed,
-          )
-          .toList(),
-      HomeFilter.closed => loops
-          .where((l) => l.state == LoopState.closed || isLoopExpired(l))
-          .toList(),
+      HomeFilter.coupon =>
+        loops
+            .where(
+              (l) =>
+                  l.kind == LoopKind.coupon &&
+                  l.state != LoopState.closed &&
+                  !isLoopExpired(l),
+            )
+            .toList(),
+      HomeFilter.schedule =>
+        loops
+            .where(
+              (l) =>
+                  (l.kind == LoopKind.appointment ||
+                      l.kind == LoopKind.deadline ||
+                      l.kind == LoopKind.reservation) &&
+                  l.state != LoopState.closed &&
+                  !isLoopExpired(l),
+            )
+            .toList(),
+      HomeFilter.place =>
+        loops
+            .where(
+              (l) =>
+                  (l.kind == LoopKind.place ||
+                      (l.place != null && l.place!.trim().isNotEmpty)) &&
+                  l.state != LoopState.closed,
+            )
+            .toList(),
+      HomeFilter.closed =>
+        loops
+            .where((l) => l.state == LoopState.closed || isLoopExpired(l))
+            .toList(),
     };
   }
 
@@ -364,92 +748,238 @@ class _HomeScreenState extends State<HomeScreen> {
     final loops = _filterLoops(allLoops, filter);
 
     return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 16, 22, 110),
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                key: const Key('settings-button'),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (_) =>
-                        SettingsScreen(controller: widget.controller),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(22, 16, 22, 110),
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    key: const Key('settings-button'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            SettingsScreen(controller: widget.controller),
+                      ),
+                    ),
+                    icon: const Icon(Icons.settings_outlined, size: 24),
+                    tooltip: '설정',
                   ),
                 ),
-                icon: const Icon(Icons.settings_outlined, size: 24),
-                tooltip: '설정',
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              '공유하면\n바로 정리해요.',
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : OLColors.navy,
-                fontSize: 32,
-                height: 1.2,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -1.2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '일정·장소·쿠폰을 구분하고 필요한 정보만 물어봅니다.',
-              style: TextStyle(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? OLColors.darkMuted
-                    : OLColors.muted,
-                fontSize: 15,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 24),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              clipBehavior: Clip.none,
-              child: Row(
-                children: [
-                  for (final item in HomeFilter.values)
-                    _FilterChip(
-                      key: Key('filter-chip-${item.name}'),
-                      label: item.label,
-                      selected: filter == item,
-                      count: _filterLoops(allLoops, item).length,
-                      onTap: () => setState(() => filter = item),
+                const SizedBox(height: 14),
+                Text(
+                  '공유하면\n바로 정리해요.',
+                  style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : OLColors.navy,
+                    fontSize: 32,
+                    height: 1.2,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '일정·장소·쿠폰을 구분하고 필요한 정보만 물어봅니다.',
+                  style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? OLColors.darkMuted
+                        : OLColors.muted,
+                    fontSize: 15,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  clipBehavior: Clip.none,
+                  child: Row(
+                    children: [
+                      for (final item in HomeFilter.values)
+                        _FilterChip(
+                          key: Key('filter-chip-${item.name}'),
+                          label: item.label,
+                          selected: filter == item,
+                          count: _filterLoops(allLoops, item).length,
+                          onTap: () => setState(() => filter = item),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                if (loops.isEmpty)
+                  if (allLoops.isEmpty)
+                    const _EmptyLoops()
+                  else
+                    _EmptyFilterLoops(filter: filter)
+                else
+                  ...loops.map(
+                    (loop) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: LoopCard(
+                        loop: loop,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => LoopDetailScreen(
+                              controller: widget.controller,
+                              loopId: loop.id,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
-            const SizedBox(height: 20),
-            if (loops.isEmpty)
-              if (allLoops.isEmpty)
-                const _EmptyLoops()
-              else
-                _EmptyFilterLoops(filter: filter)
-            else
-              ...loops.map(
-                (loop) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: LoopCard(
-                    loop: loop,
-                    onTap: () => Navigator.push(
+          ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOutBack,
+            top: _showDemoBanner ? 10 : -130,
+            left: 12,
+            right: 12,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 300),
+              opacity: _showDemoBanner ? 1.0 : 0.0,
+              child: SafeArea(
+                bottom: false,
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() => _showDemoBanner = false);
+                    final targetLoop = widget.controller.loops.firstWhere(
+                      (l) => l.title.contains('향수') || l.id == 'demo-loop-1',
+                      orElse: () => widget.controller.loops.first,
+                    );
+                    Navigator.push(
                       context,
                       MaterialPageRoute<void>(
                         builder: (_) => LoopDetailScreen(
                           controller: widget.controller,
-                          loopId: loop.id,
+                          loopId: targetLoop.id,
                         ),
+                      ),
+                    );
+                  },
+                  child: Material(
+                    elevation: 16,
+                    shadowColor: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.transparent,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xF2131A29),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: OLColors.cobalt,
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: OLColors.cobalt.withValues(alpha: 0.4),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.notifications_active_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'OpenLoop 알림',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Text(
+                                      '지금',
+                                      style: TextStyle(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.45,
+                                        ),
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  '향수 거래 (1시간 전)',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: -0.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Text(
+                                  '오후 4:00 종로5가역 12번 출구에서 만나요!',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.85),
+                                    fontSize: 11.5,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => setState(() => _showDemoBanner = false),
+                            child: const Padding(
+                              padding: EdgeInsets.all(4),
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: Colors.white54,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('capture-button'),
@@ -522,10 +1052,22 @@ class _CaptureScreenState extends State<CaptureScreen> {
 
   Future<void> _pickImage(ImageSource imageSource) async {
     try {
-      final picked = await ImagePicker().pickImage(
-        source: imageSource,
-        imageQuality: 82,
-      );
+      XFile? picked;
+      try {
+        picked = await ImagePicker().pickImage(
+          source: imageSource,
+          imageQuality: 82,
+        );
+      } catch (_) {
+        if (imageSource == ImageSource.camera) {
+          picked = await ImagePicker().pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 82,
+          );
+        } else {
+          rethrow;
+        }
+      }
       if (picked != null && mounted) {
         setState(() {
           image = picked;
@@ -553,13 +1095,20 @@ class _CaptureScreenState extends State<CaptureScreen> {
       error = null;
       analysisStarted = true;
     });
-    final result = widget.controller.analyzeInBackground(
-      imagePath: image?.path,
-      text: text.isEmpty ? null : text,
-      source: source,
-      sendNotificationOnComplete: false,
-    );
     try {
+      final selectedImage = image;
+      final imageBytes = kIsWeb && selectedImage != null
+          ? await selectedImage.readAsBytes()
+          : null;
+      if (!mounted) return;
+      final result = widget.controller.analyzeInBackground(
+        imagePath: selectedImage?.path,
+        imageBytes: imageBytes,
+        imageName: selectedImage?.name,
+        text: text.isEmpty ? null : text,
+        source: source,
+        sendNotificationOnComplete: false,
+      );
       final failure = await Navigator.push<String>(
         context,
         MaterialPageRoute<String>(
@@ -568,6 +1117,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
         ),
       );
       if (failure != null && mounted) setState(() => error = failure);
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = '이미지를 읽지 못했습니다. 다른 이미지를 선택해 다시 시도해 주세요.');
+      }
     } finally {
       if (mounted) setState(() => analysisStarted = false);
     }
@@ -723,6 +1276,13 @@ class _ProcessingScreenState extends State<ProcessingScreen>
       _stepTimer1?.cancel();
       _stepTimer2?.cancel();
       _pulseController.stop();
+      if (loop.isUnidentifiable) {
+        Navigator.pop(
+          context,
+          '일정이나 쿠폰 정보를 찾을 수 없는 사진입니다. 약속 대화나 예약·쿠폰 캡처를 올려주세요.',
+        );
+        return;
+      }
       final hasMissing = loop.effectiveMissingFields.isNotEmpty;
       await Navigator.pushReplacement(
         context,
@@ -762,33 +1322,39 @@ class _ProcessingScreenState extends State<ProcessingScreen>
               color: isCompleted
                   ? const Color(0xFF10B981)
                   : (isActive
-                      ? OLColors.cobalt
-                      : (isDark
-                          ? const Color(0xFF1E293B)
-                          : const Color(0xFFE2E8F0))),
+                        ? OLColors.cobalt
+                        : (isDark
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFFE2E8F0))),
             ),
             child: Center(
               child: isCompleted
-                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    )
                   : (isActive
-                      ? const SizedBox(
-                          width: 13,
-                          height: 13,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Text(
-                          '$stepNumber',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF64748B),
-                          ),
-                        )),
+                        ? const SizedBox(
+                            width: 13,
+                            height: 13,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            '$stepNumber',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                            ),
+                          )),
             ),
           ),
           const SizedBox(width: 14),
@@ -808,7 +1374,9 @@ class _ProcessingScreenState extends State<ProcessingScreen>
                               ? const Color(0xFFE2E8F0)
                               : const Color(0xFF334155))
                         : (isActive
-                              ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                              ? (isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A))
                               : (isDark
                                     ? const Color(0xFF64748B)
                                     : const Color(0xFF94A3B8))),
@@ -1076,11 +1644,22 @@ Future<DateTime?> showAdaptiveDatePicker(
   DateTime? firstDate,
   DateTime? lastDate,
 }) async {
-  final isIOS = !kIsWeb && Platform.isIOS;
+  final now = DateTime.now();
+  final defaultMin = now.subtract(const Duration(days: 365 * 10));
+  final minCandidate = firstDate ?? defaultMin;
+  final min = initialDate.isBefore(minCandidate)
+      ? initialDate.subtract(const Duration(days: 30))
+      : minCandidate;
+
+  final defaultMax = now.add(const Duration(days: 365 * 10));
+  final maxCandidate = lastDate ?? defaultMax;
+  final max = initialDate.isAfter(maxCandidate)
+      ? initialDate.add(const Duration(days: 30))
+      : maxCandidate;
+
+  final isIOS = !kIsWeb && Theme.of(context).platform == TargetPlatform.iOS;
   if (isIOS) {
     DateTime picked = initialDate;
-    final min = firstDate ?? DateTime.now().subtract(const Duration(days: 365));
-    final max = lastDate ?? DateTime.now().add(const Duration(days: 3650));
     final confirmed = await showCupertinoModalPopup<bool>(
       context: context,
       builder: (context) => Container(
@@ -1149,8 +1728,8 @@ Future<DateTime?> showAdaptiveDatePicker(
     return showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: firstDate ?? DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: lastDate ?? DateTime.now().add(const Duration(days: 3650)),
+      firstDate: min,
+      lastDate: max,
     );
   }
 }
@@ -1160,7 +1739,7 @@ Future<TimeOfDay?> showAdaptiveTimePicker(
   required int initialHour,
   required int initialMinute,
 }) async {
-  final isIOS = !kIsWeb && Platform.isIOS;
+  final isIOS = !kIsWeb && Theme.of(context).platform == TargetPlatform.iOS;
   if (isIOS) {
     DateTime picked = DateTime(2000, 1, 1, initialHour, initialMinute);
     final confirmed = await showCupertinoModalPopup<bool>(
@@ -1215,8 +1794,13 @@ Future<TimeOfDay?> showAdaptiveTimePicker(
               Expanded(
                 child: CupertinoDatePicker(
                   mode: CupertinoDatePickerMode.time,
-                  initialDateTime:
-                      DateTime(2000, 1, 1, initialHour, initialMinute),
+                  initialDateTime: DateTime(
+                    2000,
+                    1,
+                    1,
+                    initialHour,
+                    initialMinute,
+                  ),
                   use24hFormat: false,
                   onDateTimeChanged: (dt) => picked = dt,
                 ),
@@ -1363,12 +1947,14 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
 
   String get _inputHint => switch (field) {
     'start_time' => '시작 시간을 직접 입력하거나 [시간 선택]을 눌러주세요.',
-    'date' => selectedDate == null
-        ? '날짜를 선택하면 다음으로 넘어가요.'
-        : '추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.',
-    'expires_on' => selectedDate == null
-        ? '유효기간을 선택하면 다음으로 넘어가요.'
-        : '추출한 유효기간이 맞으면 바로 다음으로 넘어갈 수 있어요.',
+    'date' =>
+      selectedDate == null
+          ? '날짜를 선택하면 다음으로 넘어가요.'
+          : '추출한 날짜가 맞으면 바로 다음으로 넘어갈 수 있어요.',
+    'expires_on' =>
+      selectedDate == null
+          ? '유효기간을 선택하면 다음으로 넘어가요.'
+          : '추출한 유효기간이 맞으면 바로 다음으로 넘어갈 수 있어요.',
     'place' => '약속 또는 방문할 장소를 입력해 주세요.',
     'title' => '일정을 기억하기 쉬운 이름으로 입력해 주세요.',
     'purpose' => '일정의 상세 내용이나 메모를 입력해 주세요.',
@@ -1514,7 +2100,7 @@ class _AmbiguityScreenState extends State<AmbiguityScreen> {
                           MaterialPageRoute<void>(
                             builder: (_) =>
                                 (resolved.state == LoopState.needsInput &&
-                                        resolved.effectiveMissingFields.isNotEmpty)
+                                    resolved.effectiveMissingFields.isNotEmpty)
                                 ? AmbiguityScreen(
                                     controller: widget.controller,
                                     loop: resolved,
@@ -1581,7 +2167,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Future<void> _pickDate() async {
     if (!draft.isDraft) return;
     final initial = draft.primaryDate ?? DateTime.now();
-    final selected = await showAdaptiveDatePicker(context, initialDate: initial);
+    final selected = await showAdaptiveDatePicker(
+      context,
+      initialDate: initial,
+    );
     if (selected != null) {
       _edit(
         (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
@@ -1596,8 +2185,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (!draft.isDraft) return;
     final parts = draft.time?.split(':');
     final hour = parts == null ? 9 : int.tryParse(parts.first) ?? 9;
-    final minute =
-        parts == null || parts.length < 2 ? 0 : int.tryParse(parts[1]) ?? 0;
+    final minute = parts == null || parts.length < 2
+        ? 0
+        : int.tryParse(parts[1]) ?? 0;
     final selected = await showAdaptiveTimePicker(
       context,
       initialHour: hour,
@@ -1644,23 +2234,26 @@ class _ReviewScreenState extends State<ReviewScreen> {
       if (!mounted) return;
       setState(() => draft = persisted);
 
-      final bool isCalendarEvent = !expired &&
+      final bool isCalendarEvent =
+          !expired &&
           (persisted.kind == LoopKind.appointment ||
               persisted.kind == LoopKind.reservation ||
               (persisted.date != null && persisted.time != null));
 
-      // 약속·예약 등 날짜/시간이 있는 경우 캘린더에 추가 (만료된 일정은 캘린더 연동 제외)
-      if (isCalendarEvent) {
-        _launchCalendarHandoff(controller, persisted);
-      }
-
       if (mounted) Navigator.popUntil(context, (route) => route.isFirst);
+
+      // 약속·예약 등 날짜/시간이 있는 경우 화면 전환 후 안정적으로 캘린더 연동
+      if (isCalendarEvent) {
+        Future<void>.delayed(const Duration(milliseconds: 350), () {
+          _launchCalendarHandoff(controller, persisted);
+        });
+      }
 
       final String message = expired
           ? '‘${persisted.title}’ 종료된 항목으로 저장되었습니다.'
           : (isCalendarEvent
-              ? '‘${persisted.title}’ 일정이 캘린더에 추가되었습니다.'
-              : '‘${persisted.title}’ 저장이 완료되었습니다.');
+                ? '‘${persisted.title}’ 일정이 캘린더에 추가되었습니다.'
+                : '‘${persisted.title}’ 저장이 완료되었습니다.');
 
       final messenger =
           scaffoldMessengerKey.currentState ??
@@ -1812,29 +2405,25 @@ class _ReviewScreenState extends State<ReviewScreen> {
         if (draft.kind != LoopKind.place)
           _ReviewFieldCard(
             key: const Key('review-date-field'),
-            icon: (draft.kind == LoopKind.coupon ||
+            icon:
+                (draft.kind == LoopKind.coupon ||
                     draft.kind == LoopKind.purchase)
                 ? Icons.timer_outlined
                 : Icons.calendar_today_outlined,
-            label: (draft.kind == LoopKind.coupon ||
+            label:
+                (draft.kind == LoopKind.coupon ||
                     draft.kind == LoopKind.purchase)
                 ? '기한'
                 : '날짜',
             trailing: draft.isDraft
-                ? const Icon(
-                    Icons.chevron_right_rounded,
-                    color: OLColors.muted,
-                  )
+                ? const Icon(Icons.chevron_right_rounded, color: OLColors.muted)
                 : null,
             onTap: draft.isDraft ? _pickDate : null,
             child: Text(
               (draft.kind == LoopKind.coupon || draft.kind == LoopKind.purchase)
                   ? dateText(draft.expiresOn ?? draft.date)
                   : dateText(draft.date),
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
             ),
           ),
         if (draft.kind == LoopKind.appointment ||
@@ -1869,9 +2458,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   filled: false,
                   contentPadding: EdgeInsets.zero,
                   isDense: true,
-                  hintText: draft.kind == LoopKind.deadline
-                      ? '시간 없음'
-                      : '시간 미정',
+                  hintText: draft.kind == LoopKind.deadline ? '시간 없음' : '시간 미정',
                   hintStyle: const TextStyle(
                     color: OLColors.muted,
                     fontWeight: FontWeight.w500,
@@ -1892,18 +2479,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
             label: draft.kind == LoopKind.place
                 ? '저장할 장소'
                 : (draft.kind == LoopKind.purchase
-                    ? '구매처/판매처'
-                    : (draft.kind == LoopKind.reservation
-                        ? '예약 장소'
-                        : '장소')),
+                      ? '구매처/판매처'
+                      : (draft.kind == LoopKind.reservation ? '예약 장소' : '장소')),
             child: TextField(
               key: const Key('review-place-field'),
               controller: placeController,
               enabled: draft.isDraft,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
               decoration: InputDecoration(
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
@@ -1914,8 +2496,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 hintText: draft.kind == LoopKind.place
                     ? '장소명'
                     : (draft.kind == LoopKind.purchase
-                        ? '예: 쿠팡, 네이버쇼핑'
-                        : '장소 미정'),
+                          ? '예: 쿠팡, 네이버쇼핑'
+                          : '장소 미정'),
                 hintStyle: const TextStyle(
                   color: OLColors.muted,
                   fontWeight: FontWeight.w500,
@@ -1989,8 +2571,8 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
     final query = loop.place;
     if (query == null || query.isEmpty) return;
     final api = ContextApi(baseUrl: widget.controller.baseUrl);
-    final currentLocation =
-        await widget.controller.deviceActions.getCurrentLocation();
+    final currentLocation = await widget.controller.deviceActions
+        .getCurrentLocation();
     final results = await api.searchPlaces(
       query,
       latitude: currentLocation?.latitude,
@@ -2176,8 +2758,9 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
         final label = (isExpired && loop.kind == LoopKind.coupon)
             ? '만료된 쿠폰'
             : '종료된 Loop';
-        final color =
-            isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+        final color = isDark
+            ? const Color(0xFF94A3B8)
+            : const Color(0xFF64748B);
         final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
         final icon = isExpired
             ? Icons.alarm_off_rounded
@@ -2187,7 +2770,12 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
       if (isUrgent) {
         const color = Color(0xFFEA580C);
         final bg = isDark ? const Color(0xFF381F10) : const Color(0xFFFFEDD5);
-        return (bg, color, Icons.alarm_rounded, '${loopKindLabel(loop.kind)} · 임박');
+        return (
+          bg,
+          color,
+          Icons.alarm_rounded,
+          '${loopKindLabel(loop.kind)} · 임박',
+        );
       }
       const color = OLColors.cobalt;
       final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF);
@@ -2205,9 +2793,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
           IconButton(
             tooltip: '삭제',
             onPressed: () async {
-              final confirm = await showAdaptiveDeleteConfirmation(
-                context,
-              );
+              final confirm = await showAdaptiveDeleteConfirmation(context);
               if (confirm != true) return;
               if (context.mounted && Navigator.canPop(context)) {
                 Navigator.pop(context);
@@ -2231,11 +2817,7 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    chipIcon,
-                    size: 14,
-                    color: chipColor,
-                  ),
+                  Icon(chipIcon, size: 14, color: chipColor),
                   const SizedBox(width: 5),
                   Text(
                     chipLabel,
@@ -2454,7 +3036,9 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: (isExpired || isClosed)
-                      ? const Color(0xFFEF4444).withValues(alpha: isDark ? .4 : .25)
+                      ? const Color(
+                          0xFFEF4444,
+                        ).withValues(alpha: isDark ? .4 : .25)
                       : OLColors.cobalt.withValues(alpha: isDark ? .4 : .2),
                 ),
               ),
@@ -2613,6 +3197,55 @@ class _LoopDetailScreenState extends State<LoopDetailScreen> {
             _InfoBanner(text: notice!),
           ],
           const SizedBox(height: 24),
+          if (loop.date != null &&
+              (loop.kind == LoopKind.appointment ||
+                  loop.kind == LoopKind.reservation ||
+                  loop.kind == LoopKind.deadline ||
+                  loop.time != null)) ...[
+            OutlinedButton.icon(
+              key: const Key('add-calendar-button'),
+              onPressed: () async {
+                final ok = await widget.controller.deviceActions.addToCalendar(
+                  loop,
+                );
+                if (mounted && ok) {
+                  setState(() => notice = '일정을 캘린더에 성공적으로 등록했습니다.');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Row(
+                        children: [
+                          const Icon(
+                            Icons.event_available_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '‘${loop.title}’ 일정이 캘린더에 등록되었습니다.',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      backgroundColor: OLColors.navy,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.calendar_today_rounded),
+              label: const Text('기기 캘린더에 등록'),
+            ),
+            const SizedBox(height: 10),
+          ],
           if (loop.place != null) ...[
             OutlinedButton.icon(
               key: const Key('directions-button'),
@@ -2835,9 +3468,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
                 ..showSnackBar(
-                  const SnackBar(
-                    content: Text('🔔 쿠폰 유효기간 테스트 알림을 발송했습니다.'),
-                  ),
+                  const SnackBar(content: Text('🔔 쿠폰 유효기간 테스트 알림을 발송했습니다.')),
                 );
             },
             icon: const Icon(Icons.notifications_active_outlined),
@@ -2848,7 +3479,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () async {
               await widget.controller.triggerTestNotification(
                 title: '김성훈과 만남 (종로5가역)',
-                body: '1시간 후 약속이 시작됩니다. 이동 준비를 시작하세요!\n\n🌤️ 날씨: 맑음 · 24°C (강수 0%)',
+                body:
+                    '1시간 후 약속이 시작됩니다. 이동 준비를 시작하세요!\n\n🌤️ 날씨: 맑음 · 24°C (강수 0%)',
                 subtitle: '약속 시작 전 알림',
               );
               if (!context.mounted) return;
@@ -2920,6 +3552,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
           child: const Text('저장'),
         ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton.icon(
+            key: const Key('reset-demo-loops-button'),
+            onPressed: () async {
+              await widget.controller.resetToDemoSeedLoops();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('대표 샘플 일정(향수 거래, 저녁 약속)을 복원했습니다.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text(
+              '기본 샘플 데이터 복원',
+              style: TextStyle(color: OLColors.muted),
+            ),
+          ),
+        ),
       ],
     ),
   );
@@ -2960,8 +3612,9 @@ class LoopCard extends StatelessWidget {
     final (badgeText, badgeColor, badgeBg, iconColor, iconBg) = () {
       if (closed || expired) {
         final text = (expired && loop.kind == LoopKind.coupon) ? '만료됨' : '종료';
-        final color =
-            isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+        final color = isDark
+            ? const Color(0xFF94A3B8)
+            : const Color(0xFF64748B);
         final bg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
         return (text, color, bg, color, bg);
       }
@@ -3223,22 +3876,13 @@ class _EmptyFilterLoops extends StatelessWidget {
         Icons.confirmation_number_outlined,
         '저장된 쿠폰이 없습니다.\n기프티콘 이미지를 공유해 보세요.',
       ),
-      HomeFilter.schedule => (
-        Icons.calendar_month_outlined,
-        '등록된 일정이 없습니다.',
-      ),
-      HomeFilter.place => (
-        Icons.place_outlined,
-        '저장된 장소가 없습니다.',
-      ),
+      HomeFilter.schedule => (Icons.calendar_month_outlined, '등록된 일정이 없습니다.'),
+      HomeFilter.place => (Icons.place_outlined, '저장된 장소가 없습니다.'),
       HomeFilter.closed => (
         Icons.check_circle_outline_rounded,
         '종료되거나 만료된 Loop가 없습니다.',
       ),
-      HomeFilter.all => (
-        Icons.inbox_outlined,
-        '아직 Open Loop가 없습니다.',
-      ),
+      HomeFilter.all => (Icons.inbox_outlined, '아직 Open Loop가 없습니다.'),
     };
 
     return OLCard(
@@ -3351,16 +3995,10 @@ class _FactItem extends StatelessWidget {
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF1E293B)
-                  : const Color(0xFFEEF5FF),
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
               borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(
-              icon,
-              color: OLColors.cobalt,
-              size: 19,
-            ),
+            child: Icon(icon, color: OLColors.cobalt, size: 19),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -3480,9 +4118,7 @@ class _SummaryCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF1E293B)
-                  : const Color(0xFFEEF5FF),
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF5FF),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -3714,11 +4350,11 @@ class _NativeThemeSliderState extends State<_NativeThemeSlider> {
                                 size: 18,
                                 color: !isDarkModeSelected
                                     ? (isDark
-                                        ? Colors.white
-                                        : const Color(0xFF0F172A))
+                                          ? Colors.white
+                                          : const Color(0xFF0F172A))
                                     : (isDark
-                                        ? const Color(0xFF64748B)
-                                        : const Color(0xFF94A3B8)),
+                                          ? const Color(0xFF64748B)
+                                          : const Color(0xFF94A3B8)),
                               ),
                               const SizedBox(width: 8),
                               Text(
@@ -3730,11 +4366,11 @@ class _NativeThemeSliderState extends State<_NativeThemeSlider> {
                                   fontSize: 14,
                                   color: !isDarkModeSelected
                                       ? (isDark
-                                          ? Colors.white
-                                          : const Color(0xFF0F172A))
+                                            ? Colors.white
+                                            : const Color(0xFF0F172A))
                                       : (isDark
-                                          ? const Color(0xFF64748B)
-                                          : const Color(0xFF94A3B8)),
+                                            ? const Color(0xFF64748B)
+                                            : const Color(0xFF94A3B8)),
                                 ),
                               ),
                             ],
@@ -3755,11 +4391,11 @@ class _NativeThemeSliderState extends State<_NativeThemeSlider> {
                                 size: 18,
                                 color: isDarkModeSelected
                                     ? (isDark
-                                        ? Colors.white
-                                        : const Color(0xFF0F172A))
+                                          ? Colors.white
+                                          : const Color(0xFF0F172A))
                                     : (isDark
-                                        ? const Color(0xFF64748B)
-                                        : const Color(0xFF94A3B8)),
+                                          ? const Color(0xFF64748B)
+                                          : const Color(0xFF94A3B8)),
                               ),
                               const SizedBox(width: 8),
                               Text(
@@ -3771,11 +4407,11 @@ class _NativeThemeSliderState extends State<_NativeThemeSlider> {
                                   fontSize: 14,
                                   color: isDarkModeSelected
                                       ? (isDark
-                                          ? Colors.white
-                                          : const Color(0xFF0F172A))
+                                            ? Colors.white
+                                            : const Color(0xFF0F172A))
                                       : (isDark
-                                          ? const Color(0xFF64748B)
-                                          : const Color(0xFF94A3B8)),
+                                            ? const Color(0xFF64748B)
+                                            : const Color(0xFF94A3B8)),
                                 ),
                               ),
                             ],

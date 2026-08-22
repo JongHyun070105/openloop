@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import Mock
 
 from app.device_tokens import DynamoDeviceTokenStore
-from app.models import PushTokenRequest
+from app.models import LiveActivityTokenRequest, PushTokenRequest
 
 
 class DeviceTokenTests(unittest.TestCase):
@@ -44,6 +44,46 @@ class DeviceTokenTests(unittest.TestCase):
 
         self.assertNotEqual(first["PK"], second["PK"])
         self.assertEqual(first["SK"], second["SK"])
+
+    def test_registers_and_pairs_live_activity_with_latest_ios_device(self) -> None:
+        live_request = LiveActivityTokenRequest(
+            token="activity-push-to-start-token-at-least-twenty-chars"
+        )
+        result = self.store.register_live_activity(live_request, self.owner_id)
+
+        self.assertTrue(result.registered)
+        item = self.client.put_item.call_args.kwargs["Item"]
+        self.assertEqual(item["SK"], {"S": "LIVE_ACTIVITY#PUSH_TO_START"})
+        self.assertEqual(item["pushToStartToken"], {"S": live_request.token})
+
+        self.client.query.return_value = {
+            "Items": [
+                item,
+                {
+                    "entityType": {"S": "PushDevice"},
+                    "fcmToken": {"S": "older-ios-fcm-token-value"},
+                    "platform": {"S": "ios"},
+                    "active": {"BOOL": True},
+                    "updatedAt": {"S": "2026-08-19T00:00:00+00:00"},
+                },
+                {
+                    "entityType": {"S": "PushDevice"},
+                    "fcmToken": {"S": "newer-ios-fcm-token-value"},
+                    "platform": {"S": "ios"},
+                    "active": {"BOOL": True},
+                    "updatedAt": {"S": "2026-08-20T00:00:00+00:00"},
+                },
+            ]
+        }
+
+        self.assertEqual(
+            self.store.live_activity_target(self.owner_id),
+            ("newer-ios-fcm-token-value", live_request.token),
+        )
+        self.assertEqual(
+            self.store.latest_ios_fcm_token(self.owner_id),
+            "newer-ios-fcm-token-value",
+        )
 
 
 if __name__ == "__main__":

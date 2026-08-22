@@ -19,6 +19,10 @@
 .aws/
 .codex/
 .omx/
+.playwright-cli/
+.tmp/
+.netlify/
+output/
 
 # Provider credentials and signing material must stay local.
 *.pem

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 393 852" fill="none">
+  <defs>
+    <linearGradient id="titanium" x1="196.5" y1="0" x2="196.5" y2="852" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#68717C"/>
+      <stop offset="0.18" stop-color="#171D24"/>
+      <stop offset="0.52" stop-color="#030609"/>
+      <stop offset="0.82" stop-color="#242B34"/>
+      <stop offset="1" stop-color="#77818C"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="16" y1="426" x2="377" y2="426" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9AA3AD"/>
+      <stop offset="0.035" stop-color="#202731"/>
+      <stop offset="0.965" stop-color="#11171E"/>
+      <stop offset="1" stop-color="#A7AFB8"/>
+    </linearGradient>
+    <linearGradient id="button" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#87919C"/>
+      <stop offset="0.35" stop-color="#202730"/>
+      <stop offset="1" stop-color="#05080C"/>
+    </linearGradient>
+    <mask id="frame-cutout">
+      <rect x="8" y="1" width="377" height="850" rx="72" fill="white"/>
+      <rect x="20" y="14" width="353" height="824" rx="59" fill="black"/>
+    </mask>
+  </defs>
+
+  <rect x="2" y="157" width="8" height="54" rx="4" fill="url(#button)"/>
+  <rect x="2" y="230" width="8" height="91" rx="4" fill="url(#button)"/>
+  <rect x="2" y="336" width="8" height="91" rx="4" fill="url(#button)"/>
+  <rect x="383" y="256" width="8" height="128" rx="4" fill="url(#button)"/>
+
+  <rect x="8" y="1" width="377" height="850" rx="72" fill="url(#edge)" mask="url(#frame-cutout)"/>
+  <rect x="12" y="5" width="369" height="842" rx="68" fill="url(#titanium)" mask="url(#frame-cutout)"/>
+  <rect x="19.25" y="13.25" width="354.5" height="825.5" rx="59.75" stroke="#020407" stroke-width="2.5"/>
+
+  <rect x="130" y="24" width="133" height="37" rx="18.5" fill="#030609"/>
+  <circle cx="244" cy="42.5" r="5.5" fill="#0B1626"/>
+  <circle cx="244" cy="42.5" r="2.8" fill="#172E53"/>
+</svg>

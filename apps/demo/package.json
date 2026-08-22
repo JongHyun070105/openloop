@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:sim": "node scripts/sim-stream.mjs",
     "build": "vite build",
+    "bundle:flutter": "mkdir -p dist/app public/app && cp -R ../mobile/build/web/. dist/app/ && cp -R ../mobile/build/web/. public/app/",
     "preview": "vite preview"
   },
   "dependencies": {

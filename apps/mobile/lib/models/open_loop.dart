@@ -100,7 +100,8 @@ class OpenLoop {
   /// 쿠폰·구매·장소는 시간 정보가 불필요하므로 start_time을 항상 제거합니다.
   List<String> get effectiveMissingFields {
     final allText = '$title ${purpose ?? ''} ${summary ?? ''}';
-    final isCoupon = kind == LoopKind.coupon ||
+    final isCoupon =
+        kind == LoopKind.coupon ||
         const [
           '쿠폰',
           '할인',
@@ -123,12 +124,41 @@ class OpenLoop {
           '바코드',
         ].any(allText.contains);
     if (isCoupon || kind == LoopKind.purchase || kind == LoopKind.place) {
-      return missingFields.where((f) => f != 'start_time' && f != 'time').toList();
+      return missingFields
+          .where((f) => f != 'start_time' && f != 'time')
+          .toList();
     }
     return missingFields;
   }
 
   bool get isDraft => persistence != LoopPersistence.persisted;
+
+  /// 일정, 예약, 쿠폰, 장소 등 식별 가능한 데이터가 전혀 없는 무효 캡처인지 여부.
+  bool get isUnidentifiable {
+    final titleClean = title.trim();
+    if (titleClean == '식별되지 않은 항목' ||
+        titleClean == '알 수 없음' ||
+        titleClean == '일정 정보 없음' ||
+        titleClean == '등록할 일정이 없습니다' ||
+        (titleClean == '새 Open Loop' &&
+            date == null &&
+            expiresOn == null &&
+            place == null)) {
+      return true;
+    }
+    final titleConf = confidence['title'] ?? 0.0;
+    final dateConf = confidence['date'] ?? 0.0;
+    final locConf = confidence['location'] ?? 0.0;
+    if (titleConf == 0.0 &&
+        dateConf == 0.0 &&
+        locConf == 0.0 &&
+        date == null &&
+        expiresOn == null &&
+        place == null) {
+      return true;
+    }
+    return false;
+  }
 
   DateTime? get startsAt {
     if ((kind != LoopKind.appointment && kind != LoopKind.reservation) ||
@@ -166,8 +196,8 @@ class OpenLoop {
 
   DateTime? get primaryDate =>
       (kind == LoopKind.coupon || kind == LoopKind.purchase)
-          ? (expiresOn ?? date)
-          : date;
+      ? (expiresOn ?? date)
+      : date;
 
   OpenLoop copyWith({
     String? id,
@@ -221,6 +251,7 @@ class OpenLoop {
   factory OpenLoop.fromAnalyzeJson(
     Map<String, dynamic> json, {
     LoopPersistence persistence = LoopPersistence.remoteDraft,
+    DateTime? referenceTime,
   }) {
     final event = json['event'] as Map<String, dynamic>? ?? const {};
     final rawType = event['type'] as String?;
@@ -229,7 +260,8 @@ class OpenLoop {
     final summary = event['summary'] as String?;
     final allText = '$title ${purpose ?? ''} ${summary ?? ''}';
 
-    final isCoupon = rawType == 'coupon' ||
+    final isCoupon =
+        rawType == 'coupon' ||
         const [
           '쿠폰',
           '할인',
@@ -257,7 +289,7 @@ class OpenLoop {
     final kind = isCoupon
         ? LoopKind.coupon
         : (LoopKind.values.where((k) => k.name == rawType).firstOrNull ??
-            LoopKind.appointment);
+              LoopKind.appointment);
 
     final dateText = event['date'] as String?;
     final parsedDate = dateText == null ? null : DateTime.tryParse(dateText);
@@ -291,26 +323,41 @@ class OpenLoop {
       return true;
     }).toList();
 
-    final now = DateTime.now();
-    final isPast = (expiresOn != null &&
-            DateTime(expiresOn.year, expiresOn.month, expiresOn.day, 23, 59, 59)
-                .isBefore(now)) ||
+    final now = referenceTime ?? DateTime.now();
+    final isPast =
+        (expiresOn != null &&
+            DateTime(
+              expiresOn.year,
+              expiresOn.month,
+              expiresOn.day,
+              23,
+              59,
+              59,
+            ).isBefore(now)) ||
         (date != null &&
-            DateTime(date.year, date.month, date.day, 23, 59, 59)
-                .isBefore(now));
+            DateTime(
+              date.year,
+              date.month,
+              date.day,
+              23,
+              59,
+              59,
+            ).isBefore(now));
 
     final rawStatus = json['status'] as String?;
     final state = switch (rawStatus) {
       'closed' => LoopState.closed,
-      'needs_input' => missingFields.isEmpty
-          ? (isPast ? LoopState.closed : LoopState.open)
-          : LoopState.needsInput,
+      'needs_input' =>
+        missingFields.isEmpty
+            ? (isPast ? LoopState.closed : LoopState.open)
+            : LoopState.needsInput,
       _ => isPast ? LoopState.closed : LoopState.open,
     };
 
     return OpenLoop(
       id:
           json['id'] as String? ??
+          event['id'] as String? ??
           DateTime.now().microsecondsSinceEpoch.toString(),
       kind: kind,
       state: state,
@@ -381,7 +428,8 @@ class OpenLoop {
     final summary = json['summary'] as String?;
     final allText = '$title ${purpose ?? ''} ${summary ?? ''}';
 
-    final isCoupon = rawKind == LoopKind.coupon ||
+    final isCoupon =
+        rawKind == LoopKind.coupon ||
         const [
           '쿠폰',
           '할인',
@@ -408,7 +456,9 @@ class OpenLoop {
 
     final kind = isCoupon ? LoopKind.coupon : rawKind;
 
-    final parsedDate = json['date'] == null ? null : DateTime.parse(json['date'] as String);
+    final parsedDate = json['date'] == null
+        ? null
+        : DateTime.parse(json['date'] as String);
     final parsedExpiry = json['expiresOn'] == null
         ? null
         : DateTime.parse(json['expiresOn'] as String);
@@ -460,7 +510,9 @@ class OpenLoop {
           .map((item) => LoopAction.fromJson(item as Map<String, dynamic>))
           .toList(),
       checklist: (json['checklist'] as List<dynamic>? ?? const [])
-          .map((item) => LoopChecklistItem.fromJson(item as Map<String, dynamic>))
+          .map(
+            (item) => LoopChecklistItem.fromJson(item as Map<String, dynamic>),
+          )
           .toList(),
       checkpoints: (json['checkpoints'] as List<dynamic>? ?? const [])
           .map((item) => LoopCheckpoint.fromJson(item as Map<String, dynamic>))
@@ -584,7 +636,7 @@ class LoopAction {
   factory LoopAction.fromJson(Map<String, dynamic> json) => LoopAction(
     id: json['id'] as String,
     type: json['type'] as String,
-    title: json['title'] as String,
+    title: (json['title'] ?? json['label'] ?? '') as String,
     completed: json['completed'] as bool? ?? false,
     metadata: Map<String, dynamic>.from(
       json['metadata'] as Map? ?? const <String, dynamic>{},

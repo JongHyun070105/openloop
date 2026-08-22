@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/open_loop.dart';
 import 'installation_identity.dart';
+import 'shared_capture.dart';
 
 class PlaceResult {
   const PlaceResult({
@@ -148,38 +149,48 @@ class ContextApi {
 
   Future<RemoteCapabilities?> capabilities() async {
     if (_root.isEmpty) return null;
-    final response = await _client
-        .get(
-          Uri.parse('$_root/v1/capabilities'),
-          headers: {'X-OpenLoop-Install-Id': await InstallationIdentity.get()},
-        )
-        .timeout(const Duration(seconds: 8));
-    if (response.statusCode != 200) return null;
-    return RemoteCapabilities.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    try {
+      final response = await _client
+          .get(
+            Uri.parse('$_root/v1/capabilities'),
+            headers: {'X-OpenLoop-Install-Id': await InstallationIdentity.get()},
+          )
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+      return RemoteCapabilities.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> registerPushToken(String token) async {
     if (_root.isEmpty) return false;
-    final installationId = await InstallationIdentity.get();
-    final response = await _client
-        .post(
-          Uri.parse('$_root/v1/devices/push-token'),
-          headers: {
-            'content-type': 'application/json',
-            'X-OpenLoop-Install-Id': installationId,
-          },
-          body: jsonEncode({
-            'token': token,
-            'platform': Platform.isIOS ? 'ios' : 'android',
-          }),
-        )
-        .timeout(const Duration(seconds: 10));
-    if (response.statusCode < 200 || response.statusCode >= 300) return false;
-    return (jsonDecode(response.body) as Map<String, dynamic>)['registered']
-            as bool? ??
-        false;
+    try {
+      final installationId = await InstallationIdentity.get();
+      final response = await _client
+          .post(
+            Uri.parse('$_root/v1/devices/push-token'),
+            headers: {
+              'content-type': 'application/json',
+              'X-OpenLoop-Install-Id': installationId,
+            },
+            body: jsonEncode({
+              'token': token,
+              'platform': kIsWeb
+                  ? 'web'
+                  : (Platform.isIOS ? 'ios' : 'android'),
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (response.statusCode < 200 || response.statusCode >= 300) return false;
+      return (jsonDecode(response.body) as Map<String, dynamic>)['registered']
+              as bool? ??
+          false;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> openKakaoRoute(
@@ -187,38 +198,40 @@ class ContextApi {
     double? currentLat,
     double? currentLng,
   }) async {
-    try {
-      final native = (currentLat != null && currentLng != null)
-          ? Uri.parse(
-              'kakaomap://route?sp=$currentLat,$currentLng&ep=${place.latitude},${place.longitude}&by=CAR',
-            )
-          : Uri.parse(
-              'kakaomap://route?ep=${place.latitude},${place.longitude}&by=CAR',
-            );
-      if (await canLaunchUrl(native)) {
-        final launched = await launchUrl(native);
-        if (launched) return true;
-      }
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        final native = (currentLat != null && currentLng != null)
+            ? Uri.parse(
+                'kakaomap://route?sp=$currentLat,$currentLng&ep=${place.latitude},${place.longitude}&by=CAR',
+              )
+            : Uri.parse(
+                'kakaomap://route?ep=${place.latitude},${place.longitude}&by=CAR',
+              );
+        if (await canLaunchUrl(native)) {
+          final launched = await launchUrl(native);
+          if (launched) return true;
+        }
+      } catch (_) {}
+    }
 
     final encodedName = Uri.encodeComponent(place.name);
-    final webRoute = (currentLat != null && currentLng != null)
-        ? Uri.parse(
-            'https://map.kakao.com/link/to/$encodedName,${place.latitude},${place.longitude}?sp=$currentLat,$currentLng',
-          )
-        : Uri.parse(
-            'https://map.kakao.com/link/to/$encodedName,${place.latitude},${place.longitude}',
-          );
-    try {
-      if (await launchUrl(webRoute, mode: LaunchMode.externalApplication)) {
-        return true;
-      }
-    } catch (_) {}
+    if (place.latitude > 0 && place.longitude > 0) {
+      final webRoute = Uri.parse(
+        'https://map.kakao.com/link/to/$encodedName,${place.latitude},${place.longitude}',
+      );
+      try {
+        if (await launchUrl(webRoute, mode: LaunchMode.externalApplication)) {
+          return true;
+        }
+      } catch (_) {}
+    }
 
     try {
-      final web = Uri.tryParse(place.kakaoMapUrl);
-      return web != null &&
-          await launchUrl(web, mode: LaunchMode.externalApplication);
+      final web = (place.kakaoMapUrl.isNotEmpty &&
+              Uri.tryParse(place.kakaoMapUrl) != null)
+          ? Uri.parse(place.kakaoMapUrl)
+          : Uri.parse('https://map.kakao.com/link/search/$encodedName');
+      return await launchUrl(web, mode: LaunchMode.externalApplication);
     } catch (_) {
       return false;
     }
@@ -239,12 +252,23 @@ class AppIntegrations {
   OpenLoop? pendingDraftLoop;
   final pendingDraft = ValueNotifier<OpenLoop?>(null);
 
-  void handleNotificationPayload(String payload) {
+  Future<void> handleNotificationPayload(String payload) async {
     if (payload.startsWith('loop:')) {
       pendingLoopId.value = payload.substring(5);
     } else if (payload.startsWith('draft:')) {
-      if (pendingDraftLoop != null) {
+      final draftId = payload.substring(6);
+      if (pendingDraftLoop != null &&
+          (draftId == 'pending' || pendingDraftLoop!.id == draftId)) {
         pendingDraft.value = pendingDraftLoop;
+      } else {
+        final directDraft =
+            await NativeSharedMediaBridge.getAppGroupPendingDraft(
+              jobId: draftId == 'pending' ? null : draftId,
+            );
+        if (directDraft != null) {
+          pendingDraftLoop = directDraft;
+          pendingDraft.value = directDraft;
+        }
       }
     }
   }
@@ -260,7 +284,6 @@ class AppIntegrations {
   bool _tokenRefreshSubscribed = false;
   bool _foregroundMessageSubscribed = false;
   String _apiBaseUrl = '';
-  final _foregroundNotifications = _ForegroundNotificationPresenter();
 
   static const _allowedAnalyticsEvents = {
     'capture_started',
@@ -357,20 +380,19 @@ class AppIntegrations {
   }
 
   void _handleMessage(RemoteMessage? message) {
+    final payload = message?.data['payload'] as String?;
+    if (payload?.startsWith('draft:') == true) {
+      unawaited(handleNotificationPayload(payload!));
+      return;
+    }
     final loopId =
         message?.data['loop_id'] as String? ??
         (message?.data['loopKey'] as String?)?.replaceFirst('LOOP#', '');
     if (loopId?.isNotEmpty == true) pendingLoopId.value = loopId;
   }
 
-  Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    _handleMessage(message);
-    try {
-      await _foregroundNotifications.show(message);
-    } catch (error, stackTrace) {
-      await captureError(error, stackTrace);
-    }
-  }
+  void _handleForegroundMessage(RemoteMessage message) =>
+      _handleMessage(message);
 
   Future<void> capture(String eventName) async {
     if (!_posthogReady || !_allowedAnalyticsEvents.contains(eventName)) return;
@@ -383,45 +405,6 @@ class AppIntegrations {
     const dsn = String.fromEnvironment('SENTRY_DSN');
     if (dsn.isEmpty) return;
     await Sentry.captureException(error, stackTrace: stackTrace);
-  }
-}
-
-class _ForegroundNotificationPresenter {
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
-  bool _initialized = false;
-
-  Future<void> show(RemoteMessage message) async {
-    final notification = message.notification;
-    if (notification == null) return;
-    if (!_initialized) {
-      await _plugin.initialize(
-        const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          iOS: DarwinInitializationSettings(),
-        ),
-      );
-      _initialized = true;
-    }
-    await _plugin.show(
-      message.messageId?.hashCode ?? DateTime.now().microsecondsSinceEpoch,
-      notification.title ?? 'OpenLoop 알림',
-      notification.body ?? '확인할 일정이 있습니다.',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'openloop_checkpoints',
-          'OpenLoop checkpoint alerts',
-          channelDescription: 'OpenLoop 서버 체크포인트 알림',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      ),
-    );
   }
 }
 

@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenLoop - 서비스 소개서</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #08060f;
+      --card-bg: rgba(22, 17, 40, 0.78);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-pink: #ff4b8b;
+      --accent-purple: #8b5cf6;
+      --accent-blue: #246bfd;
+      --accent-cyan: #06b6d4;
+      --text-white: #ffffff;
+      --text-dim: #94a3b8;
+      --text-muted: #64748b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background-color: #040208;
+      color: var(--text-white);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 16:9 Presentation Container */
+    .deck-viewport {
+      width: 100vw;
+      height: 100vh;
+      max-width: 177.78vh; /* 16:9 constraint */
+      max-height: 56.25vw;
+      position: relative;
+      background: radial-gradient(circle at 75% 20%, #1e1333 0%, #0d0918 45%, #05030a 100%);
+      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 5.5vh 5.5vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.985) translateY(12px);
+      transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+    }
+
+    .glow-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .slide > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Typography */
+    .slide-tag {
+      font-size: 1.6vh;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--accent-pink);
+      margin-bottom: 1.2vh;
+      display: flex;
+      align-items: center;
+      gap: 0.8vw;
+    }
+
+    .slide-tag::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--accent-pink);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-pink);
+    }
+
+    .slide-title {
+      font-size: 4.8vh;
+      font-weight: 800;
+      line-height: 1.25;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.4vh;
+      color: #ffffff;
+    }
+
+    .slide-title span.highlight {
+      background: linear-gradient(135deg, #ff4b8b 0%, #a855f7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .slide-subtitle {
+      font-size: 2.1vh;
+      font-weight: 400;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* Slide Footer */
+    .slide-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 1.4vh;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 1.8vh;
+      margin-top: auto;
+    }
+
+    .brand-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #e2e8f0;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 12px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .brand-pill .logo-dot {
+      width: 8px;
+      height: 8px;
+      background: #246bfd;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #246bfd;
+    }
+
+    .page-indicator {
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #94a3b8;
+    }
+
+    /* =========================================================================
+       SLIDE 1: Cover / Hero (사용자 첫 페이지 디자인 완벽 구현)
+       ========================================================================= */
+    .slide-1-layout {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      align-items: center;
+      gap: 3vw;
+      height: 100%;
+    }
+
+    .cover-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 3vh;
+    }
+
+    .cover-brand {
+      font-size: 2.8vh;
+      font-weight: 800;
+      color: #246bfd;
+      letter-spacing: -0.01em;
+    }
+
+    .cover-title {
+      font-size: 6.2vh;
+      font-weight: 900;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+    }
+
+    .cover-desc {
+      font-size: 2.3vh;
+      color: #94a3b8;
+      line-height: 1.5;
+    }
+
+    .cover-cards {
+      display: flex;
+      gap: 1.2vw;
+      margin-top: 1.5vh;
+    }
+
+    .cover-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 1.8vh 1.4vw;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .cover-card-icon {
+      width: 4.6vh;
+      height: 4.6vh;
+      background: rgba(36, 107, 253, 0.12);
+      border: 1px solid rgba(36, 107, 253, 0.3);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2vh;
+      color: #60a5fa;
+    }
+
+    .cover-card h5 {
+      font-size: 1.7vh;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.3vh;
+    }
+
+    .cover-card p {
+      font-size: 1.3vh;
+      color: #94a3b8;
+    }
+
+    .cover-phone-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phone-mockup-angled {
+      width: 32vh;
+      height: 64vh;
+      background: #000000;
+      border-radius: 46px;
+      border: 4px solid #2d3748;
+      box-shadow: -25px 35px 70px rgba(0, 0, 0, 0.8), 0 0 0 2px #4a5568, inset 0 0 15px rgba(255, 255, 255, 0.1);
+      transform: perspective(1000px) rotateY(-18deg) rotateX(10deg) rotateZ(-4deg);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phone-notch {
+      position: absolute;
+      top: 14px;
+      width: 90px;
+      height: 24px;
+      background: #000;
+      border-radius: 20px;
+      z-index: 10;
+    }
+
+    .phone-screen-blue {
+      position: absolute;
+      inset: 0;
+      background: #246bfd;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .phone-logo-c {
+      width: 70px;
+      height: 70px;
+      border: 7px solid white;
+      border-right-color: transparent;
+      border-radius: 50%;
+      position: relative;
+      margin-bottom: 18px;
+    }
+
+    .phone-logo-c::after {
+      content: '';
+      position: absolute;
+      top: 25px;
+      right: -2px;
+      width: 9px;
+      height: 9px;
+      background: white;
+      border-radius: 50%;
+    }
+
+    .phone-brand-text {
+      font-size: 2.8vh;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    /* =========================================================================
+       SLIDE 2: 왜 OpenLoop인가 (기존 방식 vs OpenLoop)
+       ========================================================================= */
+    .slide-2-grid {
+      display: grid;
+      grid-template-columns: 0.9fr 1.3fr;
+      gap: 2.5vw;
+      flex: 1;
+      margin: 2vh 0;
+    }
+
+    .comparison-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 20px;
+      padding: 2.5vh 1.8vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .comparison-title {
+      font-size: 1.9vh;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 2vh;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legacy-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.4vh;
+    }
+
+    .legacy-step {
+      background: rgba(239, 68, 68, 0.06);
+      border: 1px dashed rgba(239, 68, 68, 0.2);
+      padding: 1.2vh 1vw;
+      border-radius: 10px;
+      font-size: 1.5vh;
+      color: #fca5a5;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hero-solution-card {
+      background: linear-gradient(145deg, rgba(36, 107, 253, 0.12) 0%, rgba(139, 92, 246, 0.08) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 20px;
+      padding: 2.5vh 2vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 15px 35px rgba(36, 107, 253, 0.15);
+    }
+
+    .hero-solution-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .hero-solution-head h3 {
+      font-size: 2.4vh;
+      font-weight: 800;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .openloop-flow-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1vw;
+      margin: 2vh 0;
+    }
+
+    .flow-mini-card {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 1.8vh 1.2vw;
+      text-align: center;
+    }
+
+    .flow-mini-card .step-num {
+      width: 24px;
+      height: 24px;
+      background: var(--accent-pink);
+      color: white;
+      font-size: 1.3vh;
+      font-weight: 800;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1vh;
+    }
+
+    .flow-mini-card h5 {
+      font-size: 1.6vh;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.6vh;
+    }
+
+    .flow-mini-card p {
+      font-size: 1.3vh;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .punchline-quote {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+      padding: 1.4vh 1.4vw;
+      text-align: center;
+      font-size: 1.8vh;
+      font-weight: 700;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* =========================================================================
+       SLIDE 3: 실제 사용 흐름
+       ========================================================================= */
+    .slide-3-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.8vw;
+      flex: 1;
+      margin: 2.5vh 0;
+    }
+
+    .step-feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 3vh 1.6vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+    }
+
+    .step-feature-card.highlight {
+      border-color: rgba(255, 75, 139, 0.4);
+      background: linear-gradient(180deg, rgba(255, 75, 139, 0.08) 0%, rgba(26, 20, 48, 0.9) 100%);
+      box-shadow: 0 15px 30px rgba(255, 75, 139, 0.1);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 1.8vh;
+    }
+
+    .step-badge {
+      background: var(--accent-pink);
+      color: white;
+      font-size: 1.4vh;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 8px;
+    }
+
+    .step-feature-card h3 {
+      font-size: 2.4vh;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 1vh;
+    }
+
+    .step-feature-card p {
+      font-size: 1.6vh;
+      color: var(--text-dim);
+      line-height: 1.5;
+      margin-bottom: 2vh;
+    }
+
+    .step-visual-mock {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      padding: 1.6vh 1.2vw;
+      display: flex;
+      flex-direction: column;
+      gap: 1vh;
+    }
+
+    .mock-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.4vh;
+      color: #e2e8f0;
+    }
+
+    .mock-row .status-pill {
+      font-size: 1.2vh;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+
+    .pill-blue { background: rgba(36, 107, 253, 0.2); color: #60a5fa; }
+    .pill-green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    .pill-orange { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
+
+    /* =========================================================================
+       SLIDE 4: 시나리오 & 파이프라인
+       ========================================================================= */
+    .pipeline-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.2vw;
+      margin: 1.8vh 0;
+    }
+
+    .pipeline-step {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 1.6vh 1.2vw;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pipeline-step .icon-circle {
+      width: 3.6vh;
+      height: 3.6vh;
+      background: rgba(139, 92, 246, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8vh;
+    }
+
+    .pipeline-step h5 {
+      font-size: 1.6vh;
+      font-weight: 700;
+      color: white;
+    }
+
+    .pipeline-step p {
+      font-size: 1.2vh;
+      color: var(--text-dim);
+    }
+
+    .scenario-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.8vw;
+      margin-top: 1.5vh;
+    }
+
+    .scenario-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 2.2vh 1.6vw;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4vh;
+    }
+
+    .scenario-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .scenario-tag {
+      font-size: 1.3vh;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 75, 139, 0.15);
+      color: #ff75a0;
+    }
+
+    .scenario-flow {
+      display: flex;
+      align-items: center;
+      gap: 0.8vw;
+      font-size: 1.4vh;
+      color: var(--text-dim);
+    }
+
+    .scenario-flow span.step-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0.8vh 1vw;
+      border-radius: 8px;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    /* =========================================================================
+       SLIDE 5: 확장 방향 및 생태계
+       ========================================================================= */
+    .slide-5-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.8vw;
+      flex: 1;
+      margin: 2.5vh 0;
+    }
+
+    .ecosystem-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 3vh 1.6vw;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .eco-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 2vh;
+    }
+
+    .eco-badge {
+      font-size: 1.3vh;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 8px;
+    }
+
+    .eco-badge.lifestyle { background: #ff4b8b; color: white; }
+    .eco-badge.commerce { background: #3b82f6; color: white; }
+    .eco-badge.enterprise { background: #10b981; color: white; }
+
+    .ecosystem-card h3 {
+      font-size: 2.3vh;
+      font-weight: 800;
+      color: white;
+      margin-bottom: 1vh;
+    }
+
+    .ecosystem-card p {
+      font-size: 1.5vh;
+      color: var(--text-dim);
+      line-height: 1.5;
+      margin-bottom: 2vh;
+    }
+
+    .tags-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6vw;
+      margin-top: auto;
+    }
+
+    .tag-item {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 1.3vh;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    /* Controls Overlay */
+    .deck-controls {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 999;
+      background: rgba(18, 13, 36, 0.85);
+      backdrop-filter: blur(12px);
+      padding: 8px 16px;
+      border-radius: 100px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    .ctrl-btn {
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .ctrl-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .dot-nav {
+      display: flex;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .dot.active {
+      width: 24px;
+      border-radius: 10px;
+      background: var(--accent-pink);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="deck-viewport" id="deck">
+    
+    <!-- SLIDE 1: Cover / Hero (첫 페이지) -->
+    <div class="slide active" data-slide="1">
+      <div class="glow-orb" style="width: 500px; height: 500px; background: rgba(36, 107, 253, 0.18); top: -80px; right: -40px;"></div>
+      
+      <div class="slide-1-layout">
+        <div class="cover-left">
+          <div class="cover-brand">OpenLoop</div>
+          <h1 class="cover-title">캡처만 하면,<br>알아서 정리해줘요.</h1>
+          <p class="cover-desc">일정, 장소, 쿠폰까지<br>흩어진 정보를 한 곳에서.</p>
+
+          <div class="cover-cards">
+            <div class="cover-card">
+              <div class="cover-card-icon">⛶</div>
+              <div>
+                <h5>캡처 한 번</h5>
+                <p>정보를 캡처하면</p>
+              </div>
+            </div>
+            <div class="cover-card">
+              <div class="cover-card-icon">✨</div>
+              <div>
+                <h5>자동 정리</h5>
+                <p>AI가 알아서 정리하고</p>
+              </div>
+            </div>
+            <div class="cover-card">
+              <div class="cover-card-icon">📅</div>
+              <div>
+                <h5>완벽 기록</h5>
+                <p>일정에 바로 추가</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cover-phone-container">
+          <div class="phone-mockup-angled">
+            <div class="phone-notch"></div>
+            <div class="phone-screen-blue">
+              <div class="phone-logo-c"></div>
+              <div class="phone-brand-text">OpenLoop</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="brand-pill"><span class="logo-dot"></span> OpenLoop Official Service Deck</div>
+        <div class="page-indicator">1 / 5</div>
+      </div>
+    </div>
+
+    <!-- SLIDE 2: 왜 OpenLoop인가 -->
+    <div class="slide" data-slide="2">
+      <div class="glow-orb" style="width: 600px; height: 600px; background: rgba(36, 107, 253, 0.12); bottom: -150px; right: 100px;"></div>
+      
+      <div>
+        <div class="slide-tag">02 · 왜 OpenLoop인가</div>
+        <h1 class="slide-title">OpenLoop는 <span class="highlight">캡처를 행동으로</span> 바꿉니다.</h1>
+        <p class="slide-subtitle">기존 캘린더는 입력을 요구하지만, OpenLoop는 캡처 한 번으로 모든 준비를 끝냅니다.</p>
+      </div>
+
+      <div class="slide-2-grid">
+        <div class="comparison-card">
+          <div>
+            <div class="comparison-title">기존 캘린더 / 메모 앱</div>
+            <div class="legacy-steps">
+              <div class="legacy-step">❌ 캡처 확인 후 캘린더 앱 직접 실행</div>
+              <div class="legacy-step">❌ 일정 제목, 날짜, 시간 일일이 타이핑</div>
+              <div class="legacy-step">❌ 약속 장소 주소 검색 & 복사 붙여넣기</div>
+              <div class="legacy-step">❌ 쿠폰 기한 확인 및 수동 알림 계산</div>
+            </div>
+          </div>
+          <p style="font-size: 1.4vh; color: #94a3b8; margin-top: 1.5vh;">👉 번거로운 수동 입력 때문에 결국 기록을 포기하게 됩니다.</p>
+        </div>
+
+        <div class="hero-solution-card">
+          <div class="hero-solution-head">
+            <h3>⚡ OpenLoop (오픈루프)</h3>
+            <span style="font-size: 1.4vh; font-weight: 700; color: #60a5fa; background: rgba(36,107,253,0.2); padding: 4px 12px; border-radius: 20px;">공유하기 한 번이면 끝</span>
+          </div>
+
+          <div class="openloop-flow-cards">
+            <div class="flow-mini-card">
+              <div class="step-num">1</div>
+              <h5>캡처 & 공유</h5>
+              <p>어떤 앱에서든 화면 캡처 후 공유</p>
+            </div>
+            <div class="flow-mini-card">
+              <div class="step-num">2</div>
+              <h5>AI 맥락 추출</h5>
+              <p>일정·시간·장소·쿠폰 자동 파싱</p>
+            </div>
+            <div class="flow-mini-card">
+              <div class="step-num">3</div>
+              <h5>원터치 액션</h5>
+              <p>캘린더 등록 & 카카오맵 즉시 연동</p>
+            </div>
+          </div>
+
+          <div class="punchline-quote">
+            “캡처 한 번 공유하면, 일정·장소·쿠폰이 알아서 정리되고 실행 준비 끝!”
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div>출처: OpenLoop Action Engine · Gemini Multimodal AI (2026.08 기준)</div>
+        <div class="page-indicator">2 / 5</div>
+      </div>
+    </div>
+
+    <!-- SLIDE 3: 실제 사용 흐름 -->
+    <div class="slide" data-slide="3">
+      <div class="glow-orb" style="width: 500px; height: 500px; background: rgba(139, 92, 246, 0.15); top: 100px; left: -100px;"></div>
+
+      <div>
+        <div class="slide-tag">03 · 실제 사용 흐름</div>
+        <h1 class="slide-title">앱은 평소처럼 쓰고,<br><span class="highlight">공유하기만 누르세요.</span></h1>
+        <p class="slide-subtitle">새로운 사용법을 배울 필요 없이, 평소 보던 화면에서 공유하기 한 번이면 완료됩니다.</p>
+      </div>
+
+      <div class="slide-3-cards">
+        <div class="step-feature-card">
+          <div>
+            <div class="step-header">
+              <span class="step-badge">01 공유하기</span>
+              <span style="font-size: 1.5vh; color: #cbd5e1; font-weight: 600;">어디서든 한 번 터치</span>
+            </div>
+            <h3>화면 캡처 후 즉시 공유</h3>
+            <p>카카오톡 약속 톡방, 인스타그램 맛집, 기프티콘 이미지에서 시스템 [공유하기]로 OpenLoop 선택</p>
+          </div>
+          <div class="step-visual-mock">
+            <div class="mock-row">📸 <span>이미지 / 텍스트 캡처</span></div>
+            <div class="mock-row"><span class="status-pill pill-blue">Share Extension</span> 백그라운드 즉시 수신</div>
+          </div>
+        </div>
+
+        <div class="step-feature-card highlight">
+          <div>
+            <div class="step-header">
+              <span class="step-badge" style="background: #8b5cf6;">02 AI 분석</span>
+              <span style="font-size: 1.5vh; color: #cbd5e1; font-weight: 600;">맥락 자동 분해</span>
+            </div>
+            <h3>핵심 정보 완벽 추출</h3>
+            <p>Gemini AI가 날짜, 시간, 장소, 유효기간, 준비물 체크리스트를 실수 없이 정밀 파싱</p>
+          </div>
+          <div class="step-visual-mock">
+            <div class="mock-row">🗓️ <span>날짜/시간</span> <span class="status-pill pill-green">내일 19:00</span></div>
+            <div class="mock-row">📍 <span>장소</span> <span class="status-pill pill-green">성수역 3번출구</span></div>
+          </div>
+        </div>
+
+        <div class="step-feature-card">
+          <div>
+            <div class="step-header">
+              <span class="step-badge" style="background: #246bfd;">03 루프 닫기</span>
+              <span style="font-size: 1.5vh; color: #cbd5e1; font-weight: 600;">실제 행동으로 연결</span>
+            </div>
+            <h3>원터치 실행 & 알림</h3>
+            <p>네이티브 캘린더 등록, 카카오맵 길찾기, 라이브 액티비티 위젯으로 잊지 않고 완료</p>
+          </div>
+          <div class="step-visual-mock">
+            <div class="mock-row">📲 <span>Live Activity D-Day 알림</span></div>
+            <div class="mock-row"><span class="status-pill pill-orange">Close & Forget</span> 완료 시 깔끔한 삭제</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="brand-pill"><span class="logo-dot"></span> OpenLoop Action Flow</div>
+        <div class="page-indicator">3 / 5</div>
+      </div>
+    </div>
+
+    <!-- SLIDE 4: 시나리오 & 엔진 파이프라인 -->
+    <div class="slide" data-slide="4">
+      <div class="glow-orb" style="width: 650px; height: 650px; background: rgba(255, 75, 139, 0.1); bottom: -100px; left: 200px;"></div>
+
+      <div>
+        <div class="slide-tag">04 · OpenLoop는 이렇게 동작합니다</div>
+        <h1 class="slide-title">한 번 캡처하면, <span class="highlight">실행할 모든 행동</span>을 이어줍니다.</h1>
+        <p class="slide-subtitle">자체 멀티모달 파이프라인과 온디바이스 보안 검증을 거쳐 안전하고 정밀하게 동작합니다.</p>
+      </div>
+
+      <div class="pipeline-bar">
+        <div class="pipeline-step">
+          <div class="icon-circle">📥</div>
+          <div>
+            <h5>01 캡처 수신</h5>
+            <p>App Group 공유 브릿지</p>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="icon-circle">🧠</div>
+          <div>
+            <h5>02 맥락 추출</h5>
+            <p>Gemini 구조화 분석</p>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="icon-circle">🛡️</div>
+          <div>
+            <h5>03 보안 & 검증</h5>
+            <p>PII 마스킹 및 가드레일</p>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="icon-circle">🚀</div>
+          <div>
+            <h5>04 액션 루프</h5>
+            <p>캘린더·지도·알림 생성</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="scenario-grid">
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <h4 style="font-size: 2vh; font-weight: 700; color: white;">카카오톡 약속 캡처</h4>
+            <span class="scenario-tag">약속 / 모임</span>
+          </div>
+          <p style="font-size: 1.5vh; color: var(--text-dim);">"내일 저녁 7시 성수역 3번출구 블루보틀에서 보자!"</p>
+          <div class="scenario-flow">
+            <span class="step-box">🗓️ 캘린더 등록</span>
+            <span>➔</span>
+            <span class="step-box">🗺️ 카카오맵 길찾기</span>
+            <span>➔</span>
+            <span class="step-box">🔔 출발 전 알림</span>
+          </div>
+        </div>
+
+        <div class="scenario-card">
+          <div class="scenario-header">
+            <h4 style="font-size: 2vh; font-weight: 700; color: white;">기프티콘 / 쿠폰 이미지 캡처</h4>
+            <span class="scenario-tag" style="background: rgba(36,107,253,0.15); color: #60a5fa;">쿠폰 / 바우처</span>
+          </div>
+          <p style="font-size: 1.5vh; color: var(--text-dim);">"스타벅스 아이스 아메리카노 교환 유효기간 2026-08-30"</p>
+          <div class="scenario-flow">
+            <span class="step-box">⏳ D-Day 카운트다운</span>
+            <span>➔</span>
+            <span class="step-box">🎟️ 바코드 바로 띄우기</span>
+            <span>➔</span>
+            <span class="step-box">✅ 만료 전 알림</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div>기술 근거: Gemini Structured Output · iOS Live Activity & Dynamic Island · KakaoMap Route API</div>
+        <div class="page-indicator">4 / 5</div>
+      </div>
+    </div>
+
+    <!-- SLIDE 5: 활용 분야 및 확장 방향 -->
+    <div class="slide" data-slide="5">
+      <div class="glow-orb" style="width: 500px; height: 500px; background: rgba(34, 197, 94, 0.12); top: -100px; right: -50px;"></div>
+
+      <div>
+        <div class="slide-tag">05 · 활용 분야와 확장 방향</div>
+        <h1 class="slide-title">일상 약속부터 <span class="highlight">금융·예약·혜택 관리</span>까지.</h1>
+        <p class="slide-subtitle">개인의 모든 열린 일상(Open Loop)을 닫아주고, 파트너 서비스와 연계하여 정확도를 극대화합니다.</p>
+      </div>
+
+      <div class="slide-5-cards">
+        <div class="ecosystem-card">
+          <div>
+            <div class="eco-header">
+              <span class="eco-badge lifestyle">일상 & 약속</span>
+            </div>
+            <h3>약속·모임 관리</h3>
+            <p>친구와의 대화, 모임 공지, 맛집 추천 캡처를 한곳에서 캘린더와 지도로 연결</p>
+          </div>
+          <div class="tags-list">
+            <span class="tag-item">카카오톡 단톡방</span>
+            <span class="tag-item">인스타 저장 맛집</span>
+            <span class="tag-item">약속 알림</span>
+          </div>
+        </div>
+
+        <div class="ecosystem-card">
+          <div>
+            <div class="eco-header">
+              <span class="eco-badge commerce">혜택 & 소비</span>
+            </div>
+            <h3>쿠폰 & 쇼핑 자산</h3>
+            <p>소멸되기 쉬운 모바일 교환권, 쇼핑 할인 쿠폰, 마일리지 만료 기한을 선제적으로 방어</p>
+          </div>
+          <div class="tags-list">
+            <span class="tag-item">기프티콘/e쿠폰</span>
+            <span class="tag-item">쇼핑몰 할인쿠폰</span>
+            <span class="tag-item">만료 임박 알림</span>
+          </div>
+        </div>
+
+        <div class="ecosystem-card">
+          <div>
+            <div class="eco-header">
+              <span class="eco-badge enterprise">예약 & 마감</span>
+            </div>
+            <h3>티켓·예약 & 과제</h3>
+            <p>항공권, KTX, 호텔 체크인, 병원 진료 예약부터 공모전·업무 데드라인까지 완벽 추적</p>
+          </div>
+          <div class="tags-list">
+            <span class="tag-item">항공/KTX 예매</span>
+            <span class="tag-item">병원/호텔 예약</span>
+            <span class="tag-item">데드라인 체크리스트</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="slide-footer">
+        <div class="brand-pill"><span class="logo-dot"></span> OpenLoop - Close Every Open Loop</div>
+        <div class="page-indicator">5 / 5</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Interactive Slide Controls -->
+  <div class="deck-controls">
+    <button class="ctrl-btn" id="prevBtn" title="이전 (←)">◀</button>
+    <div class="dot-nav" id="dotNav">
+      <div class="dot active" data-target="1"></div>
+      <div class="dot" data-target="2"></div>
+      <div class="dot" data-target="3"></div>
+      <div class="dot" data-target="4"></div>
+      <div class="dot" data-target="5"></div>
+    </div>
+    <button class="ctrl-btn" id="nextBtn" title="다음 (→)">▶</button>
+    <button class="ctrl-btn" id="fsBtn" title="전체화면">⛶</button>
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 5;
+    const slides = document.querySelectorAll('.slide');
+    const dots = document.querySelectorAll('.dot');
+
+    function goToSlide(n) {
+      if (n < 1) n = 1;
+      if (n > totalSlides) n = totalSlides;
+      currentSlide = n;
+
+      slides.forEach(slide => {
+        const slideNum = parseInt(slide.dataset.slide);
+        slide.classList.toggle('active', slideNum === currentSlide);
+      });
+
+      dots.forEach((dot, index) => {
+        dot.classList.toggle('active', (index + 1) === currentSlide);
+      });
+    }
+
+    document.getElementById('prevBtn').addEventListener('click', () => goToSlide(currentSlide - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => goToSlide(currentSlide + 1));
+
+    dots.forEach(dot => {
+      dot.addEventListener('click', () => {
+        goToSlide(parseInt(dot.dataset.target));
+      });
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        goToSlide(currentSlide + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        goToSlide(currentSlide - 1);
+      }
+    });
+
+    document.getElementById('fsBtn').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>

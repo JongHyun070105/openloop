@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import (
     Depends,
@@ -30,6 +30,10 @@ from .context_providers import (
 from .dynamo_repository import DynamoLoopRepository
 from .device_tokens import DeviceTokenStore, device_token_store_from_env
 from .errors import ExternalIntegrationError, ExternalIntegrationTimeout
+from .live_activity import (
+    LiveActivitySender,
+    live_activity_sender_from_env,
+)
 from .models import (
     AmbiguityUpdate,
     AnalyzeRequest,
@@ -39,6 +43,7 @@ from .models import (
     CompletionUpdate,
     CreateLoopRequest,
     LoopStatus,
+    LiveActivityTokenRequest,
     NormalizedPlace,
     OpenLoop,
     PushTokenRequest,
@@ -67,6 +72,7 @@ def create_app(
     weather_adapter: WeatherAdapter | None = None,
     analytics: Analytics | None = None,
     device_token_store: DeviceTokenStore | None = None,
+    live_activity_sender: LiveActivitySender | None = None,
 ) -> FastAPI:
     load_provider_secrets_from_env()
     sentry_enabled = initialize_sentry_from_env()
@@ -99,6 +105,7 @@ def create_app(
     weather = weather_adapter or weather_adapter_from_env()
     telemetry = analytics or analytics_from_env()
     devices = device_token_store or device_token_store_from_env()
+    live_activities = live_activity_sender or live_activity_sender_from_env(devices)
     api.state.repository = repository
     api.state.loop_service = service
     api.state.analysis_adapter = analysis
@@ -106,6 +113,7 @@ def create_app(
     api.state.weather_adapter = weather
     api.state.analytics = telemetry
     api.state.device_token_store = devices
+    api.state.live_activity_sender = live_activities
 
     @api.exception_handler(ExternalIntegrationTimeout)
     async def integration_timeout_handler(_request, _error) -> JSONResponse:  # type: ignore[no-untyped-def]
@@ -125,6 +133,23 @@ def create_app(
                 "provider": analysis.provider,
             },
         )
+
+    def maybe_send_live_activity(
+        result: AnalyzeResponse,
+        installation_id: UUID | None,
+        preference: str | None,
+        job_id: UUID | None,
+        response: Response,
+    ) -> None:
+        if preference != "preferred":
+            return
+        accepted = live_activities.send_completed(
+            owner_id=owner_id(installation_id),
+            title=result.event.title,
+            job_id=str(job_id or uuid4()),
+        )
+        if accepted:
+            response.headers["X-OpenLoop-Live-Activity"] = "accepted"
 
     def push_dispatch_enabled() -> bool:
         return (
@@ -199,11 +224,17 @@ def create_app(
     @api.post("/v1/analyze", response_model=AnalyzeResponse)
     def analyze(
         request: AnalyzeRequest,
+        response: Response,
         installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
+        live_activity: str | None = Header(default=None, alias="X-OpenLoop-Live-Activity"),
+        analysis_job_id: UUID | None = Header(default=None, alias="X-OpenLoop-Analysis-Job-Id"),
     ) -> AnalyzeResponse:
         require_client_identity(installation_id)
         result = analysis.analyze(request)
         track_analysis(result)
+        maybe_send_live_activity(
+            result, installation_id, live_activity, analysis_job_id, response
+        )
         return result
 
     async def single_image_upload(
@@ -249,17 +280,23 @@ def create_app(
 
     @api.post("/v1/analyze/image", response_model=AnalyzeResponse)
     async def analyze_image(
+        response: Response,
         file: UploadFile = Depends(single_image_upload),
         companion_text: str | None = Form(default=None, max_length=20_000),
         source: Literal["screenshot", "image"] = Form(default="image"),
         reference_at: datetime | None = Form(default=None),
         installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
+        live_activity: str | None = Header(default=None, alias="X-OpenLoop-Live-Activity"),
+        analysis_job_id: UUID | None = Header(default=None, alias="X-OpenLoop-Analysis-Job-Id"),
     ) -> AnalyzeResponse:
         require_client_identity(installation_id)
         if reference_at is not None and reference_at.tzinfo is None:
             raise HTTPException(status_code=422, detail="reference_at must include a timezone")
         result = await analyze_uploaded_image(file, companion_text, source, reference_at)
         track_analysis(result)
+        maybe_send_live_activity(
+            result, installation_id, live_activity, analysis_job_id, response
+        )
         return result
 
     @api.post("/v1/loops/analyze", response_model=OpenLoop, status_code=status.HTTP_201_CREATED)
@@ -366,6 +403,23 @@ def create_app(
         telemetry.capture(
             "push_token_unregistration",
             {"platform": platform, "registered": result.registered, "provider": result.provider},
+        )
+        return result
+
+    @api.post("/v1/devices/live-activity-token", response_model=PushTokenResponse)
+    def register_live_activity_token(
+        request: LiveActivityTokenRequest,
+        installation_id: UUID | None = Header(default=None, alias="X-OpenLoop-Install-Id"),
+    ) -> PushTokenResponse:
+        owner = owner_id(installation_id)
+        result = (
+            devices.register_live_activity(request, owner)
+            if live_activities.provider != "disabled"
+            else PushTokenResponse(registered=False, provider="disabled")
+        )
+        telemetry.capture(
+            "live_activity_token_registration",
+            {"registered": result.registered, "provider": result.provider},
         )
         return result
 

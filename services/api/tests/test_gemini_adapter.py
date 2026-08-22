@@ -91,10 +91,11 @@ class GeminiAdapterTests(unittest.TestCase):
         self.assertNotIn("top_k", config)
 
     def test_image_bytes_go_only_to_multimodal_part(self) -> None:
+        valid_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRfakedata"
         self.adapter.analyze_image(
             filename="private-name.png",
             content_type="image/png",
-            content=b"image-bytes",
+            content=valid_png,
             companion_text="010-1234-5678",
             source="screenshot",
         )
@@ -104,7 +105,7 @@ class GeminiAdapterTests(unittest.TestCase):
         self.assertNotIn("010-1234-5678", prompt)
         self.assertIn("2026-08-16T11:01:00+09:00", prompt)
         self.assertIn("this one user-shared image", prompt)
-        self.assertEqual(part, {"data": b"image-bytes", "mime_type": "image/png"})
+        self.assertEqual(part, {"data": valid_png, "mime_type": "image/png"})
         self.assertEqual(
             self.captured["config"].values["thinking_config"].values["thinking_level"],
             "LOW",
@@ -239,7 +240,7 @@ class GeminiAdapterTests(unittest.TestCase):
         image = self.adapter.analyze_image(
             filename="capture.png",
             content_type="image/png",
-            content=b"image-bytes",
+            content=b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRfakedata",
             companion_text="오늘 오후 4시 종로5가역 12번 출구에서 향수 거래",
             source="screenshot",
             reference_at=reference,

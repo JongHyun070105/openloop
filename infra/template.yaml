@@ -81,6 +81,8 @@ Resources:
         AllowHeaders:
           - content-type
           - x-openloop-install-id
+          - x-openloop-analysis-job-id
+          - x-openloop-live-activity
         AllowMethods:
           - GET
           - POST
@@ -128,6 +130,11 @@ Resources:
           # direct development retains its explicit environment fallback.
           OPENLOOP_REQUIRE_INSTALL_ID: "true"
           OPENLOOP_PUSH_DISPATCH_ENABLED: !If [HasFcmSecret, "true", "false"]
+          OPENLOOP_LIVE_ACTIVITY_ENABLED: !If [HasFcmSecret, "true", "false"]
+          LIVE_ACTIVITY_QUEUE_URL: !If
+            - HasFcmSecret
+            - !Ref LiveActivityDispatchQueue
+            - ""
           INTEGRATION_SECRET_ARN: !Ref IntegrationSecretArn
           GEMINI_MODEL: !Ref GeminiModel
           # Two bounded 12 s provider attempts fit inside this 30 s Lambda timeout.
@@ -190,6 +197,12 @@ Resources:
                   Action: secretsmanager:GetSecretValue
                   Resource: !Ref IntegrationSecretArn
                 - !Ref AWS::NoValue
+              - !If
+                - HasFcmSecret
+                - Effect: Allow
+                  Action: sqs:SendMessage
+                  Resource: !GetAtt LiveActivityDispatchQueue.Arn
+                - !Ref AWS::NoValue
 
   ApiFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -243,6 +256,97 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt CheckpointDispatchDeadLetterQueue.Arn
         maxReceiveCount: 3
+
+  LiveActivityDispatchQueue:
+    Type: AWS::SQS::Queue
+    Condition: HasFcmSecret
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 86400
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt LiveActivityDispatchDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  LiveActivityDispatchDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Condition: HasFcmSecret
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600
+
+  LiveActivityWorkerFunction:
+    Type: AWS::Serverless::Function
+    Condition: HasFcmSecret
+    Properties:
+      FunctionName: !Sub "openloop-${Environment}-live-activity-worker"
+      Runtime: python3.13
+      Handler: app.live_activity_worker.lambda_handler
+      CodeUri: ../services/api/
+      Description: Sends queued completed-analysis Live Activities through FCM
+      MemorySize: 256
+      Timeout: 30
+      ReservedConcurrentExecutions: 1
+      Role: !GetAtt LiveActivityWorkerRole.Arn
+      Environment:
+        Variables:
+          OPENLOOP_TABLE_NAME: !Ref OpenLoopTable
+          FCM_SECRET_ARN: !Ref FcmSecretArn
+          FCM_PROJECT_ID: !Ref FcmProjectId
+      Events:
+        LiveActivityQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt LiveActivityDispatchQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+  LiveActivityWorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: HasFcmSecret
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/openloop-${Environment}-live-activity-worker"
+      RetentionInDays: 7
+
+  LiveActivityWorkerRole:
+    Type: AWS::IAM::Role
+    Condition: HasFcmSecret
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LiveActivityWorker
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${LiveActivityWorkerLogGroup.Arn}:*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:DeleteItem
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt OpenLoopTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt LiveActivityDispatchQueue.Arn
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref FcmSecretArn
 
   CheckpointDispatchDeadLetterQueue:
     Type: AWS::SQS::Queue

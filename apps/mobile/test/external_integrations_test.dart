@@ -113,7 +113,8 @@ void main() {
         200,
       );
     });
-      expect(await ContextApi(
+    expect(
+      await ContextApi(
         baseUrl: 'https://api.example',
         client: client,
       ).registerPushToken('fcm-token'),
@@ -121,21 +122,24 @@ void main() {
     );
   });
 
-  test('openKakaoRoute accepts current location coordinates gracefully', () async {
-    final api = ContextApi(baseUrl: '');
-    const place = PlaceResult(
-      name: '홍익대학교 서울캠퍼스',
-      address: '서울 마포구 와우산로 94',
-      latitude: 37.55087483744099,
-      longitude: 126.92555459143057,
-      kakaoMapUrl: 'https://place.map.kakao.com/12345',
-    );
-    // url_launcher가 없는 mock/headless 환경에서도 에러 없이 안전하게 실행되는지 확인
-    final opened = await api.openKakaoRoute(
-      place,
-      currentLat: 37.5665,
-      currentLng: 126.9780,
-    );
-    expect(opened, isFalse);
-  });
+  test(
+    'openKakaoRoute accepts current location coordinates gracefully',
+    () async {
+      final api = ContextApi(baseUrl: '');
+      const place = PlaceResult(
+        name: '홍익대학교 서울캠퍼스',
+        address: '서울 마포구 와우산로 94',
+        latitude: 37.55087483744099,
+        longitude: 126.92555459143057,
+        kakaoMapUrl: 'https://place.map.kakao.com/12345',
+      );
+      // url_launcher가 없는 mock/headless 환경에서도 에러 없이 안전하게 실행되는지 확인
+      final opened = await api.openKakaoRoute(
+        place,
+        currentLat: 37.5665,
+        currentLng: 126.9780,
+      );
+      expect(opened, isFalse);
+    },
+  );
 }
